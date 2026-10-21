@@ -488,6 +488,69 @@
   }
 
   var SVG_NS = "http://www.w3.org/2000/svg";
+
+  // Issuer of a card name or an offer-list key ("Freedom", "Capital One", "Smartly / Cash+"), for its color dot:
+  // "chase", "usb", "boa", "citi", "cap1", or null (no dot).
+  var ISSUERS = {
+    "Freedom": "chase", "Freedom Flex": "chase",
+    "Smartly": "usb", "Cash+": "usb", "U.S. Bank": "usb", "Smartly / Cash+": "usb",
+    "Unlimited Cash": "boa", "Customized Cash": "boa", "Bank of America": "boa", "Customized Cash / Unlimited Cash": "boa",
+    "Double Cash": "citi", "Citi Custom Cash": "citi", "Costco Visa": "citi",
+    "Quicksilver": "cap1", "Discover it": "cap1", "Capital One": "cap1", "Quicksilver / Discover it": "cap1"
+  };
+  function issuerOf(name) {
+    if (typeof name !== "string") return null;
+    if (Object.prototype.hasOwnProperty.call(ISSUERS, name)) return ISSUERS[name];
+    if (/^Chase(?:\s|$)/.test(name)) return "chase";
+    if (/^Citi(?:\s|$)/.test(name)) return "citi";
+    return null;
+  }
+  window.__issuerOf = issuerOf; // for tools/sort_test.js
+  // The dot for a card name, or null when its issuer is unknown.
+  function issuerDot(name) {
+    var k = issuerOf(name);
+    if (!k) return null;
+    var d = el("span", "idot i-" + k);
+    d.setAttribute("aria-hidden", "true");
+    return d;
+  }
+  // Puts the card's dot first inside `node` (no dot for an unknown issuer); returns `node`.
+  function withDot(node, name) {
+    var d = issuerDot(name);
+    if (d) node.insertBefore(d, node.firstChild);
+    return node;
+  }
+
+  // Small stroked icons for the offer meta line (aria-hidden, no fill): check (done), shop (in-store), globe (online).
+  function metaIcon(kind) {
+    var svg = document.createElementNS(SVG_NS, "svg");
+    svg.setAttribute("class", "bico");
+    svg.setAttribute("viewBox", "0 0 12 12");
+    svg.setAttribute("fill", "none");
+    svg.setAttribute("stroke", "currentColor");
+    svg.setAttribute("stroke-linecap", "round");
+    svg.setAttribute("stroke-linejoin", "round");
+    svg.setAttribute("aria-hidden", "true");
+    svg.setAttribute("focusable", "false");
+    var add = function (tag, attrs) {
+      var n = document.createElementNS(SVG_NS, tag);
+      for (var k in attrs) n.setAttribute(k, attrs[k]);
+      svg.appendChild(n);
+    };
+    if (kind === "check") {
+      svg.setAttribute("stroke-width", "1.8");
+      add("path", { d: "M2 6.5l2.5 2.5L10 3.5" });
+    } else if (kind === "shop") {
+      svg.setAttribute("stroke-width", "1.4");
+      add("path", { d: "M2 5l1-3h6l1 3M2 5v5h8V5M2 5h8M5 10V7h2v3" });
+    } else {
+      svg.setAttribute("stroke-width", "1.3");
+      add("circle", { cx: "6", cy: "6", r: "4.5" });
+      add("path", { d: "M1.5 6h9M6 1.5c1.6 1.7 1.6 7.3 0 9M6 1.5c-1.6 1.7-1.6 7.3 0 9" });
+    }
+    return svg;
+  }
+
   function extIcon() {
     var svg = document.createElementNS(SVG_NS, "svg");
     svg.setAttribute("class", "ext");
@@ -580,21 +643,31 @@
     if (mx) bon.appendChild(el("span", "maxr", ", max " + mx));
     // What it likely earns with its card ("· 15% with Freedom"), when the card adds something.
     var tot = gone ? null : offerTotal(o, todayISO());
-    if (tot && tot.rate > 0) bon.appendChild(el("span", "total", " · " + (tot.upTo ? "up to " : "") + pct(tot.total) + "% with " + tot.C.name));
+    // A hidden ", " keeps the bonus and the pill apart in the text a screen reader or copy reads.
+    if (tot && tot.rate > 0) {
+      bon.appendChild(el("span", "sr-only", ", "));
+      bon.appendChild(el("span", "total", (tot.upTo ? "up to " : "") + pct(tot.total) + "% with " + tot.C.name));
+    }
     row.appendChild(bon);
 
     var meta = el("div", "meta");
-    meta.appendChild(el("span", "mcard", rowCard(o.card)));
+    meta.appendChild(withDot(el("span", "mcard", rowCard(o.card)), o.card));
     if (gone) {
       meta.appendChild(el("span", "dropped", droppedText(o)));
       // Signed in, a used row (kept in place, or under the Used filter) is restored from the row itself.
       if (o.status === "used" && editing()) meta.appendChild(editBtn("Restore offer", { type: "offer.status", id: o.id, from: "used", to: "active" }, "edlink"));
     } else {
       var a = activation(o);
-      meta.appendChild(el("span", "badge act " + a[1], a[0]));
+      var ab = el("span", "badge act " + a[1], a[0]);
+      if (a[1] === "done") ab.insertBefore(metaIcon("check"), ab.firstChild);
+      meta.appendChild(ab);
     }
     var ch = channel(o);
-    if (ch) meta.appendChild(el("span", "badge", ch));
+    if (ch) {
+      var cb = el("span", "badge chan", ch);
+      cb.insertBefore(metaIcon(o.channel === "online" ? "globe" : "shop"), cb.firstChild);
+      meta.appendChild(cb);
+    }
     else if (chanMode !== "any" && !(usedMode && editing())) meta.appendChild(el("span", "badge nochan", "channel not shown"));
     var cu = cuisineOf(o);
     if (cu && cu.cuisine !== "Unclassified") meta.appendChild(el("span", "badge cuis", cu.detail || cu.cuisine));
@@ -644,6 +717,7 @@
     data.offers.forEach(function (o) { if (names.indexOf(o.card) === -1) names.push(o.card); });
     [null].concat(names).forEach(function (c) {
       var b = el("button", "cat cardbtn", c || "All cards");
+      if (c) withDot(b, c);
       b.type = "button";
       b.setAttribute("aria-pressed", String(c === card));
       b.addEventListener("click", function () {
@@ -1685,7 +1759,7 @@
     live.forEach(function (e) {
       var li = el("li"), head = el("div"), more = [];
       li.appendChild(head);
-      head.appendChild(el("span", "bcard", e.card + ": "));
+      head.appendChild(withDot(el("span", "bcard", e.card + ": "), e.card));
       var rate = function (r) { head.appendChild(el("span", "brate", pct(r) + "%")); };
       if (e.everyday) {
         // "Smartly: Everyday default: 4% on everything"
@@ -1996,7 +2070,7 @@
     btn.type = "button";
     btn.setAttribute("aria-controls", id);
     btn.dataset.card = r.card;
-    btn.appendChild(el("span", "fname", r.card));
+    btn.appendChild(withDot(el("span", "fname", r.card), r.card));
     btn.appendChild(document.createTextNode(" "));
     btn.appendChild(el("span", "fstatus s-" + r.band.key, r.band.label));
     btn.appendChild(document.createTextNode(" "));
@@ -2037,12 +2111,15 @@
     var band = oldest ? oldest.band : FRESH_UNKNOWN;
     if (unknown && (band.key === "fresh")) band = FRESH_UNKNOWN;
     fsum.textContent = "";
-    fsum.appendChild(el("span", null, "Offer freshness · Oldest update: " + (oldest ? ageText(oldest.age) : "Unknown") +
+    var stext = el("span", "fsumtext");
+    stext.appendChild(el("span", "ftitle", "Offer freshness"));
+    stext.appendChild(el("span", "fsumage", " · Oldest update: " + (oldest ? ageText(oldest.age) : "Unknown") +
       (unknown && oldest ? " · " + unknown + (unknown === 1 ? " date unknown" : " dates unknown") : "")));
+    fsum.appendChild(stext);
     var chip = el("span", "fchip s-" + band.key);
     chip.appendChild(el("span", "fdot"));
     chip.lastChild.setAttribute("aria-hidden", "true");
-    chip.appendChild(el("span", null, band.label));
+    chip.appendChild(el("span", "sr-only", band.label));
     fsum.appendChild(chip);
 
     flist.textContent = "";
