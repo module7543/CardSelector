@@ -550,6 +550,43 @@ const label = r => r.merchant + " | " + r.card + " | " + r.bonus;
     ok(!s2.some(id => /2026-q4$/.test(id)) && s2.length > 0, "typed at 00:00:00.2 on Jan 1: the timer still takes the 2026 Q4 entries out of the strip (" + s2.join(", ") + ")");
     await ctx.close();
   }
+  {
+    // The bonus file didn't load (no strip): focus, visibilitychange and pageshow the same day draw nothing.
+    const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: "block" });
+    page = await ctx.newPage();
+    await page.clock.setFixedTime(new Date(2026, 9, 21, 12));
+    await page.route("**/data/bonus-categories.json", r => r.abort());
+    await page.goto(base);
+    await page.waitForFunction(() => /active offers loaded/.test(document.body.innerText));
+    await page.fill("#q", "pizza");
+    await page.waitForTimeout(900);
+    const r0 = await page.evaluate(() => window.__renders);
+    await page.evaluate(() => { window.dispatchEvent(new Event("focus")); document.dispatchEvent(new Event("visibilitychange")); window.dispatchEvent(new PageTransitionEvent("pageshow", { persisted: true })); });
+    const r1 = await page.evaluate(() => window.__renders);
+    ok(r1 === r0, "no bonus file, same day: focus, visibilitychange and pageshow draw nothing (" + (r1 - r0) + " renders)");
+    await ctx.close();
+  }
+  {
+    // A press cut off by hiding the tab (no pointerup or pointercancel) doesn't hold the redraw: back the next day,
+    // it redraws once.
+    const ctx = await dayCtx(2026, 9, 21);
+    await page.fill("#q", "zzday");
+    await page.waitForTimeout(900);
+    await page.clock.pauseAt(new Date(2026, 9, 21, 23, 59, 50));
+    const vis = h => page.evaluate(h => {
+      Object.defineProperty(document, "hidden", { configurable: true, get: () => h });
+      Object.defineProperty(document, "visibilityState", { configurable: true, get: () => h ? "hidden" : "visible" });
+      document.dispatchEvent(new Event("visibilitychange"));
+    }, h);
+    await page.evaluate(() => document.getElementById("main").dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, pointerType: "touch" })));
+    await vis(true);
+    await page.clock.setSystemTime(new Date(2026, 9, 22, 8, 0, 0));
+    const r0 = await page.evaluate(() => window.__renders);
+    await vis(false);
+    const r1 = await page.evaluate(() => window.__renders);
+    ok(r1 === r0 + 1, "press cut off by hiding the tab, back the next day: one redraw (" + (r1 - r0) + " renders)");
+    await ctx.close();
+  }
   page = mainPage;
 
   // Not activated: with the three quarterly entries forced to not_confirmed, the closed line puts a "⚠" (the

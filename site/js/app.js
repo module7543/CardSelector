@@ -2302,7 +2302,8 @@
   }
   function checkDay() {
     var t = todayISO();
-    if (!data || lastDay === null || (!dayPending && t === lastDay && t === stripDay)) return;
+    // (No strip drawn yet, e.g. its file didn't load: only the results count.)
+    if (!data || lastDay === null || (!dayPending && t === lastDay && (stripDay === null || t === stripDay))) return;
     if (dayBlocked()) { dayPending = true; return; }
     dayPending = false;
     dayRedraw();
@@ -2322,6 +2323,10 @@
   document.addEventListener("pointerup", function () { tapEnd(700); }, true);
   document.addEventListener("pointercancel", function () { tapEnd(0); }, true);
   document.addEventListener("click", function () { if (tapping) tapEnd(0); }, true);
+  // A press cut off by the page going away (no pointerup or pointercancel) must not hold the redraw for good.
+  function tapGone() { clearTimeout(tapTimer); tapping = false; }
+  document.addEventListener("visibilitychange", function () { if (document.hidden) tapGone(); });
+  window.addEventListener("pagehide", tapGone);
   // Where focus is, as something that can be found again after the redraw: the offer row, bonus row or strip
   // entry it sits in (else its container), and its kind, text and place among its kind there.
   function focusSpot() {
