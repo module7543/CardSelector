@@ -1722,7 +1722,7 @@
     if (!w || line._w === w) return; // hidden (row open) or already fitted at this width
     line._w = w;
     var ents = Array.prototype.slice.call(line.querySelectorAll(".bent"));
-    var more = line.querySelector(".bmore"), extra = +line.getAttribute("data-below") || 0;
+    var more = line.querySelector(".bplus"), extra = +line.getAttribute("data-below") || 0;
     var right = line.getBoundingClientRect().right - (parseFloat(getComputedStyle(line).paddingRight) || 0);
     for (var k = ents.length; k >= 0; k--) {
       ents.forEach(function (e, i) { e.classList.toggle("bout", i >= k); });
@@ -1796,7 +1796,7 @@
           if (line.firstChild) e.insertBefore(el("span", "sr-only", ", "), e.firstChild);
           line.appendChild(e);
         });
-        var more = el("span", "bmore");
+        var more = el("span", "bplus");
         more.appendChild(el("span", null, "")).setAttribute("aria-hidden", "true");
         more.appendChild(el("span", "sr-only", ""));
         line.appendChild(more);

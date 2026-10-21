@@ -228,7 +228,7 @@ const label = r => r.merchant + " | " + r.card + " | " + r.bonus;
   const bonusRows = () => page.$$eval("#main .bonusrows > details.bonusrow", ds => ds.map(d => {
     const line = d.querySelector(".bline"), lr = line.getBoundingClientRect();
     const shown = [...line.querySelectorAll(".bent")].filter(e => getComputedStyle(e).display !== "none");
-    const more = line.querySelector(".bmore"), moreOn = getComputedStyle(more).display !== "none";
+    const more = line.querySelector(".bplus"), moreOn = getComputedStyle(more).display !== "none";
     const n = moreOn ? +/^\+(\d+)$/.exec(more.firstChild.textContent)[1] : 0;
     const sum = d.querySelector("summary").getBoundingClientRect();
     return { open: d.open, lead: d.querySelector(".bhead").textContent, shown: shown.length, n, total: d.querySelectorAll(".blist > li").length,
@@ -274,7 +274,7 @@ const label = r => r.merchant + " | " + r.card + " | " + r.bonus;
     return new Promise(r => requestAnimationFrame(() => requestAnimationFrame(() => {
       const line = d.querySelector(".bline"), lr = line.getBoundingClientRect();
       const shown = [...line.querySelectorAll(".bent")].filter(e => getComputedStyle(e).display !== "none");
-      const more = line.querySelector(".bmore");
+      const more = line.querySelector(".bplus");
       r({ cut: shown.concat([more]).filter(e => getComputedStyle(e).display !== "none" && e.getBoundingClientRect().right > lr.right + 0.5).length,
         shown: shown.length, more: more.firstChild.textContent, total: d.querySelectorAll(".blist > li").length });
     })));

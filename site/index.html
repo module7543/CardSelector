@@ -399,7 +399,8 @@
   .bonusrow { padding: 10px 14px; background: var(--bonus-bg); border-radius: 12px; font-size: 14px; }
   .bonusrow .bhead { font-weight: 700; color: var(--bonus); }
   .bonusrow.hint { margin: 0; background: var(--neutral-bg); color: var(--neutral-text); }
-  .bonusrow .bnote { margin-top: 6px; font-size: 12.5px; color: var(--muted); }
+  .bonusrow .bnote { margin-top: 4px; font-size: 12.5px; color: var(--muted); }
+  details.bonusrow .bnote { margin-top: 6px; }
   /* A row that opens: the summary fills the row (the row's padding moves onto it), a 44px tap target. */
   details.bonusrow { padding: 0; min-width: 0; }
   .bonusrow > summary {
@@ -418,11 +419,11 @@
   }
   .bonusrow[open] .bchev { margin-top: 3px; transform: rotate(-135deg); }
   /* Closed: one line of whole entries, then "+N". */
-  .bonusrow .bline { display: flex; align-items: center; gap: 12px; margin-top: 2px; white-space: nowrap; overflow: hidden; font-size: 14px; }
+  .bonusrow .bline { display: flex; align-items: center; gap: 12px; margin-top: 2px; line-height: 20px; white-space: nowrap; overflow: hidden; font-size: 14px; }
   .bonusrow[open] .bline { display: none; }
   .bonusrow .bent { display: block; flex: none; }
   .bonusrow .bout { display: none; }
-  .bonusrow .bmore { flex: none; font-size: 13px; font-weight: 600; color: var(--muted); }
+  .bonusrow .bplus { flex: none; font-size: 13px; font-weight: 600; color: var(--muted); }
   .bonusrow .bcn { font-weight: 600; }
   .bonusrow .brate { font-weight: 700; color: var(--bonus); }
   /* Open: one entry per line, then the notes. */
