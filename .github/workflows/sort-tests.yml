@@ -1,0 +1,40 @@
+# Headless sort checks at phone width (tools/sort_test.js), the phone edit checks (tools/phone_edits_test.js) and
+# the saved copy checks (tools/offline_test.js) on pull requests that change the page, and the offer refresh
+# checks (tools/refresh_test.py) on pull requests that change the refresh tool, its fixtures or the validator.
+# Separate from the deploy, so a phone edit to the data never waits on a browser test.
+name: Sort checks
+
+on:
+  pull_request:
+    paths: ['site/js/**', 'site/index.html', 'site/sw.js', 'tools/offline_test.js', 'tools/write_version.py', '.github/workflows/pages.yml', 'site/data/phone-edits.json', 'tools/sort_test.js', 'tools/phone_edits_test.js', 'tools/fold_phone_edits.py', 'tools/fold_on_main.sh', '.github/workflows/fold-phone-edits.yml', 'tools/validate.py', 'tools/refresh.py', 'tools/refresh_test.py', 'tools/fixtures/**', 'tools/cuisines.py', 'site/data/cards.json', 'site/data/bonus-categories.json', 'site/data/card-links.json', '.github/workflows/sort-tests.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  sort:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install Playwright and Chromium
+        run: npm install --no-save playwright@1.56.1 && npx playwright install --with-deps chromium
+      - name: Run the sort checks
+        run: node tools/sort_test.js
+      - name: Run the phone edit checks
+        run: node tools/phone_edits_test.js
+      - name: Run the saved copy checks
+        run: node tools/offline_test.js
+
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Run the offer refresh checks
+        run: python3 tools/refresh_test.py

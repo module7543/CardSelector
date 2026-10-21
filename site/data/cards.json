@@ -1,0 +1,181 @@
+{
+  "preferred_rewards": {
+    "cards": [
+      "Unlimited Cash",
+      "Customized Cash"
+    ],
+    "percent": 75,
+    "until": "2026-12-15",
+    "then_percent": 50,
+    "note": "Owner's Bank of America Preferred Rewards tier on both cards. The boost multiplies every card rate on them (Unlimited Cash 1.5% -> 2.625%, Customized Cash 3% / 2% / 1% -> 5.25% / 3.5% / 1.75%), not BankAmeriDeals offer amounts. 75% through the until date (the owner's estimate), then 50%.",
+    "checked": "2026-10-20"
+  },
+  "offer_lists": {
+    "U.S. Bank": {
+      "cards": [
+        "Smartly"
+      ],
+      "row_name": "Smartly / Cash+",
+      "activation": "stored",
+      "label": "U.S. Bank offer",
+      "note": "Deals are activated once and redeem on any eligible U.S. Bank card. The headline always uses Smartly; Cash+ is never recommended (owner uses it for one utility bill)."
+    },
+    "Capital One": {
+      "cards": [
+        "Quicksilver",
+        "Discover it"
+      ],
+      "row_name": "Quicksilver / Discover it",
+      "activation": "add_to_card",
+      "label": "Capital One offer",
+      "note": "Each offer is applied to one chosen card (\"Apply my offer to\"), and in-store offers lock to that card, so an offer is never ready on both. Shown under After activating as \"add to <card>\", whichever card earns more there."
+    },
+    "Bank of America": {
+      "cards": [
+        "Unlimited Cash",
+        "Customized Cash"
+      ],
+      "row_name": "Customized Cash / Unlimited Cash",
+      "activation": "stored",
+      "label": "BofA offer",
+      "note": "Per-card behavior unconfirmed: the stored activation state is used, and the better of the two cards is picked (rates include the Preferred Rewards boost)."
+    },
+    "Citi Double Cash": {
+      "cards": [
+        "Double Cash"
+      ],
+      "activation": "stored",
+      "label": "Citi offer"
+    },
+    "Citi Custom Cash": {
+      "cards": [
+        "Citi Custom Cash"
+      ],
+      "activation": "stored",
+      "label": "Citi offer"
+    },
+    "Chase Freedom Flex": {
+      "cards": [
+        "Freedom Flex"
+      ],
+      "activation": "stored",
+      "label": "Chase offer"
+    },
+    "Chase Freedom": {
+      "cards": [
+        "Freedom"
+      ],
+      "activation": "stored",
+      "label": "Chase offer"
+    }
+  },
+  "cards": [
+    {
+      "name": "Smartly",
+      "bonus_card": "Smartly",
+      "base_rate": 4,
+      "standing": [],
+      "source_url": "https://www.usbank.com/credit-cards/smartly-visa-signature-credit-card.html",
+      "source": "Owner: 4% at the owner's Smartly tier on the first $10,000 each billing cycle (as read on usbank.com 2026-10-19); always the U.S. Bank card for deals",
+      "checked": "2026-10-20"
+    },
+    {
+      "name": "Freedom Flex",
+      "bonus_card": "Freedom Flex",
+      "base_rate": 1,
+      "standing": [
+        {
+          "name": "dining",
+          "rate": 3,
+          "app_categories": [
+            "Dining"
+          ],
+          "exclude_cuisines": [
+            "Gift Cards & Dining Services"
+          ],
+          "list": "dining_chains"
+        },
+        {
+          "name": "drugstores",
+          "rate": 3,
+          "list": "drugstores"
+        }
+      ],
+      "source_url": "https://creditcards.chase.com/cash-back-credit-cards/freedom/flex",
+      "source": "Owner's card facts: 1% base, 3% dining and drugstores; the quarterly 5% replaces them when it applies and is activated",
+      "checked": "2026-10-20"
+    },
+    {
+      "name": "Freedom",
+      "bonus_card": "Freedom",
+      "base_rate": 1,
+      "standing": [],
+      "source_url": "https://www.chase.com/personal/credit-cards/freedom",
+      "source": "Owner's card facts: legacy Freedom, 1% base, no standing 3%",
+      "checked": "2026-10-20"
+    },
+    {
+      "name": "Discover it",
+      "bonus_card": "Discover it",
+      "base_rate": 1,
+      "standing": [],
+      "source_url": "https://www.discover.com/credit-cards/cash-back/it-card.html",
+      "source": "Owner's card facts: 1%, or the 5% quarterly category",
+      "checked": "2026-10-20"
+    },
+    {
+      "name": "Quicksilver",
+      "bonus_card": null,
+      "base_rate": 1.5,
+      "standing": [],
+      "source_url": "https://www.capitalone.com/credit-cards/quicksilver/",
+      "source": "Owner's card facts",
+      "checked": "2026-10-20"
+    },
+    {
+      "name": "Citi Custom Cash",
+      "bonus_card": "Citi Custom Cash",
+      "base_rate": 1,
+      "standing": [],
+      "source_url": "https://www.citi.com/credit-cards/citi-custom-cash-credit-card",
+      "source": "Owner's card facts: 5% in the planned category, 1% otherwise",
+      "checked": "2026-10-20"
+    },
+    {
+      "name": "Double Cash",
+      "bonus_card": null,
+      "base_rate": 2,
+      "standing": [],
+      "source_url": "https://www.citi.com/credit-cards/citi-double-cash-credit-card",
+      "source": "Owner's card facts",
+      "checked": "2026-10-20"
+    },
+    {
+      "name": "Unlimited Cash",
+      "bonus_card": null,
+      "base_rate": 1.5,
+      "standing": [],
+      "source_url": "https://www.bankofamerica.com/credit-cards/products/unlimited-cash-back-credit-card/",
+      "source": "Owner's card facts: 1.5% on everything, before the Preferred Rewards boost (preferred_rewards above)",
+      "checked": "2026-10-20"
+    },
+    {
+      "name": "Customized Cash",
+      "bonus_card": "Customized Cash",
+      "base_rate": 1,
+      "standing": [],
+      "source_url": "https://www.bankofamerica.com/credit-cards/products/cash-back-credit-card/",
+      "source": "Owner's card facts: 1% base; the choice category (3%) and 2% grocery and wholesale clubs are in bonus-categories.json (Customized Cash). Rates before the Preferred Rewards boost (preferred_rewards above)",
+      "checked": "2026-10-20"
+    },
+    {
+      "name": "Costco Visa",
+      "bonus_card": "Costco Visa",
+      "base_rate": 1,
+      "standing": [],
+      "source_url": "https://www.citi.com/credit-cards/costco-anywhere-visa-credit-card",
+      "source": "Owner's card facts: no merchant offers, competes on rate (category rates in bonus-categories.json)",
+      "checked": "2026-10-20"
+    }
+  ]
+}

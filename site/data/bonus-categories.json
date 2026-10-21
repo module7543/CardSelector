@@ -1,0 +1,933 @@
+{
+  "about": "Card bonus categories (quarterly 5% and standing ones). Kept apart from offers.json so offer refreshes never touch it. Rules and the quarterly refresh are in CLAUDE.md (Bonus categories). Card names are nicknames only, never account or last-four digits.",
+  "keyword_lists": {
+    "dining_chains": {
+      "keywords": [
+        "Starbucks",
+        "McDonald's",
+        "Chipotle",
+        "Chick-fil-A",
+        "Taco Bell",
+        "In-N-Out",
+        "Panera",
+        "Subway",
+        "Domino's",
+        "Pizza Hut",
+        "Sweetgreen",
+        "Cava",
+        "Panda Express",
+        "Shake Shack"
+      ],
+      "may_not_count": {},
+      "exclude": []
+    },
+    "grocery_stores": {
+      "keywords": [
+        "Ralphs",
+        "Vons",
+        "Albertsons",
+        "Pavilions",
+        "Safeway",
+        "Kroger",
+        "Trader Joe's",
+        "Whole Foods",
+        "Sprouts",
+        "Smart & Final",
+        "Gelson's",
+        "Erewhon",
+        "Bristol Farms",
+        "Lazy Acres",
+        "Food 4 Less",
+        "Stater Bros",
+        "Aldi",
+        "H Mart",
+        "Mother's Market",
+        "Grocery Outlet",
+        "Northgate",
+        "Vallarta",
+        "Super King",
+        "Jons",
+        "Wholesome Choice",
+        "Tito's Market",
+        "Food Lion",
+        "Giant Food",
+        "Stop & Shop",
+        "Publix",
+        "H-E-B",
+        "Wegmans",
+        "Instacart",
+        "Shipt"
+      ],
+      "may_not_count": {
+        "Instacart": "delivery services can code as delivery, not as a grocery store",
+        "Shipt": "delivery services can code as delivery, not as a grocery store"
+      },
+      "exclude": [
+        "Walmart",
+        "Target",
+        "Costco",
+        "Sam's Club",
+        "BJ's"
+      ]
+    },
+    "red_cross": {
+      "keywords": [
+        "American Red Cross",
+        "Red Cross"
+      ],
+      "may_not_count": {},
+      "exclude": []
+    },
+    "entertainment": {
+      "keywords": [
+        "AMC",
+        "Regal",
+        "Cinemark",
+        "Landmark Theatres",
+        "Alamo Drafthouse",
+        "Fandango",
+        "Ticketmaster",
+        "Live Nation",
+        "AXS",
+        "SeatGeek",
+        "StubHub",
+        "Vivid Seats"
+      ],
+      "may_not_count": {
+        "StubHub": "ticket resellers can code as resale, not as entertainment",
+        "Vivid Seats": "ticket resellers can code as resale, not as entertainment"
+      },
+      "exclude": [
+        "Netflix",
+        "Hulu",
+        "Disney+",
+        "Max",
+        "Peacock",
+        "Paramount+",
+        "Spotify",
+        "YouTube"
+      ]
+    },
+    "utilities": {
+      "keywords": [
+        "AT&T",
+        "Verizon",
+        "T-Mobile",
+        "Spectrum",
+        "Xfinity",
+        "Comcast",
+        "Cox",
+        "Frontier",
+        "Mint Mobile",
+        "Visible",
+        "Southern California Edison",
+        "SoCalGas",
+        "LADWP",
+        "PG&E"
+      ],
+      "may_not_count": {
+        "Spectrum": "bills that include cable TV can code as cable, which Discover excludes",
+        "Xfinity": "bills that include cable TV can code as cable, which Discover excludes",
+        "Cox": "bills that include cable TV can code as cable, which Discover excludes"
+      },
+      "exclude": []
+    },
+    "gas_stations": {
+      "keywords": [
+        "Shell",
+        "Chevron",
+        "ARCO",
+        "Mobil",
+        "Exxon",
+        "76",
+        "BP",
+        "Valero",
+        "Texaco",
+        "Sunoco",
+        "Marathon",
+        "Citgo",
+        "Phillips 66",
+        "Sinclair",
+        "Speedway",
+        "Circle K",
+        "Wawa",
+        "Sheetz",
+        "QuikTrip",
+        "Casey's",
+        "Quik Stop"
+      ],
+      "may_not_count": {
+        "Speedway": "convenience-store chains may code as a convenience store, not a gas station",
+        "Circle K": "convenience-store chains may code as a convenience store, not a gas station",
+        "Wawa": "convenience-store chains may code as a convenience store, not a gas station",
+        "Sheetz": "convenience-store chains may code as a convenience store, not a gas station",
+        "QuikTrip": "convenience-store chains may code as a convenience store, not a gas station",
+        "Casey's": "convenience-store chains may code as a convenience store, not a gas station",
+        "Quik Stop": "convenience-store chains may code as a convenience store, not a gas station"
+      },
+      "exclude": [
+        "Costco",
+        "Sam's Club",
+        "BJ's",
+        "Walmart"
+      ]
+    },
+    "select_travel": {
+      "keywords": [
+        "Delta",
+        "United Airlines",
+        "American Airlines",
+        "Southwest",
+        "Alaska Airlines",
+        "JetBlue",
+        "Spirit Airlines",
+        "Frontier Airlines",
+        "Hawaiian Airlines",
+        "Allegiant",
+        "Marriott",
+        "Hilton",
+        "Hyatt",
+        "IHG",
+        "Holiday Inn",
+        "Hampton Inn",
+        "Wyndham",
+        "Best Western",
+        "Choice Hotels",
+        "Carnival",
+        "Royal Caribbean",
+        "Norwegian Cruise Line",
+        "Princess Cruises",
+        "Celebrity Cruises",
+        "Expedia",
+        "Booking.com",
+        "Hotels.com",
+        "Priceline",
+        "Travelocity",
+        "Orbitz",
+        "Hopper",
+        "Airbnb",
+        "Vrbo"
+      ],
+      "may_not_count": {
+        "Airbnb": "vacation rentals may not code as a hotel or travel agency",
+        "Vrbo": "vacation rentals may not code as a hotel or travel agency"
+      },
+      "exclude": []
+    },
+    "select_transit": {
+      "keywords": [
+        "Uber",
+        "Lyft",
+        "LA Metro",
+        "Metrolink",
+        "Amtrak",
+        "Greyhound",
+        "FlixBus",
+        "BART",
+        "Caltrain",
+        "SpotHero",
+        "ParkWhiz",
+        "FasTrak",
+        "E-ZPass",
+        "The Toll Roads"
+      ],
+      "may_not_count": {
+        "Uber": "only rides count; Uber Eats is food delivery"
+      },
+      "exclude": [
+        "Uber Eats",
+        "Lime",
+        "Bird"
+      ]
+    },
+    "car_rental": {
+      "keywords": [
+        "Hertz",
+        "Avis",
+        "Enterprise",
+        "Budget",
+        "National Car Rental",
+        "Alamo",
+        "Sixt",
+        "Thrifty",
+        "Dollar Rent A Car",
+        "Turo"
+      ],
+      "may_not_count": {
+        "Turo": "peer-to-peer car rentals may not code as a car rental"
+      },
+      "exclude": []
+    },
+    "costco_travel": {
+      "keywords": [
+        "Costco Travel"
+      ],
+      "may_not_count": {},
+      "exclude": []
+    },
+    "ev_charging": {
+      "keywords": [
+        "ChargePoint",
+        "Electrify America",
+        "EVgo",
+        "Tesla Supercharger",
+        "Blink Charging"
+      ],
+      "may_not_count": {},
+      "exclude": []
+    },
+    "costco": {
+      "keywords": [
+        "Costco",
+        "Costco.com"
+      ],
+      "may_not_count": {},
+      "exclude": []
+    },
+    "costco_gas": {
+      "keywords": [
+        "Costco Gas"
+      ],
+      "full_name": true,
+      "may_not_count": {},
+      "exclude": []
+    },
+    "select_streaming": {
+      "keywords": [
+        "Amazon Prime Video",
+        "Amazon Music",
+        "Apple Music",
+        "Paramount+",
+        "Disney+",
+        "DirecTV Stream",
+        "ESPN+",
+        "fuboTV",
+        "Max",
+        "NBA League Pass",
+        "Netflix",
+        "Pandora",
+        "Showtime",
+        "Sling TV",
+        "Spotify",
+        "Starz",
+        "SiriusXM",
+        "Vudu",
+        "YouTube TV",
+        "YouTube Premium",
+        "Tidal"
+      ],
+      "may_not_count": {
+        "YouTube Premium": "Citi's list names YouTube Red, its old name"
+      },
+      "exclude": []
+    },
+    "drugstores": {
+      "keywords": [
+        "CVS",
+        "Walgreens",
+        "Rite Aid",
+        "Duane Reade"
+      ],
+      "may_not_count": {},
+      "exclude": []
+    },
+    "home_improvement": {
+      "keywords": [
+        "Home Depot",
+        "The Home Depot",
+        "Lowe's",
+        "Ace Hardware",
+        "True Value",
+        "Menards",
+        "Floor & Decor",
+        "Harbor Freight",
+        "Sherwin-Williams"
+      ],
+      "may_not_count": {
+        "Harbor Freight": "tool stores may code as hardware, not home improvement",
+        "Sherwin-Williams": "paint stores may code as paint, not home improvement"
+      },
+      "exclude": []
+    },
+    "fitness_clubs": {
+      "keywords": [
+        "Equinox",
+        "24 Hour Fitness",
+        "LA Fitness",
+        "Planet Fitness",
+        "Crunch Fitness",
+        "Gold's Gym",
+        "Anytime Fitness",
+        "Orangetheory",
+        "SoulCycle",
+        "Barry's",
+        "CorePower Yoga",
+        "YMCA",
+        "Life Time",
+        "F45",
+        "Pure Barre",
+        "Club Pilates",
+        "ClassPass"
+      ],
+      "may_not_count": {
+        "ClassPass": "class-booking apps may not code as a fitness club"
+      },
+      "exclude": [
+        "Peloton",
+        "Apple Fitness+"
+      ]
+    },
+    "live_entertainment": {
+      "keywords": [
+        "Ticketmaster",
+        "Live Nation",
+        "AXS",
+        "SeatGeek",
+        "StubHub",
+        "Vivid Seats",
+        "Eventbrite",
+        "Disneyland",
+        "Universal Studios Hollywood",
+        "Six Flags",
+        "Knott's Berry Farm",
+        "SeaWorld",
+        "Busch Gardens",
+        "Hollywood Bowl",
+        "LA Phil",
+        "Center Theatre Group"
+      ],
+      "may_not_count": {
+        "StubHub": "ticket resellers can code as resale, not as entertainment",
+        "Vivid Seats": "ticket resellers can code as resale, not as entertainment",
+        "Eventbrite": "event platforms may not code as live entertainment"
+      },
+      "exclude": [
+        "AMC",
+        "Regal",
+        "Cinemark",
+        "Fandango",
+        "Landmark Theatres",
+        "Alamo Drafthouse"
+      ]
+    },
+    "online_stores": {
+      "keywords": [
+        "Amazon",
+        "eBay",
+        "Etsy",
+        "Temu",
+        "Shein",
+        "Wayfair",
+        "Chewy"
+      ],
+      "may_not_count": {},
+      "exclude": []
+    },
+    "telecom": {
+      "keywords": [
+        "AT&T",
+        "Verizon",
+        "T-Mobile",
+        "Spectrum",
+        "Xfinity",
+        "Comcast",
+        "Cox",
+        "Frontier",
+        "Mint Mobile",
+        "Visible"
+      ],
+      "may_not_count": {},
+      "exclude": []
+    },
+    "furnishings": {
+      "keywords": [
+        "IKEA",
+        "Wayfair",
+        "Pottery Barn",
+        "West Elm",
+        "Crate & Barrel",
+        "CB2",
+        "RH",
+        "Ashley Furniture",
+        "Living Spaces",
+        "La-Z-Boy",
+        "Rooms To Go"
+      ],
+      "may_not_count": {},
+      "exclude": []
+    },
+    "wholesale_clubs": {
+      "keywords": [
+        "Costco",
+        "Sam's Club",
+        "BJ's Wholesale"
+      ],
+      "may_not_count": {},
+      "exclude": []
+    }
+  },
+  "entries": [
+    {
+      "id": "us-bank-smartly/standing",
+      "card": "Smartly",
+      "app_card": "U.S. Bank",
+      "kind": "fixed",
+      "everyday": true,
+      "start": null,
+      "end": null,
+      "categories_text": "4% cash back on purchases at the owner's Smartly tier, on the first $10,000 of purchases each billing cycle, then 2%. Education, gift cards, insurance, taxes, business-to-business and third-party bill payments earn 2%.",
+      "rate": 4,
+      "cap_text": "4% on the first $10,000 of purchases each billing cycle, then 2%",
+      "activation": "not_needed",
+      "activate_by": null,
+      "activation_note": null,
+      "likely_note": null,
+      "strip_note": "first $10,000 per billing cycle, some categories 2%",
+      "headline_note": "first $10,000 per billing cycle, then 2%; some categories always 2%",
+      "search": true,
+      "match": [],
+      "source_url": "https://www.usbank.com/credit-cards/smartly-visa-signature-credit-card.html",
+      "unconfirmed": "Terms as read by the owner on usbank.com on 2026-10-19; the page could not be fetched from the import session. 4% is the owner's Smartly tier rate.",
+      "checked": "2026-10-19"
+    },
+    {
+      "id": "chase-freedom-flex/2026-q4",
+      "card": "Freedom Flex",
+      "app_card": "Chase Freedom Flex",
+      "kind": "rotating",
+      "start": "2026-10-01",
+      "end": "2026-12-31",
+      "categories_text": "at grocery stores (excluding Walmart® and Target®), on dining purchases and donations to the American Red Cross",
+      "rate": 5,
+      "cap_text": "up to $1,500 in combined purchases",
+      "activation": "activated",
+      "activate_by": "2026-12-14",
+      "activation_note": null,
+      "likely_note": null,
+      "strip_note": null,
+      "search": true,
+      "match": [
+        {
+          "name": "grocery stores",
+          "list": "grocery_stores",
+          "button_categories": [
+            "Groceries & Food Delivery"
+          ],
+          "button_note": "Grocery stores only, not meal kits, wine clubs or delivery services."
+        },
+        {
+          "name": "dining",
+          "app_categories": [
+            "Dining"
+          ],
+          "exclude_cuisines": [
+            "Gift Cards & Dining Services"
+          ],
+          "list": "dining_chains"
+        },
+        {
+          "name": "American Red Cross donations",
+          "list": "red_cross"
+        }
+      ],
+      "source_url": "https://media.chase.com/news/chase-freedom-2026-q4-categories",
+      "unconfirmed": null,
+      "checked": "2026-10-19",
+      "short": "Flex"
+    },
+    {
+      "id": "chase-freedom/2026-q4",
+      "card": "Freedom",
+      "app_card": "Chase Freedom",
+      "kind": "rotating",
+      "start": "2026-10-01",
+      "end": "2026-12-31",
+      "categories_text": "at grocery stores (excluding Walmart® and Target®), on dining purchases and donations to the American Red Cross",
+      "rate": 5,
+      "cap_text": "up to $1,500 in combined purchases",
+      "activation": "activated",
+      "activate_by": "2026-12-14",
+      "activation_note": null,
+      "likely_note": null,
+      "strip_note": null,
+      "search": true,
+      "match": [
+        {
+          "name": "grocery stores",
+          "list": "grocery_stores",
+          "button_categories": [
+            "Groceries & Food Delivery"
+          ],
+          "button_note": "Grocery stores only, not meal kits, wine clubs or delivery services."
+        },
+        {
+          "name": "dining",
+          "app_categories": [
+            "Dining"
+          ],
+          "exclude_cuisines": [
+            "Gift Cards & Dining Services"
+          ],
+          "list": "dining_chains"
+        },
+        {
+          "name": "American Red Cross donations",
+          "list": "red_cross"
+        }
+      ],
+      "source_url": "https://media.chase.com/news/chase-freedom-2026-q4-categories",
+      "unconfirmed": null,
+      "checked": "2026-10-19"
+    },
+    {
+      "id": "discover-it/2026-q4",
+      "card": "Discover it",
+      "app_card": "Capital One",
+      "kind": "rotating",
+      "start": "2026-10-01",
+      "end": "2026-12-31",
+      "categories_text": "at Restaurants, Entertainment and Utilities",
+      "rate": 5,
+      "cap_text": "up to $1,500 in purchases",
+      "activation": "activated",
+      "activate_by": "2026-12-31",
+      "activation_note": "5% starts the day you activate",
+      "likely_note": null,
+      "strip_note": null,
+      "search": true,
+      "match": [
+        {
+          "name": "dining",
+          "app_categories": [
+            "Dining"
+          ],
+          "exclude_cuisines": [
+            "Gift Cards & Dining Services"
+          ],
+          "caveat_cuisines": {
+            "Bakeries & Desserts": "Discover it: bakeries may not count as restaurants."
+          },
+          "list": "dining_chains"
+        },
+        {
+          "name": "entertainment",
+          "list": "entertainment",
+          "button_categories": [
+            "Streaming & Entertainment"
+          ],
+          "button_note": "Discover it: streaming and subscription services are excluded."
+        },
+        {
+          "name": "utilities",
+          "list": "utilities",
+          "button_categories": [
+            "Services & Utilities"
+          ]
+        }
+      ],
+      "source_url": "https://www.discover.com/credit-cards/cash-back/cashback-bonus.html",
+      "unconfirmed": "The issuer page shows no year. The 2026 dates, the activation deadline (end of quarter) and the exclusions come from third-party sites (https://www.nerdwallet.com/credit-cards/news/discover-bonus-categories-q4-2026).",
+      "checked": "2026-10-19"
+    },
+    {
+      "id": "citi-custom-cash/standing",
+      "card": "Citi Custom Cash",
+      "app_card": "Citi Custom Cash",
+      "kind": "top_category",
+      "start": null,
+      "end": null,
+      "categories_text": "on your top eligible spend category each billing cycle",
+      "eligible_text": "Restaurants, Gas Stations, Grocery Stores, Select Travel, Select Transit, Select Streaming Services, Drugstores, Home Improvement Stores, Fitness Clubs and Live Entertainment",
+      "eligible": [
+        {
+          "name": "restaurants",
+          "topic": "dining",
+          "app_categories": [
+            "Dining"
+          ],
+          "exclude_cuisines": [
+            "Gift Cards & Dining Services"
+          ],
+          "caveat_cuisines": {
+            "Bakeries & Desserts": "Citi Custom Cash: bakeries don't count as restaurants."
+          },
+          "list": "dining_chains"
+        },
+        {
+          "name": "gas stations",
+          "topic": "gas stations",
+          "list": "gas_stations",
+          "button_categories": [
+            "Auto & Gas"
+          ]
+        },
+        {
+          "name": "grocery stores",
+          "topic": "grocery stores",
+          "list": "grocery_stores",
+          "button_categories": [
+            "Groceries & Food Delivery"
+          ]
+        },
+        {
+          "name": "select travel",
+          "topic": "travel",
+          "list": "select_travel",
+          "button_categories": [
+            "Travel"
+          ]
+        },
+        {
+          "name": "select transit",
+          "topic": "transit",
+          "list": [
+            "select_transit",
+            "car_rental"
+          ],
+          "button_categories": [
+            "Travel"
+          ]
+        },
+        {
+          "name": "select streaming services",
+          "topic": "streaming",
+          "list": "select_streaming",
+          "button_categories": [
+            "Streaming & Entertainment"
+          ]
+        },
+        {
+          "name": "drugstores",
+          "topic": "drugstores",
+          "list": "drugstores",
+          "button_categories": [
+            "Health, Fitness & Vision"
+          ]
+        },
+        {
+          "name": "home improvement stores",
+          "topic": "home improvement stores",
+          "list": "home_improvement",
+          "button_categories": [
+            "Home & Garden"
+          ]
+        },
+        {
+          "name": "fitness clubs",
+          "topic": "fitness clubs",
+          "list": "fitness_clubs",
+          "button_categories": [
+            "Health, Fitness & Vision"
+          ]
+        },
+        {
+          "name": "live entertainment",
+          "topic": "entertainment",
+          "list": "live_entertainment",
+          "button_categories": [
+            "Streaming & Entertainment"
+          ]
+        }
+      ],
+      "planned": "restaurants",
+      "rate": 5,
+      "cap_text": "up to $500 spent each billing cycle, then 1%",
+      "activation": "not_needed",
+      "activate_by": null,
+      "activation_note": null,
+      "likely_note": null,
+      "strip_note": null,
+      "search": true,
+      "match": [],
+      "source_url": "https://www.citi.com/credit-cards/citi-custom-cash-credit-card",
+      "unconfirmed": "The list of category names is from citi.com. Exclusions (bakeries, caterers, third-party delivery, warehouse-club gas, movie theaters, virtual fitness) and the streaming provider list come from Citi's terms as quoted by third parties (https://frequentmiler.com/customcash/, Citi directory of services PDF https://snamwpm.eccmp.com/wpm/617/contentuploads/docs/dos_cre344.pdf); not read on citi.com.",
+      "checked": "2026-10-19"
+    },
+    {
+      "id": "costco-visa/standing",
+      "card": "Costco Visa",
+      "app_card": null,
+      "kind": "fixed",
+      "start": null,
+      "end": null,
+      "categories_text": "5% on gas at Costco gas stations, 4% on other eligible gas and EV charging, 3% on restaurants and eligible travel (airfare, hotels, car rentals, travel agencies, cruise lines, Costco Travel), 2% on all other Costco and Costco.com purchases, 1% on everything else",
+      "rate": null,
+      "cap_text": "5% and 4% share $7,000 combined spend per year, then 1%",
+      "activation": "not_needed",
+      "activate_by": null,
+      "activation_note": null,
+      "likely_note": null,
+      "strip_note": "Rewards come as an annual certificate after the February statement, redeemable at Costco through Dec 31",
+      "search": true,
+      "match": [
+        {
+          "name": "Costco warehouse and Costco.com",
+          "rate": 2,
+          "rate_note": "5% at Costco gas, 3% on Costco Travel",
+          "list": "costco",
+          "notes": [
+            "Costco warehouses take only Visa cards in store.",
+            "The Chase 5% grocery bonus excludes warehouse clubs, so it does not apply at Costco."
+          ],
+          "headline_notes": {
+            "Smartly": "it's a Visa, so it works in Costco warehouses; at Costco gas, Costco Visa earns 5%"
+          }
+        },
+        {
+          "name": "dining",
+          "rate": 3,
+          "app_categories": [
+            "Dining"
+          ],
+          "exclude_cuisines": [
+            "Gift Cards & Dining Services"
+          ],
+          "caveat_cuisines": {
+            "Bakeries & Desserts": "Costco Visa: bakeries don't count as restaurants."
+          },
+          "list": "dining_chains"
+        },
+        {
+          "name": "Costco gas",
+          "rate": 5,
+          "list": "costco_gas"
+        },
+        {
+          "name": "gas stations",
+          "rate": 4,
+          "rate_note": "5% at Costco gas",
+          "list": "gas_stations",
+          "button_categories": [
+            "Auto & Gas"
+          ],
+          "button_note": "Costco Visa: 4% also covers EV charging. Gas at superstores, supermarkets, convenience stores and warehouse clubs other than Costco doesn't count."
+        },
+        {
+          "name": "EV charging",
+          "rate": 4,
+          "list": "ev_charging"
+        },
+        {
+          "name": "travel",
+          "rate": 3,
+          "list": [
+            "select_travel",
+            "car_rental",
+            "costco_travel"
+          ],
+          "button_categories": [
+            "Travel"
+          ]
+        }
+      ],
+      "source_url": "https://www.citi.com/credit-cards/costco-anywhere-visa-credit-card",
+      "unconfirmed": "Rates, cap and certificate terms are from citi.com and creditcards.com (https://www.creditcards.com/card-advice/costco-anywhere-visa-card-by-citi-review/). The gas and restaurant exclusions (superstores, supermarkets, convenience stores, other warehouse clubs; bakeries, restaurants inside department stores, grocery stores and warehouse clubs) are from AwardWallet (third party), not read on citi.com.",
+      "checked": "2026-10-19"
+    },
+    {
+      "id": "bank-of-america-customized-cash/standing",
+      "card": "Customized Cash",
+      "app_card": "Bank of America",
+      "kind": "chosen",
+      "start": null,
+      "end": null,
+      "categories_text": "in your choice category, and 2% at grocery stores and wholesale clubs",
+      "choices_text": "Gas & EV charging stations; online shopping, including cable, internet, phone plans and streaming; dining; travel; drug stores & pharmacies; home improvement & furnishings. The choice can change once each calendar month.",
+      "choices": [
+        {
+          "name": "gas & EV charging stations",
+          "topic": "gas stations",
+          "list": [
+            "gas_stations",
+            "ev_charging"
+          ],
+          "button_categories": [
+            "Auto & Gas"
+          ]
+        },
+        {
+          "name": "online shopping",
+          "topic": "online shopping",
+          "channel": "online",
+          "list": [
+            "online_stores",
+            "telecom",
+            "select_streaming"
+          ]
+        },
+        {
+          "name": "dining",
+          "topic": "dining",
+          "app_categories": [
+            "Dining"
+          ],
+          "exclude_cuisines": [
+            "Gift Cards & Dining Services"
+          ],
+          "list": "dining_chains"
+        },
+        {
+          "name": "travel",
+          "topic": "travel",
+          "list": [
+            "select_travel",
+            "car_rental"
+          ],
+          "button_categories": [
+            "Travel"
+          ]
+        },
+        {
+          "name": "drug stores & pharmacies",
+          "topic": "drugstores",
+          "list": "drugstores",
+          "button_categories": [
+            "Health, Fitness & Vision"
+          ]
+        },
+        {
+          "name": "home improvement & furnishings",
+          "topic": "home improvement stores",
+          "list": [
+            "home_improvement",
+            "furnishings"
+          ],
+          "button_categories": [
+            "Home & Garden"
+          ]
+        }
+      ],
+      "choice": "online shopping",
+      "rate": 3,
+      "cap_text": "up to $2,500 each quarter, combined with the 2% grocery and wholesale club purchases, then 1%",
+      "activation": "not_needed",
+      "activate_by": null,
+      "activation_note": null,
+      "likely_note": null,
+      "strip_note": null,
+      "search": true,
+      "match": [
+        {
+          "name": "grocery stores",
+          "rate": 2,
+          "list": "grocery_stores",
+          "button_categories": [
+            "Groceries & Food Delivery"
+          ],
+          "button_note": "Grocery stores only, not meal kits, wine clubs or delivery services."
+        },
+        {
+          "name": "wholesale clubs",
+          "rate": 2,
+          "list": "wholesale_clubs",
+          "notes": [
+            "Both Bank of America cards are Visa, so they work in Costco warehouses."
+          ]
+        }
+      ],
+      "source_url": "https://www.bankofamerica.com/credit-cards/products/cash-back-credit-card/cash-back-category-choices/",
+      "unconfirmed": "The six choice names and the once-a-month change rule are from the owner (2026-10-20), not re-read on bankofamerica.com. Which merchants count is decided by Bank of America's merchant coding; the keyword lists are a guide.",
+      "checked": "2026-10-20"
+    }
+  ]
+}

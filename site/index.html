@@ -1,0 +1,558 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<!-- The edit sign-in lives in this browser, so only this site's own scripts run, and the page talks only to
+     itself and the GitHub API. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://api.github.com; form-action 'none'; base-uri 'none'; object-src 'none'">
+<title>CardSelector</title>
+<link rel="icon" href="data:,">
+<style>
+  :root {
+    --bg: #f4f5f7;
+    --surface: #ffffff;
+    --text: #14171c;
+    --muted: #5a6270;
+    --line: #d9dde3;
+    --accent: #0a58c2;
+    --bonus: #0b6b3a;
+    --warn-bg: #fff0c2;
+    --warn-text: #5c4300;
+    --ok-bg: #d8f3e2;
+    --ok-text: #0b5a31;
+    --neutral-bg: #e8ebef;
+    --neutral-text: #3d4552;
+    --card-sel-bg: #14284b;
+    --card-sel-text: #ffffff;
+    --cuis: #6b2fa3;
+    --cuis-bg: #f3ecfa;
+    --bonus-bg: #e6f4ec;
+    --f-fresh: #0b6b3a;
+    --f-aging: #7a5700;
+    --f-soon: #b04400;
+    --f-old: #b3261e;
+    --f-unknown: #5a6270;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0f1115;
+      --surface: #1a1d23;
+      --text: #eef0f3;
+      --muted: #a2a9b5;
+      --line: #2e333c;
+      --accent: #7ab2ff;
+      --bonus: #5fd493;
+      --warn-bg: #4a3a0a;
+      --warn-text: #ffe29a;
+      --ok-bg: #12402a;
+      --ok-text: #a6ebc3;
+      --neutral-bg: #2a2f38;
+      --neutral-text: #c8cdd6;
+      --card-sel-bg: #eef0f3;
+      --card-sel-text: #0f1115;
+      --cuis: #cfa8f5;
+      --cuis-bg: #2a2137;
+      --bonus-bg: #12301f;
+      --f-fresh: #5fd493;
+      --f-aging: #f2c94c;
+      --f-soon: #ff9e57;
+      --f-old: #ff8a80;
+      --f-unknown: #a2a9b5;
+    }
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 18px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  .wrap { max-width: 640px; margin: 0 auto; padding: 0 16px 48px; }
+
+  .searchbar {
+    position: sticky; top: 0; z-index: 5;
+    background: var(--bg);
+    padding: 14px 0 10px;
+  }
+  .sr-only {
+    position: absolute; width: 1px; height: 1px; overflow: hidden;
+    clip: rect(0 0 0 0); white-space: nowrap;
+  }
+  #q {
+    width: 100%; height: 58px;
+    padding: 0 18px;
+    font: inherit; font-size: 20px;
+    color: var(--text); background: var(--surface);
+    border: 2px solid var(--line); border-radius: 14px;
+    -webkit-appearance: none; appearance: none;
+  }
+  #q:focus { outline: none; border-color: var(--accent); }
+  #q::placeholder { color: var(--muted); }
+  .count { margin: 10px 4px 0; min-height: 1.4em; color: var(--muted); font-size: 16px; }
+  .offline { margin: 2px 4px 0; color: var(--muted); font-size: 13px; }
+
+  /* "Use: <card> <rate>": the card to pay with, under the search box whenever a search or category is active. */
+  .use { margin: 0 0 4px; padding: 10px 14px; background: var(--surface); border: 1.5px solid var(--bonus); border-radius: 12px; }
+  .use[hidden] { display: none; }
+  .usehead { font-size: 18px; font-weight: 600; overflow-wrap: anywhere; }
+  .usehead strong { color: var(--bonus); font-weight: 750; }
+  .usehead .useextra { font-size: 16px; font-weight: 500; color: var(--muted); }
+  .usenote { margin-top: 3px; font-size: 14px; color: var(--muted); overflow-wrap: anywhere; }
+  .useat { margin-bottom: 2px; font-size: 14px; font-weight: 650; color: var(--muted); overflow-wrap: anywhere; }
+  .usehead + .usehead { margin-top: 4px; }
+  .usehead.usem { font-size: 16px; }
+  .usehead .usemname { font-weight: 700; }
+  .usesub { margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--line); font-size: 13px; color: var(--muted); }
+
+  /* Filters: one summary button on phones, the full panel on wide screens. */
+  .ftoggle {
+    display: flex; align-items: center; gap: 8px; width: 100%; min-height: 46px; margin: 8px 0 0; padding: 0 14px;
+    font: inherit; font-size: 16px; font-weight: 650; color: var(--text); text-align: left;
+    background: var(--surface); border: 1.5px solid var(--line); border-radius: 12px; cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .ftoggle .fsumm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ftoggle .fsumm .on { color: var(--accent); }
+  .ftoggle::after {
+    content: ""; width: 8px; height: 8px; margin: -4px 4px 0 0; flex: none;
+    border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted); transform: rotate(45deg);
+  }
+  .ftoggle[aria-expanded="true"]::after { margin-top: 4px; transform: rotate(-135deg); }
+  .ftoggle:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+  .filters { margin-top: 12px; }
+  @media (max-width: 699px) {
+    .filters:not(.open) { display: none; }
+  }
+  @media (min-width: 700px) {
+    .ftoggle { display: none; }
+  }
+
+  /* Sort: one native select (opens the phone's own picker), always visible above the filters. */
+  .selwrap { position: relative; }
+  .selwrap::after {
+    content: ""; position: absolute; right: 16px; top: 50%; width: 8px; height: 8px; margin-top: -6px;
+    border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted);
+    transform: rotate(45deg); pointer-events: none;
+  }
+  #sort {
+    display: block; width: 100%; min-height: 48px; padding: 0 40px 0 14px;
+    font: inherit; font-size: 17px; color: var(--text); background: var(--surface);
+    border: 1.5px solid var(--line); border-radius: 10px;
+    -webkit-appearance: none; appearance: none; cursor: pointer;
+  }
+  #sort:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+  .sorthelp { margin: 6px 2px 0; font-size: 14px; color: var(--muted); }
+
+  /* Filter groups (sort, card, category, and cuisine under Dining): a small label over each row of buttons. */
+  .filter + .filter { margin-top: 20px; }
+  .flabel { margin: 0 2px 6px; font-size: 13px; font-weight: 600; letter-spacing: .03em; color: var(--muted); }
+  /* Buttons wrap onto as many lines as needed, never scroll sideways. */
+  .cats, .cards, .cuisines { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 4px; }
+  .cat {
+    min-height: 38px; padding: 0 10px;
+    font: inherit; font-size: 14px; font-weight: 600; line-height: 1.2;
+    color: var(--text); background: var(--surface);
+    border: 1.5px solid var(--line); border-radius: 999px; cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .cat:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+  .cat[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--bg); }
+  /* Card buttons: rounded rectangles, bolder text, navy (light) / light (dark) when selected. */
+  .cat.cardbtn { border-radius: 8px; font-weight: 750; }
+  .cat.cardbtn[aria-pressed="true"] { background: var(--card-sel-bg); border-color: var(--card-sel-bg); color: var(--card-sel-text); }
+  /* Cuisine row (only under Dining): a tinted panel with square-cornered plum chips, so it reads as a sub-filter. */
+  .filter.cuis { margin-top: 10px; padding: 10px 10px 8px; background: var(--cuis-bg); border-left: 4px solid var(--cuis); border-radius: 0 10px 10px 0; }
+  .filter.cuis[hidden] { display: none; }
+  .filter.cuis .flabel { color: var(--cuis); }
+  .cat.cuisbtn { border-radius: 6px; border-color: var(--cuis); color: var(--cuis); background: transparent; font-size: 13.5px; }
+  .cat.cuisbtn .n, .cat .n { font-weight: 500; opacity: .75; }
+  .cat.cuisbtn[aria-pressed="true"] { background: var(--cuis); border-color: var(--cuis); color: var(--bg); }
+
+  ul.results { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 10px; }
+  li.offer {
+    background: var(--surface);
+    border: 1px solid var(--line); border-radius: 14px;
+    overflow: hidden;
+  }
+  /* The whole row (name, bonus, badges) opens the details: the toggle button's ::after is stretched over it.
+     The Google and card icons sit above that layer as their own 44px targets. */
+  .row { position: relative; min-height: 76px; padding: 14px 16px; }
+  .row:has(.toggle:active) { background: var(--neutral-bg); }
+  /* The chevron button itself is a 44px target; negative margins keep its layout footprint (and the icons) as before. */
+  .toggle {
+    display: inline-flex; align-items: center; justify-content: center; flex: none;
+    width: 44px; min-height: 44px; margin: -10px -16px -9px -19px;
+    padding: 0; font: inherit; color: var(--muted); text-align: right;
+    background: none; border: 0; cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .toggle::after { content: ""; position: absolute; inset: 0; cursor: pointer; }
+  .toggle:focus-visible { outline: none; }
+  .toggle:focus-visible::after { outline: 3px solid var(--accent); outline-offset: -3px; }
+  .top { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+  .merchant { font-size: 20px; font-weight: 650; overflow-wrap: anywhere; }
+  /* Google search icon: a 44px tap target via a matching negative margin, like a.cardlink. */
+  a.glink {
+    position: relative; z-index: 1;
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 44px; height: 44px; margin: -10px -6px -10px -4px; vertical-align: middle;
+    color: var(--accent); -webkit-tap-highlight-color: transparent;
+  }
+  a.glink:focus-visible { outline: 3px solid var(--accent); outline-offset: -2px; border-radius: 8px; }
+  a.glink .ext { width: 18px; height: 18px; margin: 0; vertical-align: middle; }
+  .gone a.glink { color: var(--muted); }
+  .names { min-width: 0; }
+  /* Card offers-page link: a boxed card glyph, so it reads differently from the plain Google arrow icon.
+     44px tap target via a matching negative margin, like a.merchant. */
+  a.cardlink {
+    position: relative; z-index: 1;
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 44px; height: 44px; margin: -10px -4px -10px 2px; vertical-align: middle;
+    color: var(--accent); -webkit-tap-highlight-color: transparent;
+  }
+  a.cardlink:focus-visible { outline: 3px solid var(--accent); outline-offset: -2px; border-radius: 8px; }
+  .cardico {
+    width: 30px; height: 30px; padding: 4px; box-sizing: border-box;
+    border: 1.5px solid var(--accent); border-radius: 8px; background: var(--neutral-bg);
+  }
+  .gone a.cardlink { color: var(--muted); }
+  .gone .cardico { border-color: var(--muted); }
+  .ext { display: inline-block; width: .7em; height: .7em; margin-left: .3em; color: var(--accent); vertical-align: baseline; }
+  .chev { flex: none; display: inline-block; transition: transform .15s; }
+  .toggle[aria-expanded="true"] .chev { transform: rotate(180deg); }
+  .bonus { font-size: 22px; font-weight: 700; color: var(--bonus); margin-top: 2px; }
+  .bonus .maxr { font-size: 17px; font-weight: 600; }
+  .bonus .total { font-size: 14px; font-weight: 500; color: var(--muted); }
+  .meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin-top: 6px; font-size: 14px; color: var(--muted); }
+  .meta .mcard { font-size: 16px; font-weight: 600; color: var(--text); }
+  /* Badges are quiet: small plain text, so merchant, reward and card are what stands out. */
+  .badge { display: inline-block; font-size: 13.5px; font-weight: 500; color: var(--muted); }
+  .badge.needs { padding: 0 6px; border-radius: 5px; background: var(--warn-bg); color: var(--warn-text); }
+  .badge.done { color: var(--ok-text); }
+  .badge.nochan { font-style: italic; }
+  .badge.cuis { color: var(--cuis); }
+
+  .details { padding: 10px 16px 14px; border-top: 1px solid var(--line); font-size: 16px; }
+  .details[hidden] { display: none; }
+  .details dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 6px 12px; margin: 0; align-items: baseline; }
+  .details dl + dl { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); }
+  dt { font-size: 12.5px; font-weight: 600; letter-spacing: .03em; text-transform: uppercase; color: var(--muted); }
+  dd { margin: 0; overflow-wrap: anywhere; }
+  dd.fine { font-size: 14.5px; line-height: 1.4; }
+  dd ul { margin: 0; padding-left: 18px; }
+  .dnone { margin: 8px 0 0; font-size: 13.5px; color: var(--muted); }
+  /* Cuisine evidence, folded away under the purchase details. */
+  details.cuisdet { margin-top: 14px; border-top: 1px solid var(--line); padding-top: 4px; }
+  details.cuisdet > summary { min-height: 44px; display: flex; align-items: center; font-size: 15px; font-weight: 600; color: var(--cuis); cursor: pointer; }
+  details.cuisdet > summary:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
+  details.cuisdet p { margin: 2px 0 0; font-size: 15px; color: var(--muted); overflow-wrap: anywhere; }
+  /* Import notes on how the issuer's screen was read: quiet, at the bottom. */
+  details.srcdet > summary { color: var(--muted); }
+  details.srcdet ul { margin: 2px 0 0; padding-left: 18px; font-size: 14.5px; color: var(--muted); overflow-wrap: anywhere; }
+
+  .more {
+    display: block; width: 100%; min-height: 52px; margin: 10px 0 0; padding: 0 16px;
+    font: inherit; font-size: 16px; font-weight: 600; color: var(--accent);
+    background: var(--surface); border: 1.5px solid var(--line); border-radius: 14px; cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .more:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+  .more[hidden] { display: none; }
+
+  .hint, .empty { margin: 28px 4px; color: var(--muted); }
+  .empty strong { color: var(--text); }
+
+  details.expired { margin-top: 28px; }
+  details.expired > summary {
+    min-height: 52px; display: flex; align-items: center;
+    padding: 0 4px; font-weight: 600; cursor: pointer;
+  }
+  details.expired > ul.results { margin-top: 4px; }
+  details.expired .note { margin: 8px 4px 0; color: var(--muted); font-size: 14px; }
+  /* Offers that dropped off: same rows, grayed out. */
+  li.offer.gone { background: transparent; border-style: dashed; }
+  .gone .merchant, .gone .bonus { color: var(--muted); }
+  .gone .bonus { font-weight: 600; }
+  .gone .dropped { font-weight: 600; }
+  /* "Restore offer" on a used row sits above the row's stretched tap layer. */
+  .meta .edlink { position: relative; z-index: 1; }
+  /* The Used button sits close under Activation. */
+  .filter#used-filter { margin-top: 10px; }
+  /* In store / Online and Activation while the Used list is on: they don't apply. */
+  .filter.off .cats, .filter.off .flabel, .filter.off .sorthelp { opacity: .4; }
+  .filter.off .cat { cursor: default; }
+
+  /* Bonus categories strip (above the search box): one summary line, tap to expand. */
+  details.bstrip {
+    margin: 12px 0 0; background: var(--surface);
+    border: 1px solid var(--line); border-left: 4px solid var(--bonus); border-radius: 0 12px 12px 0;
+  }
+  details.bstrip[hidden] { display: none; }
+  details.bstrip > summary {
+    min-height: 44px; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px;
+    padding: 6px 12px; font-size: 15px; font-weight: 650; cursor: pointer; list-style: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  details.bstrip > summary::-webkit-details-marker { display: none; }
+  details.bstrip > summary::after {
+    content: ""; width: 8px; height: 8px; margin: -4px 4px 0 auto; flex: none;
+    border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted); transform: rotate(45deg);
+  }
+  details.bstrip[open] > summary::after { margin-top: 4px; transform: rotate(-135deg); }
+  details.bstrip > summary:focus-visible { outline: 3px solid var(--accent); outline-offset: -3px; }
+  details.bstrip ul { list-style: none; margin: 0; padding: 0 12px 10px; display: grid; gap: 8px; font-size: 16px; }
+  details.bstrip li { padding-top: 8px; border-top: 1px solid var(--line); overflow-wrap: anywhere; }
+  .bstrip .bcard { font-weight: 700; }
+  .bstrip .brate { font-weight: 700; color: var(--bonus); }
+  .bstrip .bmeta { color: var(--muted); }
+  /* Category wording, dates and caps: smaller and muted under the card and rate. */
+  .bstrip .bsub { margin-top: 1px; font-size: 13.5px; line-height: 1.35; color: var(--muted); }
+  .bstrip .bsub .brate { color: var(--bonus); font-weight: 650; }
+  /* Status line: inline text flow, so the control sits right after the status, on its last line. */
+  .bstrip .bstat { margin-top: 4px; font-size: 13.5px; line-height: 2; }
+  .bstrip .bstat .bwarn { display: inline; padding: 2px 6px; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
+  .bstrip .bstat .edfill, .bstrip .bstat .edlink { margin-left: 6px; vertical-align: middle; }
+  .bstrip .bstat .edlink { margin-top: -8px; margin-bottom: -8px; }
+  .bstrip .bstat .bby { margin-left: 8px; }
+  details.bmore { margin-top: 2px; font-size: 13.5px; color: var(--muted); }
+  details.bmore > summary {
+    display: inline-flex; align-items: center; min-height: 32px; color: var(--accent); font-weight: 600;
+    cursor: pointer; list-style: none; -webkit-tap-highlight-color: transparent;
+  }
+  details.bmore > summary::-webkit-details-marker { display: none; }
+  details.bmore > summary::after { content: "▾"; margin-left: 4px; font-size: 12px; }
+  details.bmore[open] > summary::after { content: "▴"; }
+  details.bmore > summary:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
+  details.bmore p { margin: 0 0 4px; line-height: 1.4; }
+  .bwarn {
+    display: inline-block; padding: 1px 8px; border-radius: 6px;
+    background: var(--warn-bg); color: var(--warn-text); font-weight: 600;
+  }
+  .bok { color: var(--ok-text); font-weight: 600; }
+  /* Bonus rows above the offers: a tinted box, not a tappable offer. */
+  .bonusrows { display: grid; gap: 8px; margin: 8px 0 0; }
+  .bonusrow {
+    padding: 10px 14px; background: var(--bonus-bg);
+    border-left: 4px solid var(--bonus); border-radius: 0 12px 12px 0; font-size: 16px;
+  }
+  .bonusrow .bhead { font-weight: 700; color: var(--bonus); }
+  .bonusrow.hint { margin: 0; background: var(--neutral-bg); border-left-color: var(--muted); color: var(--neutral-text); font-size: 15px; }
+  .bonusrow .bnote { margin-top: 4px; font-size: 14px; color: var(--muted); }
+  /* Cards below the everyday rate, and rows where every bonus card is below it: kept for reference, muted. */
+  .bonusrow .bbelow { color: var(--muted); }
+  .bonusrow.muted { background: var(--surface); border-left-color: var(--line); color: var(--muted); }
+  .bonusrow.muted .bhead { color: var(--muted); }
+  /* "For “starbucks”" / "For Travel": which bonus rows come from the search and which from the button. */
+  .bgroup { margin: 4px 2px -2px; font-size: 13px; font-weight: 700; letter-spacing: .03em; color: var(--muted); }
+
+  footer { margin: 32px 0 0; color: var(--muted); font-size: 14px; }
+  footer[hidden] { display: none; }
+
+  /* Offer freshness (footer): collapsed one-liner, tap to list each card's last full read. */
+  details.fresh { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; }
+  details.fresh > summary {
+    min-height: 48px; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px;
+    padding: 6px 14px; font-size: 15px; font-weight: 600; color: var(--text); cursor: pointer; list-style: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  details.fresh > summary::-webkit-details-marker { display: none; }
+  details.fresh > summary::after {
+    content: ""; width: 8px; height: 8px; margin: -4px 4px 0 auto; flex: none;
+    border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted); transform: rotate(45deg);
+  }
+  details.fresh[open] > summary::after { margin-top: 4px; transform: rotate(-135deg); }
+  details.fresh > summary:focus-visible { outline: 3px solid var(--accent); outline-offset: -3px; border-radius: 12px; }
+  .fchip { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; white-space: nowrap; }
+  .fdot { width: 10px; height: 10px; border-radius: 50%; background: currentColor; flex: none; }
+  .fbody { padding: 0 14px 12px; }
+  .fnote { margin: 0 0 6px; font-size: 14px; color: var(--muted); }
+  ul.flist { list-style: none; margin: 0; padding: 0; }
+  li.frow { border-top: 1px solid var(--line); }
+  .fhead {
+    display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: baseline; gap: 0 12px;
+    width: 100%; min-height: 48px; padding: 8px 0; margin: 0;
+    font: inherit; font-size: 16px; color: var(--text); text-align: left;
+    background: none; border: 0; cursor: pointer; -webkit-tap-highlight-color: transparent;
+  }
+  .fhead:focus-visible { outline: 3px solid var(--accent); outline-offset: -2px; border-radius: 8px; }
+  .fname { font-weight: 650; overflow-wrap: anywhere; }
+  .fstatus { font-weight: 700; text-align: right; }
+  .fage { grid-column: 1; color: var(--muted); font-size: 14px; }
+  .fdetail { margin: 0; padding: 0 0 10px; font-size: 14px; color: var(--text); overflow-wrap: anywhere; }
+  .fdetail[hidden] { display: none; }
+  .s-fresh { color: var(--f-fresh); }
+  .s-aging { color: var(--f-aging); }
+  .s-soon { color: var(--f-soon); }
+  .s-old { color: var(--f-old); }
+  .s-unknown { color: var(--f-unknown); }
+
+  /* Phone edits: quiet controls next to the status they change, the save bar at the bottom, the Edit mode panel. */
+  .edbtn {
+    min-height: 44px; padding: 0 14px; font: inherit; font-size: 16px; font-weight: 650;
+    color: var(--accent); background: var(--surface); border: 1.5px solid var(--accent); border-radius: 10px;
+    cursor: pointer; -webkit-tap-highlight-color: transparent;
+  }
+  .edbtn:disabled, .edfill:disabled, .edsm:disabled, .edlink:disabled { opacity: .45; cursor: default; }
+  .edbtn:focus-visible, .edfill:focus-visible, .edsm:focus-visible, .edlink:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+  /* Small filled amber button on a "Not activated" line. */
+  .edfill {
+    min-height: 32px; padding: 0 10px; font: inherit; font-size: 13.5px; font-weight: 700;
+    color: #2b1d00; background: #f2b632; border: 0; border-radius: 7px;
+    cursor: pointer; -webkit-tap-highlight-color: transparent;
+  }
+  /* Small outline button (Mark used, Used on <card>, Save focus). */
+  .edsm {
+    min-height: 34px; padding: 0 10px; font: inherit; font-size: 14px; font-weight: 600;
+    color: var(--accent); background: transparent; border: 1px solid var(--line); border-radius: 8px;
+    cursor: pointer; -webkit-tap-highlight-color: transparent;
+  }
+  /* Muted grey text link ("Undo" after "Activated"); padded to a usable tap target. */
+  .edlink {
+    padding: 8px 6px; margin: -8px -2px; font: inherit; font-size: 13.5px; font-weight: 500;
+    color: var(--muted); background: none; border: 0; text-decoration: underline; text-underline-offset: 2px;
+    cursor: pointer; -webkit-tap-highlight-color: transparent;
+  }
+  .edrow { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin: 0 0 10px; font-size: 14px; }
+  .edrow + .edrow { margin-top: -4px; }
+  .bfocus { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin-top: 4px; font-size: 14px; }
+  .bfocus select {
+    min-height: 34px; max-width: 100%; padding: 0 6px; font: inherit; font-size: 14px; font-weight: 600;
+    color: var(--text); background: var(--surface); border: 1px solid var(--line); border-radius: 8px;
+  }
+  .bfocus .edsm[hidden] { display: none; }
+  /* Save bar: one compact line with the status and inline actions; after Live it shrinks to a small pill. */
+  .savebar {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 20;
+    padding: 8px 12px calc(8px + env(safe-area-inset-bottom));
+    background: var(--surface); border-top: 3px solid var(--accent); box-shadow: 0 -3px 12px rgba(0, 0, 0, .14);
+    transition: opacity .3s;
+  }
+  .savebar[hidden] { display: none; }
+  .savebar.ok { border-top-color: var(--bonus); }
+  .savebar.warn { border-top-color: var(--f-soon); }
+  .savebar.err { border-top-color: var(--f-old); }
+  .savein { display: flex; align-items: center; gap: 10px; max-width: 640px; margin: 0 auto; }
+  .savemsg { flex: 0 1 auto; min-width: 0; margin: 0; font-size: 14.5px; line-height: 1.3; overflow-wrap: anywhere; }
+  .savemsg a { color: var(--accent); }
+  /* Undo / Retry follow the message on the same line; the close (×) sits at the far right. */
+  .savebtns { display: flex; flex: 1 0 auto; align-items: center; gap: 4px; }
+  .savebtns:empty { display: none; }
+  .savebtns .edlink { margin: -8px 0; padding: 8px 8px; font-size: 14.5px; font-weight: 600; color: var(--accent); }
+  .savebtns .savesep { color: var(--muted); margin: 0 -6px 0 -6px; }
+  .savebar.live .savesep { font-size: 13px; }
+  li.offer.actctl .meta .badge.act { display: none; }
+  .savebtns .xbtn { margin-left: auto; color: var(--muted); text-decoration: none; font-size: 20px; line-height: 1; padding: 6px 10px; }
+  .savebar.live {
+    left: auto; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom)); max-width: calc(100% - 24px);
+    padding: 4px 4px 4px 12px; border: 1px solid var(--line); border-left: 3px solid var(--bonus); border-radius: 10px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, .12);
+  }
+  .savebar.live .savemsg { font-size: 13px; color: var(--muted); }
+  .savebar.live .savebtns .edlink { font-size: 13px; }
+  .wrap.barpad { padding-bottom: 90px; }
+  .editmode { margin-top: 10px; }
+  .editmode summary .edon, .editmode summary .edoff { margin-left: 8px; font-size: 14px; font-weight: 700; }
+  .edon { color: var(--bonus); }
+  .edoff { color: var(--muted); }
+  .edwarn { color: var(--f-old); font-weight: 650; }
+  .fnote a { color: var(--accent); }
+  .signin { display: grid; gap: 6px; }
+  .signin label { font-size: 15px; font-weight: 650; }
+  .signin input {
+    width: 100%; height: 46px; padding: 0 12px; font: inherit; font-size: 16px;
+    color: var(--text); background: var(--surface); border: 1.5px solid var(--line); border-radius: 10px;
+  }
+  .signin input:focus { outline: none; border-color: var(--accent); }
+  .signin .edbtn { justify-self: start; margin-top: 4px; }
+  .ferr { margin: 0; min-height: 1.2em; font-size: 15px; color: var(--f-old); overflow-wrap: anywhere; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="searchbar">
+    <label for="q" class="sr-only">Search merchants</label>
+    <input id="q" type="search" placeholder="Search a merchant (e.g. amaz)"
+           autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false"
+           enterkeyhint="search" inputmode="search" autofocus>
+  </div>
+  <div class="use" id="use" aria-live="polite" hidden></div>
+  <details class="bstrip" id="bstrip" hidden>
+    <summary id="bsum"></summary>
+    <ul id="blist"></ul>
+  </details>
+  <!-- On phones the filters fold behind one button that summarises what is active; wide screens show them all. -->
+  <button class="ftoggle" id="ftoggle" type="button" aria-expanded="false" aria-controls="filters"></button>
+  <div class="filters" id="filters">
+  <div class="filter">
+    <label class="flabel" for="sort" id="sort-label">Sort</label>
+    <div class="selwrap"><select id="sort" aria-describedby="sort-help"></select></div>
+    <p class="sorthelp" id="sort-help"></p>
+  </div>
+  <div class="filter">
+    <div class="flabel" id="chans-label">In store or online</div>
+    <div class="cats" id="chans" role="group" aria-labelledby="chans-label"></div>
+  </div>
+  <div class="filter">
+    <div class="flabel" id="acts-label">Activation</div>
+    <div class="cats" id="acts" role="group" aria-labelledby="acts-label"></div>
+    <p class="sorthelp" id="acts-note" hidden></p>
+  </div>
+  <!-- Signed in only: "Used (N)" lists the used offers. -->
+  <div class="filter" id="used-filter" hidden>
+    <div class="cats" id="used" role="group" aria-label="Used offers"></div>
+  </div>
+  <div class="filter">
+    <div class="flabel" id="cards-label">Card</div>
+    <div class="cards" id="cards" role="group" aria-labelledby="cards-label"></div>
+  </div>
+  <div class="filter">
+    <div class="flabel" id="cats-label">Category</div>
+    <div class="cats" id="cats" role="group" aria-labelledby="cats-label"></div>
+  </div>
+  <div class="filter cuis" id="cuis-filter" hidden>
+    <div class="flabel" id="cuis-label">Cuisine</div>
+    <div class="cuisines" id="cuis" role="group" aria-labelledby="cuis-label"></div>
+  </div>
+  </div>
+  <div class="count" id="count" aria-live="polite"></div>
+  <p class="offline" id="offline" hidden></p>
+  <main id="main"></main>
+  <footer id="foot" hidden>
+    <details class="fresh" id="fresh">
+      <summary id="fsum"></summary>
+      <div class="fbody">
+        <p class="fnote">Age since the last full offer read. Individual offers may have changed.</p>
+        <ul class="flist" id="flist"></ul>
+      </div>
+    </details>
+    <details class="fresh editmode" id="editmode">
+      <summary id="editsum">Edit mode</summary>
+      <div class="fbody" id="editbody">
+        <!-- A username + password form so a password manager can fill it. Only the password is used. -->
+        <form class="signin" id="signin" autocomplete="on">
+          <label for="signin-user">Username</label>
+          <input id="signin-user" name="username" autocomplete="username"
+                 autocapitalize="off" autocorrect="off" spellcheck="false">
+          <label for="signin-pass">Password</label>
+          <input id="signin-pass" name="password" type="password" autocomplete="current-password" required>
+          <button class="edbtn" type="submit">Sign in</button>
+          <p class="ferr" id="signin-err" role="alert"></p>
+        </form>
+      </div>
+    </details>
+  </footer>
+</div>
+<div class="savebar" id="savebar" role="status" aria-live="polite" hidden>
+  <div class="savein"><p class="savemsg" id="savemsg"></p><div class="savebtns" id="savebtns"></div></div>
+</div>
+
+<script src="js/edits.js"></script>
+<script src="js/store.js"></script>
+<script src="js/recent.js"></script>
+<script src="js/copy.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

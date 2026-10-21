@@ -1,0 +1,17 @@
+{
+  "cuisines": ["Persian & Mediterranean", "Mexican", "Latin American", "Italian & Pizza", "French & European", "Chinese", "Japanese & Sushi", "Korean", "Southeast Asian", "Indian & South Asian", "Asian Fusion & Poke", "American", "Breakfast & Brunch", "Steak & Seafood", "Healthy, Vegan & Salads", "Cafés, Coffee & Tea", "Bakeries & Desserts", "Bars, Pubs, Wine Bars & Breweries", "Other Cuisines", "Gift Cards & Dining Services", "Unclassified"],
+  "merchants": {
+    "Anantra Thai Restaurant": {"cuisine": "Southeast Asian", "confidence": "Confirmed", "detail": "Thai", "evidence": "Infatuation describes Anantra Thai as a Thai mini-chain (Woodland Hills, Canoga Park, Burbank) with an Isaan menu and noodle dishes.", "source": "theinfatuation.com/los-angeles/reviews/anantra-thai", "checked": "2026-10-19", "locked": false},
+    "HATCH (yakitori restaurant)": {"cuisine": "Japanese & Sushi", "confidence": "Likely", "detail": "Japanese", "evidence": "Recognized business, classified from general knowledge", "source": "general knowledge", "checked": "2026-10-19", "locked": false},
+    "Kickin KAsian - Encino": {"cuisine": "American", "confidence": "Unsure", "detail": "Cajun Asian seafood boil", "evidence": "Spicy family-run Cajun Asian seafood restaurant at 17620 Ventura Blvd, Encino; specializes in customizable seafood boils (crawfish, clams, mussels).", "source": "venturablvd.goldenstate.is/kickin-kasian-spicy-cajun-asian-seafood-encino", "checked": "2026-10-19", "locked": false},
+    "La Colombe": {"cuisine": "Cafés, Coffee & Tea", "confidence": "Likely", "evidence": "Recognized business, classified from general knowledge", "source": "general knowledge", "checked": "2026-10-19", "locked": false},
+    "Park's Finest BBQ, The": {"cuisine": "Southeast Asian", "confidence": "Likely", "detail": "Filipino", "evidence": "Recognized business, classified from general knowledge", "source": "general knowledge", "checked": "2026-10-19", "locked": false},
+    "Round Table Pizza": {"cuisine": "Italian & Pizza", "confidence": "Likely", "evidence": "Recognized business, classified from general knowledge", "source": "general knowledge", "checked": "2026-10-19", "locked": false},
+    "Shiraz Restaurant": {"cuisine": "Persian & Mediterranean", "confidence": "Confirmed", "detail": "Persian", "evidence": "Time Out mentions \"Persian-style barg and koobideh\" and a soltani combo; Glendale and Sherman Oaks", "source": "timeout.com/los-angeles/restaurants/shiraz", "checked": "2026-10-19", "locked": false},
+    "Subway": {"cuisine": "American", "confidence": "Likely", "evidence": "Recognized business, classified from general knowledge", "source": "general knowledge", "checked": "2026-10-19", "locked": false},
+    "Taqueria El Tapatio": {"cuisine": "Mexican", "confidence": "Unsure", "evidence": "Several same-name locations (Glendale, Woodland Hills, Moorpark); Time Out/Infatuation review Glendale for tacos; Woodland Hills listing mentions lengua, menudo, burrito banado.", "source": "timeout.com/los-angeles/restaurants/taqueria-el-tapatio", "checked": "2026-10-19", "locked": false},
+    "Two Hands Corn Dogs - Little Tokyo": {"cuisine": "Korean", "confidence": "Likely", "detail": "Korean", "evidence": "Recognized business, classified from general knowledge", "source": "general knowledge", "checked": "2026-10-19", "locked": false}
+  },
+  "to_classify": [
+  ]
+}

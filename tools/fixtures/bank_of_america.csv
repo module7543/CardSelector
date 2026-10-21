@@ -1,0 +1,9 @@
+offer_id,merchant,bonus,channel,icon_label,tag
+1,Shiraz Restaurant,4% Cash back,in-store only,autoEnrolledBadge,
+2,Shiraz Restaurant,4% Cash back,in-store only,autoEnrolledBadge,
+3,HATCH,4% Cash back,in-store only,autoEnrolledBadge,
+4,Life Extension,3% Cash back,online only,activateBadge,
+5,Life Extension,3% Cash back,online only,autoEnrolledBadge,
+6,Trust & Will,$60 Cash back,online only,activateBadge,Boosted
+7,GetYourGuide,Save 10%,online only,shopBadge,
+8,Expedia,Save Now,online only,shopBadge,

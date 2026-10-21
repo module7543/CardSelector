@@ -1,0 +1,103 @@
+# Folds pending phone edits (site/data/phone-edits.json) into offers.json on main, then deploys. Nightly at about
+# 3 a.m. Pacific and on "Run workflow". Sessions never fold (CLAUDE.md, Pending phone edits).
+# The push uses this workflow's own token, which does not start pages.yml, so this workflow deploys itself; until
+# it does, phone saves are refused (main's offers.json differs from the live one).
+name: Fold phone edits
+
+on:
+  schedule:
+    - cron: '17 10 * * *' # UTC: 3:17 a.m. Pacific in summer (PDT), 2:17 a.m. in winter (PST)
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: fold-phone-edits
+  cancel-in-progress: false
+
+jobs:
+  fold:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # commit and push the fold to main
+    outputs:
+      folded: ${{ steps.fold.outputs.folded }}
+      sha: ${{ steps.fold.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - name: Fold, validate, commit and push (fast-forward only, retried from the new main)
+        id: fold
+        run: bash tools/fold_on_main.sh
+
+  # GitHub cancels a run still pending in a concurrency group when another job queues there, and the phone's save
+  # bar follows pages.yml runs only (it would read that as a failed deploy). So wait, outside the group, until no
+  # pages.yml run is queued or running (up to 10 minutes) before the deploy job joins the group.
+  wait-for-pages:
+    needs: fold
+    if: needs.fold.outputs.folded == 'true' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+    steps:
+      - name: Wait until no pages.yml run is queued or running
+        continue-on-error: true # never let the wait stop the deploy of a fold already on main
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          for i in $(seq 1 60); do
+            if ! busy=$(gh run list --workflow pages.yml --limit 20 --json status --jq '[.[] | select(.status != "completed")] | length'); then
+              echo "Couldn't read the pages.yml runs; trying again."
+              sleep 10
+              continue
+            fi
+            if [ "$busy" = 0 ]; then echo "No pages.yml run queued or running."; exit 0; fi
+            echo "$busy pages.yml run(s) queued or running; waiting."
+            sleep 10
+          done
+          echo "Still busy after 10 minutes; deploying anyway."
+
+  # Same steps as pages.yml, in the same concurrency group. It deploys the newest main, which contains the fold
+  # commit (checked): deploying the fold commit itself could roll back a phone save that landed after it. A newer
+  # pages.yml run may replace or cancel it; that run deploys a main that has the fold too.
+  # Runs after a fold, and on every "Run workflow" even with nothing to fold, so a manual run also repairs a fold
+  # whose deploy failed (phone saves are refused until main's offers.json is live).
+  deploy:
+    needs: [fold, wait-for-pages]
+    # Also when the wait job failed: the fold is already on main and must go live.
+    if: ${{ !cancelled() && needs.fold.result == 'success' && (needs.fold.outputs.folded == 'true' || github.event_name == 'workflow_dispatch') }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    concurrency:
+      group: pages
+      cancel-in-progress: false # wait for a running pages.yml deploy: the phone's save bar follows pages.yml runs only
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - name: Main contains the fold commit
+        if: needs.fold.outputs.sha != ''
+        env:
+          FOLD_SHA: ${{ needs.fold.outputs.sha }}
+        run: git merge-base --is-ancestor "$FOLD_SHA" HEAD
+      - name: Check the data (tools/validate.py)
+        run: python3 tools/validate.py
+      - uses: actions/configure-pages@v5
+      - name: Stamp the deployed commit (site/version.json, read by the phone's saved copy)
+        run: python3 tools/write_version.py
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+      - id: deployment
+        uses: actions/deploy-pages@v4

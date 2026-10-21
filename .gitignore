@@ -1,0 +1,7 @@
+# Screenshots stay on the PC and are never committed or published.
+screenshots/
+# Issuer CSVs (offer reads) are never committed; the only CSVs in the repo are the test fixtures.
+*.csv
+!tools/fixtures/*.csv
+# Written by the deploy workflows only (tools/write_version.py); never committed.
+site/version.json

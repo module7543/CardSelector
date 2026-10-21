@@ -1,0 +1,13 @@
+passes,seq,section,tile_kind,merchant,merchant_tld,view_context_id,source,offer_types,channel,bonus,min_spend,badge,promo_text,activation_label,tile_class,expiration,category,raw_text
+1+2,1,Additional Offers for You,standard,CVS,,,standard,affiliate,In-Store & Online,"Spend $20, earn $15",20,,,none shown,,,,
+1+2,2,Additional Offers for You,carousel-item,CVS,,,standard,affiliate,In-Store & Online,"Spend $20, earn $15",20,,,none shown,,,,
+1+2,3,Additional Offers for You,standard,eBay,,,standard,affiliate,Online,"Spend $20, earn $10",20,,,none shown,,,,
+1+2,4,Additional Offers for You,carousel-item,eBay,,,standard,affiliate,Online,"Spend $20, earn $10",20,,,none shown,,,,
+1+2,5,Additional Offers for You,standard,Carhartt,,,standard,affiliate,In-Store & Online,Up to 25% back,,BONUS,,none shown,,,,
+1+2,6,Additional Offers for You,carousel-item,Carhartt,,,standard,affiliate,In-Store & Online,Up to 25% back,,,,none shown,,,,
+1+2,7,Additional Offers for You,top-offer,Carhartt,,,standard,affiliate,In-Store & Online,Up to 25% back,,,,none shown (button: Get This Offer),,,,
+1+2,8,Additional Offers for You,standard,Pura,,,standard,affiliate,Online,"Spend $20, earn $10",20,BONUS,,none shown,,,,
+1+2,9,Additional Offers for You,standard,Pura,,,standard,affiliate,Online,2% back,,,,none shown,,,,
+1+2,10,Additional Offers for You,standard,Pura Vida,,,standard,affiliate,Online,"Spend $20, earn $15",20,BONUS,,none shown,,,,
+1+2,11,Additional Offers for You,standard,loop-mobile.com,,,standard,affiliate,Online,4% back,,,,none shown,,,,
+1+2,12,Additional Offers for You,standard,Darn Tough Vermont,,,standard,affiliate,Online,"Spend $20, earn $10",20,BONUS,,none shown,,,,

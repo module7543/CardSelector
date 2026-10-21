@@ -1,0 +1,9 @@
+{
+  "Bank of America": { "url": "https://www.bankofamerica.com" },
+  "Capital One": { "url": "https://verified.capitalone.com/auth/signin" },
+  "Citi Double Cash": { "url": "https://www.citi.com" },
+  "Citi Custom Cash": { "url": "https://www.citi.com" },
+  "Chase Freedom Flex": { "url": "https://www.chase.com/chaseoffers" },
+  "Chase Freedom": { "url": "https://www.chase.com/chaseoffers" },
+  "U.S. Bank": { "url": "https://www.usbank.com/online-mobile-banking/activate-your-cash-back-deals.html" }
+}

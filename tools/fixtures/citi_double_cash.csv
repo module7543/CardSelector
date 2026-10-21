@@ -1,0 +1,10 @@
+offer_id,merchant,bonus,min_spend,max_reward_cap,channel,enrollment_state,section,expiration,promo_tag,category,source_tab,passes_seen,card
+RN-90001,Taqueria El Tapatio - Woodland Hills,5% Back,,,,Enroll in Offer,Dining,38d left,,Dining,All,1;2,Citi Double Cash
+RN-90002,Taqueria El Tapatio,5% Back,,,,Enroll in Offer,Dining,38d left,,Dining,All,1;2,Citi Double Cash
+fixture-3,oribe.com,4% Back,,,,Enroll in Offer,Shopping,38d left,,Shopping,All,1;2,Citi Double Cash
+fixture-4,BestBuy,$10 Back,,,,Enroll in Offer,Featured;Shopping,5d left,Featured,Shopping,All,1;2,Citi Double Cash
+fixture-5,Lyft,10% Back,,,,Enrolled,Shopping,66d left,,Shopping,All,1;2,Citi Double Cash
+fixture-6,Splash,$20 Back,,,,Enroll in Offer,Shopping,5d left,,Shopping,All,1;2,Citi Double Cash
+RN-90007,Kickin KAsian Encino,5% Back,,,,Enroll in Offer,Dining,38d left,,Dining,All,1;2,Citi Double Cash
+RN-90008,Subway - Woodland Hills,5% Back,,,,Enroll in Offer,Dining,38d left,,Dining,All,1;2,Citi Double Cash
+redeemed-1,Macy's,$5.00 Earned,,,,Redeemed,Redeemed tab,"Earned Sep 03, 2026",,,Redeemed,1,Citi Double Cash
