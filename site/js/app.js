@@ -1889,6 +1889,7 @@
   function renderStrip() {
     blist.textContent = "";
     var today = todayISO();
+    stripDay = today; // a render() alone doesn't redraw the strip, so the day redraw checks this too
     var live = bonus ? bonus.entries.filter(function (e) { return bonusLive(e, today); }) : [];
     bstrip.hidden = !live.length;
     if (!live.length) return;
@@ -2293,14 +2294,15 @@
   // list, the Ends badges, the bonus strip and the headline follow today. Never during a save or while an edit
   // control has focus (then dayPending, redrawn when the save ends or the focus leaves). Everything the owner
   // has open or picked stays, and focus and scroll stay where they are.
-  var lastDay = null, dayPending = false;
+  var lastDay = null, stripDay = null, dayPending = false, tapping = false, tapTimer = 0;
   function dayBlocked() {
-    if (saving) return true;
+    if (saving || tapping) return true;
     var f = document.activeElement;
     return !!f && (main.contains(f) || blist.contains(f)) && f.matches("select, .edsm, .edfill, .edlink");
   }
   function checkDay() {
-    if (!data || lastDay === null || (!dayPending && todayISO() === lastDay)) return;
+    var t = todayISO();
+    if (!data || lastDay === null || (!dayPending && t === lastDay && t === stripDay)) return;
     if (dayBlocked()) { dayPending = true; return; }
     dayPending = false;
     dayRedraw();
@@ -2309,6 +2311,17 @@
   document.addEventListener("focusout", function () {
     if (dayPending) setTimeout(function () { if (dayPending) checkDay(); }, 0);
   });
+  // Nor while a tap is in progress: a redraw between its press and its click would replace the tapped button (on
+  // iOS a tapped button never takes focus, so the focus check alone doesn't hold it). Let go just after the click;
+  // a press that ends with no click (a scroll) lets go a moment later.
+  function tapEnd(ms) {
+    clearTimeout(tapTimer);
+    tapTimer = setTimeout(function () { tapping = false; if (dayPending) checkDay(); }, ms);
+  }
+  document.addEventListener("pointerdown", function () { tapping = true; clearTimeout(tapTimer); }, true);
+  document.addEventListener("pointerup", function () { tapEnd(700); }, true);
+  document.addEventListener("pointercancel", function () { tapEnd(0); }, true);
+  document.addEventListener("click", function () { if (tapping) tapEnd(0); }, true);
   // Where focus is, as something that can be found again after the redraw: the offer row, bonus row or strip
   // entry it sits in (else its container), and its kind, text and place among its kind there.
   function focusSpot() {
@@ -2345,7 +2358,12 @@
       return { lead: d.querySelector(".bhead").textContent, topic: d.getAttribute("data-topic") };
     });
     var moreOpen = Array.prototype.map.call(blist.querySelectorAll("li[data-eid] > details.bmore[open]"), function (d) { return d.parentNode.getAttribute("data-eid"); });
-    var picks = Array.prototype.map.call(blist.querySelectorAll(".bfocus select"), function (sel) { return [sel.id, sel.value]; });
+    // An unsaved pick shows its Save; a picker that only shows an older stored value (redrawn before a save of it
+    // ended) has none and takes the stored value.
+    var picks = Array.prototype.filter.call(blist.querySelectorAll(".bfocus select"), function (sel) {
+      var b = sel.parentNode.querySelector("button");
+      return b && !b.hidden;
+    }).map(function (sel) { return [sel.id, sel.value]; });
     totalCache = {}; totalSig = ""; // Best offer totals, worked out again for today
     renderCats(); renderCards(); renderStrip(); renderCuisines(); render();
     var ex2 = main.querySelector("details.expired");

@@ -583,6 +583,8 @@ async function dayChecks(br, base) {
       CardStore.save = function (change) {
         return new Promise(function (res) {
           window.__pend.push(function () {
+            if (/^bonus\./.test(change.type)) return res({ status: "saved", message: "Focus: " + change.to, undo: { type: change.type, id: change.id, from: change.to, to: change.from },
+              record: { activation: "not_needed", planned: change.type === "bonus.planned" ? change.to : null, choice: change.type === "bonus.choice" ? change.to : null } });
             var rec = window.__recs[change.id], r = CardEdits.apply({ offers: { offers: [rec] } }, change, today);
             res({ status: "saved", message: r.summary, record: JSON.parse(JSON.stringify(rec)), undo: CardEdits.inverse(change, r.before) });
           });
@@ -652,6 +654,49 @@ async function dayChecks(br, base) {
   const pick = await page.$eval(sel, s => ({ value: s.value, save: !s.parentNode.querySelector("button").hidden, focus: document.activeElement === document.body }));
   ok(f2.renders === f1.renders + 1 && f2.today === "gone", "Focus picker: one redraw once it loses focus, the ended offer moved (" + (f2.renders - f1.renders) + " renders)");
   ok(pick.value === other && other !== cur && pick.save && pick.focus, "Focus picker: the unsaved pick (" + cur + " -> " + other + ") and its Save survive, focus not moved (" + JSON.stringify(pick) + ")");
+  await ctx.close();
+
+  // 3. A Focus save running across midnight: afterwards the picker shows the saved value, with no Save.
+  ({ ctx, page } = await open());
+  await page.click("#bstrip > summary");
+  await page.selectOption(sel, other);
+  await page.locator("#blist li[data-eid='citi-custom-cash/standing'] .bfocus button", { hasText: /^Save$/ }).click();
+  await page.clock.runFor(15000);
+  await page.evaluate(() => window.__pend.shift()());
+  await page.waitForTimeout(50);
+  const fs3 = await page.$eval(sel, s => ({ value: s.value, save: !s.parentNode.querySelector("button").hidden }));
+  const g3 = await st(page);
+  ok(fs3.value === other && !fs3.save && g3.today === "gone" && g3.bar === "Saved · Deploying · Undo ×",
+    "Focus saved across midnight: the picker shows the saved " + other + " with no Save, the ended offer moved (" + JSON.stringify([fs3, g3.bar]) + ")");
+  await ctx.close();
+
+  // 4. A held redraw doesn't eat a tap: midnight passes with the Focus picker focused, then Save is tapped the way
+  // iOS taps (the button takes no focus, so focus leaves the picker on the press, before the click).
+  ({ ctx, page } = await open());
+  await page.click("#bstrip > summary");
+  await page.focus(sel);
+  await page.selectOption(sel, other);
+  await page.focus(sel);
+  await page.clock.runFor(15000);
+  await page.evaluate(() => document.addEventListener("mousedown", function (e) {
+    if (e.target.closest(".bfocus button")) { e.preventDefault(); document.activeElement.blur(); }
+  }, true));
+  const box = await page.locator("#blist li[data-eid='citi-custom-cash/standing'] .bfocus button", { hasText: /^Save$/ }).boundingBox();
+  const r4 = (await st(page)).renders;
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.clock.runFor(20); // the focusout's release gets its chance between press and click
+  await page.waitForTimeout(30);
+  await page.mouse.up();
+  await page.clock.runFor(10); // the tap's end (a 0 ms timer, long before a real save returns)
+  await page.waitForTimeout(50);
+  const n4 = await page.evaluate(() => window.__pend.length);
+  ok(n4 === 1, "tap after a held midnight redraw: the Save tap starts one save (" + n4 + ")");
+  await page.evaluate(() => (window.__pend.shift() || function () {})()); // none when the tap was lost
+  await page.clock.runFor(10);
+  await page.waitForTimeout(50);
+  const g4 = await st(page);
+  ok(g4.today === "gone" && g4.renders === r4 + 2, "tap after a held midnight redraw: the save's own redraws carry the new day (" + (g4.renders - r4) + " renders: save start, save end)");
   await ctx.close();
 }
 

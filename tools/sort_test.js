@@ -538,6 +538,18 @@ const label = r => r.merchant + " | " + r.card + " | " + r.bonus;
       "Dec 31 -> Jan 1: the 2026 Q4 entries leave the bonus strip (" + s0.length + " -> " + s1.length + " entries)");
     await ctx.close();
   }
+  {
+    // Typing just after midnight, before the midnight timer: the results follow the new day at once, and the timer
+    // still redraws the strip.
+    const ctx = await dayCtx(2026, 11, 31);
+    await page.clock.pauseAt(new Date(2026, 11, 31, 23, 59, 59, 900));
+    await page.clock.runFor(300); // 00:00:00.2, the timer (00:00:00.5) not yet run
+    await page.fill("#q", "pi");
+    await page.clock.runFor(5000);
+    const s2 = await page.$$eval("#blist li[data-eid]", ls => ls.map(l => l.getAttribute("data-eid")));
+    ok(!s2.some(id => /2026-q4$/.test(id)) && s2.length > 0, "typed at 00:00:00.2 on Jan 1: the timer still takes the 2026 Q4 entries out of the strip (" + s2.join(", ") + ")");
+    await ctx.close();
+  }
   page = mainPage;
 
   // Not activated: with the three quarterly entries forced to not_confirmed, the closed line puts a "⚠" (the
