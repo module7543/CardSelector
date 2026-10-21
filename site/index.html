@@ -11,13 +11,13 @@
 <link rel="icon" href="data:,">
 <style>
   :root {
-    --bg: #f4f5f7;
+    --bg: #eef1f5;
     --surface: #ffffff;
     --text: #14171c;
     --muted: #5a6270;
-    --line: #d9dde3;
+    --line: #e1e5eb;
     --accent: #0a58c2;
-    --bonus: #0b6b3a;
+    --bonus: #0a6b39;
     --warn-bg: #fff0c2;
     --warn-text: #5c4300;
     --ok-bg: #d8f3e2;
@@ -34,14 +34,17 @@
     --f-soon: #b04400;
     --f-old: #b3261e;
     --f-unknown: #5a6270;
+    --tint: #eaf6ef;
+    --cuis-line: #c7b0e0;
+    --box-shadow: 0 1px 2px rgba(16, 24, 40, .05), 0 2px 6px rgba(16, 24, 40, .04);
   }
   @media (prefers-color-scheme: dark) {
     :root {
-      --bg: #0f1115;
-      --surface: #1a1d23;
+      --bg: #0d1014;
+      --surface: #1c2129;
       --text: #eef0f3;
       --muted: #a2a9b5;
-      --line: #2e333c;
+      --line: #2c333d;
       --accent: #7ab2ff;
       --bonus: #5fd493;
       --warn-bg: #4a3a0a;
@@ -60,6 +63,9 @@
       --f-soon: #ff9e57;
       --f-old: #ff8a80;
       --f-unknown: #a2a9b5;
+      --tint: #13281c;
+      --cuis-line: #6d5a86;
+      --box-shadow: inset 0 1px 0 rgba(255, 255, 255, .06);
     }
   }
   * { box-sizing: border-box; }
@@ -75,56 +81,69 @@
   .searchbar {
     position: sticky; top: 0; z-index: 5;
     background: var(--bg);
-    padding: 14px 0 10px;
+    padding: 12px 0 8px;
   }
   .sr-only {
     position: absolute; width: 1px; height: 1px; overflow: hidden;
     clip: rect(0 0 0 0); white-space: nowrap;
   }
   #q {
-    width: 100%; height: 58px;
+    width: 100%; height: 48px;
     padding: 0 18px;
-    font: inherit; font-size: 20px;
+    font: inherit; font-size: 17px;
     color: var(--text); background: var(--surface);
-    border: 2px solid var(--line); border-radius: 14px;
+    border: 1.5px solid var(--line); border-radius: 12px;
+    box-shadow: 0 1px 2px rgba(16, 24, 40, .06);
     -webkit-appearance: none; appearance: none;
   }
-  #q:focus { outline: none; border-color: var(--accent); }
+  #q:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 4px rgba(10, 88, 194, .12); }
   #q::placeholder { color: var(--muted); }
-  .count { margin: 10px 4px 0; min-height: 1.4em; color: var(--muted); font-size: 16px; }
+  .count { margin: 12px 2px 0; min-height: 1.4em; color: var(--muted); font-size: 13px; font-weight: 600; }
   .offline { margin: 2px 4px 0; color: var(--muted); font-size: 13px; }
 
   /* "Use: <card> <rate>": the card to pay with, under the search box whenever a search or category is active. */
-  .use { margin: 0 0 4px; padding: 10px 14px; background: var(--surface); border: 1.5px solid var(--bonus); border-radius: 12px; }
+  .use { margin: 0 0 4px; padding: 12px 14px; background: var(--tint); border: 1.5px solid var(--bonus); border-radius: 12px; }
   .use[hidden] { display: none; }
-  .usehead { font-size: 18px; font-weight: 600; overflow-wrap: anywhere; }
-  .usehead strong { color: var(--bonus); font-weight: 750; }
-  .usehead .useextra { font-size: 16px; font-weight: 500; color: var(--muted); }
-  .usenote { margin-top: 3px; font-size: 14px; color: var(--muted); overflow-wrap: anywhere; }
-  .useat { margin-bottom: 2px; font-size: 14px; font-weight: 650; color: var(--muted); overflow-wrap: anywhere; }
+  .usehead { font-size: 16px; font-weight: 600; overflow-wrap: anywhere; }
+  .usehead strong { font-size: 17px; font-weight: 750; letter-spacing: -0.01em; color: var(--bonus); }
+  .usehead .useextra { font-size: 14px; font-weight: 400; color: var(--muted); }
+  .usenote { margin-top: 3px; font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
+  .useat {
+    margin-bottom: 2px; font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .07em;
+    color: var(--bonus); overflow-wrap: anywhere;
+  }
   .usehead + .usehead { margin-top: 4px; }
   .usehead.usem { font-size: 16px; }
   .usehead .usemname { font-weight: 700; }
-  .usesub { margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--line); font-size: 13px; color: var(--muted); }
+  .usesub { margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--line); font-size: 12.5px; color: var(--muted); }
 
-  /* Filters: one summary button on phones, the full panel on wide screens. */
+  /* Filters: one summary button on phones, the full panel on wide screens. On phones the bonus strip, the
+     Filters button and the open filters join into one panel (strip on top, square corners where they meet). */
   .ftoggle {
-    display: flex; align-items: center; gap: 8px; width: 100%; min-height: 46px; margin: 8px 0 0; padding: 0 14px;
-    font: inherit; font-size: 16px; font-weight: 650; color: var(--text); text-align: left;
-    background: var(--surface); border: 1.5px solid var(--line); border-radius: 12px; cursor: pointer;
+    display: flex; align-items: center; gap: 8px; width: 100%; min-height: 44px; margin: 0; padding: 0 14px;
+    font: inherit; font-size: 15px; font-weight: 600; color: var(--text); text-align: left;
+    background: var(--surface); border: 1px solid var(--line); border-top: 0; border-radius: 0 0 12px 12px; cursor: pointer;
     -webkit-tap-highlight-color: transparent;
   }
   .ftoggle .fsumm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .ftoggle .fsumm .on { color: var(--accent); }
   .ftoggle::after {
-    content: ""; width: 8px; height: 8px; margin: -4px 4px 0 0; flex: none;
-    border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted); transform: rotate(45deg);
+    content: ""; width: 7px; height: 7px; margin: -3px 4px 0 0; flex: none;
+    border-right: 1.5px solid var(--muted); border-bottom: 1.5px solid var(--muted); transform: rotate(45deg);
   }
-  .ftoggle[aria-expanded="true"]::after { margin-top: 4px; transform: rotate(-135deg); }
+  .ftoggle[aria-expanded="true"]::after { margin-top: 3px; transform: rotate(-135deg); }
   .ftoggle:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+  /* No bonus strip above: the button stands alone. */
+  details.bstrip[hidden] + .ftoggle { margin-top: 8px; border-top: 1px solid var(--line); border-radius: 12px; }
+  /* Open: the filters hang under the button; the panel's top border is the one line between them. */
+  .ftoggle[aria-expanded="true"], details.bstrip[hidden] + .ftoggle[aria-expanded="true"] { border-bottom: 0; border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
   .filters { margin-top: 12px; }
   @media (max-width: 699px) {
     .filters:not(.open) { display: none; }
+    .filters.open {
+      margin: 0; padding: 12px 14px 14px; background: var(--surface);
+      border: 1px solid var(--line); border-top: 1px solid var(--line); border-radius: 0 0 12px 12px;
+    }
   }
   @media (min-width: 700px) {
     .ftoggle { display: none; }
@@ -138,53 +157,54 @@
     transform: rotate(45deg); pointer-events: none;
   }
   #sort {
-    display: block; width: 100%; min-height: 48px; padding: 0 40px 0 14px;
-    font: inherit; font-size: 17px; color: var(--text); background: var(--surface);
-    border: 1.5px solid var(--line); border-radius: 10px;
+    display: block; width: 100%; min-height: 44px; padding: 0 40px 0 14px;
+    font: inherit; font-size: 16px; color: var(--text); background: var(--surface);
+    border: 1px solid var(--line); border-radius: 8px;
     -webkit-appearance: none; appearance: none; cursor: pointer;
   }
   #sort:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
-  .sorthelp { margin: 6px 2px 0; font-size: 14px; color: var(--muted); }
+  .sorthelp { margin: 6px 2px 0; font-size: 12.5px; color: var(--muted); }
 
   /* Filter groups (sort, card, category, and cuisine under Dining): a small label over each row of buttons. */
-  .filter + .filter { margin-top: 20px; }
-  .flabel { margin: 0 2px 6px; font-size: 13px; font-weight: 600; letter-spacing: .03em; color: var(--muted); }
+  .filter + .filter { margin-top: 12px; }
+  .flabel { margin: 0 0 6px; font-size: 12px; font-weight: 600; color: var(--muted); }
   /* Buttons wrap onto as many lines as needed, never scroll sideways. */
-  .cats, .cards, .cuisines { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 4px; }
+  .cats, .cards, .cuisines { display: flex; flex-wrap: wrap; gap: 5px; margin: 0 0 4px; }
   .cat {
-    min-height: 38px; padding: 0 10px;
-    font: inherit; font-size: 14px; font-weight: 600; line-height: 1.2;
+    min-height: 32px; padding: 0 10px;
+    font: inherit; font-size: 13px; font-weight: 600; line-height: 1.2;
     color: var(--text); background: var(--surface);
-    border: 1.5px solid var(--line); border-radius: 999px; cursor: pointer;
+    border: 1px solid var(--line); border-radius: 999px; cursor: pointer;
     -webkit-tap-highlight-color: transparent;
   }
   .cat:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
   .cat[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--bg); }
   /* Card buttons: rounded rectangles, bolder text, navy (light) / light (dark) when selected. */
-  .cat.cardbtn { border-radius: 8px; font-weight: 750; }
+  .cat.cardbtn { border-radius: 6px; font-weight: 600; }
   .cat.cardbtn[aria-pressed="true"] { background: var(--card-sel-bg); border-color: var(--card-sel-bg); color: var(--card-sel-text); }
   /* Cuisine row (only under Dining): a tinted panel with square-cornered plum chips, so it reads as a sub-filter. */
-  .filter.cuis { margin-top: 10px; padding: 10px 10px 8px; background: var(--cuis-bg); border-left: 4px solid var(--cuis); border-radius: 0 10px 10px 0; }
+  .filter.cuis { margin-top: 8px; padding: 8px 10px 10px; background: var(--cuis-bg); border-radius: 10px; }
   .filter.cuis[hidden] { display: none; }
   .filter.cuis .flabel { color: var(--cuis); }
-  .cat.cuisbtn { border-radius: 6px; border-color: var(--cuis); color: var(--cuis); background: transparent; font-size: 13.5px; }
-  .cat.cuisbtn .n, .cat .n { font-weight: 500; opacity: .75; }
+  .cat.cuisbtn { border-radius: 6px; border: 1px solid var(--cuis-line); color: var(--cuis); background: transparent; font-size: 13px; }
+  .cat.cuisbtn .n, .cat .n { font-weight: 400; opacity: .7; }
   .cat.cuisbtn[aria-pressed="true"] { background: var(--cuis); border-color: var(--cuis); color: var(--bg); }
 
-  ul.results { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 10px; }
+  ul.results { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 8px; }
   li.offer {
     background: var(--surface);
-    border: 1px solid var(--line); border-radius: 14px;
+    border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--box-shadow);
     overflow: hidden;
   }
   /* The whole row (name, bonus, badges) opens the details: the toggle button's ::after is stretched over it.
      The Google and card icons sit above that layer as their own 44px targets. */
-  .row { position: relative; min-height: 76px; padding: 14px 16px; }
+  .row { position: relative; padding: 11px 14px 12px; }
   .row:has(.toggle:active) { background: var(--neutral-bg); }
-  /* The chevron button itself is a 44px target; negative margins keep its layout footprint (and the icons) as before. */
+  /* The chevron button itself is a 44px target; negative margins shrink its layout footprint to the name's line
+     (top edge on the row's top, right edge on the row's right) so it adds no height. */
   .toggle {
     display: inline-flex; align-items: center; justify-content: center; flex: none;
-    width: 44px; min-height: 44px; margin: -10px -16px -9px -19px;
+    width: 44px; min-height: 44px; margin: -11px -14px -11px -21px;
     padding: 0; font: inherit; color: var(--muted); text-align: right;
     background: none; border: 0; cursor: pointer;
     -webkit-tap-highlight-color: transparent;
@@ -193,60 +213,64 @@
   .toggle:focus-visible { outline: none; }
   .toggle:focus-visible::after { outline: 3px solid var(--accent); outline-offset: -3px; }
   .top { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
-  .merchant { font-size: 20px; font-weight: 650; overflow-wrap: anywhere; }
+  .merchant { font-size: 16px; font-weight: 700; letter-spacing: -0.01em; overflow-wrap: anywhere; }
   /* Google search icon: a 44px tap target via a matching negative margin, like a.cardlink. */
   a.glink {
     position: relative; z-index: 1;
     display: inline-flex; align-items: center; justify-content: center;
-    width: 44px; height: 44px; margin: -10px -6px -10px -4px; vertical-align: middle;
+    width: 44px; height: 44px; margin: -11px -6px -11px -4px; vertical-align: middle;
     color: var(--accent); -webkit-tap-highlight-color: transparent;
   }
   a.glink:focus-visible { outline: 3px solid var(--accent); outline-offset: -2px; border-radius: 8px; }
-  a.glink .ext { width: 18px; height: 18px; margin: 0; vertical-align: middle; }
+  a.glink .ext { width: 15px; height: 15px; margin: 0; vertical-align: middle; }
   .gone a.glink { color: var(--muted); }
-  .names { min-width: 0; }
+  /* Same size as the name, so the line is no taller than the name itself. */
+  .names { min-width: 0; font-size: 16px; }
   /* Card offers-page link: a boxed card glyph, so it reads differently from the plain Google arrow icon.
      44px tap target via a matching negative margin, like a.merchant. */
   a.cardlink {
     position: relative; z-index: 1;
     display: inline-flex; align-items: center; justify-content: center;
-    width: 44px; height: 44px; margin: -10px -4px -10px 2px; vertical-align: middle;
+    width: 44px; height: 44px; margin: -11px -4px -11px 2px; vertical-align: middle;
     color: var(--accent); -webkit-tap-highlight-color: transparent;
   }
   a.cardlink:focus-visible { outline: 3px solid var(--accent); outline-offset: -2px; border-radius: 8px; }
   .cardico {
-    width: 30px; height: 30px; padding: 4px; box-sizing: border-box;
-    border: 1.5px solid var(--accent); border-radius: 8px; background: var(--neutral-bg);
+    width: 26px; height: 26px; padding: 4px; box-sizing: border-box;
+    border: 1.5px solid var(--accent); border-radius: 6px; background: var(--neutral-bg);
   }
   .gone a.cardlink { color: var(--muted); }
   .gone .cardico { border-color: var(--muted); }
   .ext { display: inline-block; width: .7em; height: .7em; margin-left: .3em; color: var(--accent); vertical-align: baseline; }
   .chev { flex: none; display: inline-block; transition: transform .15s; }
   .toggle[aria-expanded="true"] .chev { transform: rotate(180deg); }
-  .bonus { font-size: 22px; font-weight: 700; color: var(--bonus); margin-top: 2px; }
-  .bonus .maxr { font-size: 17px; font-weight: 600; }
-  .bonus .total { font-size: 14px; font-weight: 500; color: var(--muted); }
-  .meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin-top: 6px; font-size: 14px; color: var(--muted); }
-  .meta .mcard { font-size: 16px; font-weight: 600; color: var(--text); }
+  .bonus {
+    font-size: 17px; font-weight: 750; letter-spacing: -0.01em; font-variant-numeric: tabular-nums;
+    color: var(--bonus); margin-top: 2px;
+  }
+  .bonus .maxr { font-size: 14px; font-weight: 600; }
+  .bonus .total { font-size: 13px; font-weight: 400; letter-spacing: 0; color: var(--muted); }
+  .meta { display: flex; flex-wrap: wrap; align-items: center; gap: 3px 10px; margin-top: 4px; font-size: 13px; color: var(--muted); }
+  .meta .mcard { font-size: 13px; font-weight: 600; color: var(--text); }
   /* Badges are quiet: small plain text, so merchant, reward and card are what stands out. */
-  .badge { display: inline-block; font-size: 13.5px; font-weight: 500; color: var(--muted); }
-  .badge.needs { padding: 0 6px; border-radius: 5px; background: var(--warn-bg); color: var(--warn-text); }
+  .badge { display: inline-block; font-size: 13px; font-weight: 500; color: var(--muted); }
+  .badge.needs { padding: 1px 7px; border-radius: 6px; background: var(--warn-bg); color: var(--warn-text); font-weight: 600; }
   .badge.done { color: var(--ok-text); }
   .badge.nochan { font-style: italic; }
-  .badge.cuis { color: var(--cuis); }
+  .badge.cuis { color: var(--cuis); font-weight: 500; }
 
-  .details { padding: 10px 16px 14px; border-top: 1px solid var(--line); font-size: 16px; }
+  .details { padding: 10px 14px 12px; border-top: 1px solid var(--line); font-size: 14px; }
   .details[hidden] { display: none; }
   .details dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 6px 12px; margin: 0; align-items: baseline; }
   .details dl + dl { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); }
-  dt { font-size: 12.5px; font-weight: 600; letter-spacing: .03em; text-transform: uppercase; color: var(--muted); }
+  dt { font-size: 11.5px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
   dd { margin: 0; overflow-wrap: anywhere; }
-  dd.fine { font-size: 14.5px; line-height: 1.4; }
+  dd.fine { font-size: 14px; line-height: 1.4; }
   dd ul { margin: 0; padding-left: 18px; }
-  .dnone { margin: 8px 0 0; font-size: 13.5px; color: var(--muted); }
+  .dnone { margin: 8px 0 0; font-size: 12.5px; color: var(--muted); }
   /* Cuisine evidence, folded away under the purchase details. */
   details.cuisdet { margin-top: 14px; border-top: 1px solid var(--line); padding-top: 4px; }
-  details.cuisdet > summary { min-height: 44px; display: flex; align-items: center; font-size: 15px; font-weight: 600; color: var(--cuis); cursor: pointer; }
+  details.cuisdet > summary { min-height: 44px; display: flex; align-items: center; font-size: 14px; font-weight: 600; color: var(--cuis); cursor: pointer; }
   details.cuisdet > summary:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
   details.cuisdet p { margin: 2px 0 0; font-size: 15px; color: var(--muted); overflow-wrap: anywhere; }
   /* Import notes on how the issuer's screen was read: quiet, at the bottom. */
@@ -254,9 +278,9 @@
   details.srcdet ul { margin: 2px 0 0; padding-left: 18px; font-size: 14.5px; color: var(--muted); overflow-wrap: anywhere; }
 
   .more {
-    display: block; width: 100%; min-height: 52px; margin: 10px 0 0; padding: 0 16px;
-    font: inherit; font-size: 16px; font-weight: 600; color: var(--accent);
-    background: var(--surface); border: 1.5px solid var(--line); border-radius: 14px; cursor: pointer;
+    display: block; width: 100%; min-height: 44px; margin: 10px 0 0; padding: 0 16px;
+    font: inherit; font-size: 15px; font-weight: 600; color: var(--accent);
+    background: var(--surface); border: 1px solid var(--line); border-radius: 12px; cursor: pointer;
     -webkit-tap-highlight-color: transparent;
   }
   .more:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
@@ -267,14 +291,14 @@
 
   details.expired { margin-top: 28px; }
   details.expired > summary {
-    min-height: 52px; display: flex; align-items: center;
-    padding: 0 4px; font-weight: 600; cursor: pointer;
+    min-height: 44px; display: flex; align-items: center;
+    padding: 0 4px; font-size: 15px; font-weight: 600; cursor: pointer;
   }
   details.expired > ul.results { margin-top: 4px; }
   details.expired .note { margin: 8px 4px 0; color: var(--muted); font-size: 14px; }
   /* Offers that dropped off: same rows, grayed out. */
-  li.offer.gone { background: transparent; border-style: dashed; }
-  .gone .merchant, .gone .bonus { color: var(--muted); }
+  li.offer.gone { background: transparent; border-style: dashed; box-shadow: none; }
+  .gone .merchant, .gone .bonus, .gone .meta .mcard, .gone .badge.cuis { color: var(--muted); }
   .gone .bonus { font-weight: 600; }
   .gone .dropped { font-weight: 600; }
   /* "Restore offer" on a used row sits above the row's stretched tap layer. */
@@ -285,41 +309,48 @@
   .filter.off .cats, .filter.off .flabel, .filter.off .sorthelp { opacity: .4; }
   .filter.off .cat { cursor: default; }
 
-  /* Bonus categories strip (above the search box): one summary line, tap to expand. */
+  /* Bonus categories strip (under the search box): one summary line, tap to expand. On phones it is the top
+     of one panel with the Filters button under it. */
   details.bstrip {
-    margin: 12px 0 0; background: var(--surface);
-    border: 1px solid var(--line); border-left: 4px solid var(--bonus); border-radius: 0 12px 12px 0;
+    margin: 8px 0 0; background: var(--surface);
+    border: 1px solid var(--line); border-radius: 12px;
+  }
+  @media (max-width: 699px) {
+    details.bstrip { border-radius: 12px 12px 0 0; }
   }
   details.bstrip[hidden] { display: none; }
   details.bstrip > summary {
     min-height: 44px; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px;
-    padding: 6px 12px; font-size: 15px; font-weight: 650; cursor: pointer; list-style: none;
+    padding: 6px 14px; font-size: 15px; font-weight: 600; cursor: pointer; list-style: none;
     -webkit-tap-highlight-color: transparent;
   }
   details.bstrip > summary::-webkit-details-marker { display: none; }
-  details.bstrip > summary::after {
-    content: ""; width: 8px; height: 8px; margin: -4px 4px 0 auto; flex: none;
-    border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted); transform: rotate(45deg);
+  details.bstrip > summary::before {
+    content: ""; width: 8px; height: 8px; flex: none; border-radius: 2px; background: var(--bonus);
   }
-  details.bstrip[open] > summary::after { margin-top: 4px; transform: rotate(-135deg); }
+  details.bstrip > summary::after {
+    content: ""; width: 7px; height: 7px; margin: -3px 4px 0 auto; flex: none;
+    border-right: 1.5px solid var(--muted); border-bottom: 1.5px solid var(--muted); transform: rotate(45deg);
+  }
+  details.bstrip[open] > summary::after { margin-top: 3px; transform: rotate(-135deg); }
   details.bstrip > summary:focus-visible { outline: 3px solid var(--accent); outline-offset: -3px; }
-  details.bstrip ul { list-style: none; margin: 0; padding: 0 12px 10px; display: grid; gap: 8px; font-size: 16px; }
-  details.bstrip li { padding-top: 8px; border-top: 1px solid var(--line); overflow-wrap: anywhere; }
-  .bstrip .bcard { font-weight: 700; }
+  details.bstrip ul { list-style: none; margin: 0; padding: 0 14px 4px; display: grid; gap: 0; font-size: 14px; }
+  details.bstrip li { padding: 9px 0; border-top: 1px solid var(--line); overflow-wrap: anywhere; }
+  .bstrip .bcard { font-weight: 650; }
   .bstrip .brate { font-weight: 700; color: var(--bonus); }
   .bstrip .bmeta { color: var(--muted); }
   /* Category wording, dates and caps: smaller and muted under the card and rate. */
-  .bstrip .bsub { margin-top: 1px; font-size: 13.5px; line-height: 1.35; color: var(--muted); }
+  .bstrip .bsub { margin-top: 1px; font-size: 13px; line-height: 1.35; color: var(--muted); }
   .bstrip .bsub .brate { color: var(--bonus); font-weight: 650; }
   /* Status line: inline text flow, so the control sits right after the status, on its last line. */
-  .bstrip .bstat { margin-top: 4px; font-size: 13.5px; line-height: 2; }
+  .bstrip .bstat { margin-top: 4px; font-size: 13px; line-height: 2; }
   .bstrip .bstat .bwarn { display: inline; padding: 2px 6px; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
   .bstrip .bstat .edfill, .bstrip .bstat .edlink { margin-left: 6px; vertical-align: middle; }
   .bstrip .bstat .edlink { margin-top: -8px; margin-bottom: -8px; }
   .bstrip .bstat .bby { margin-left: 8px; }
   details.bmore { margin-top: 2px; font-size: 13.5px; color: var(--muted); }
   details.bmore > summary {
-    display: inline-flex; align-items: center; min-height: 32px; color: var(--accent); font-weight: 600;
+    display: inline-flex; align-items: center; min-height: 32px; font-size: 13px; color: var(--accent); font-weight: 600;
     cursor: pointer; list-style: none; -webkit-tap-highlight-color: transparent;
   }
   details.bmore > summary::-webkit-details-marker { display: none; }
@@ -334,16 +365,13 @@
   .bok { color: var(--ok-text); font-weight: 600; }
   /* Bonus rows above the offers: a tinted box, not a tappable offer. */
   .bonusrows { display: grid; gap: 8px; margin: 8px 0 0; }
-  .bonusrow {
-    padding: 10px 14px; background: var(--bonus-bg);
-    border-left: 4px solid var(--bonus); border-radius: 0 12px 12px 0; font-size: 16px;
-  }
+  .bonusrow { padding: 10px 14px; background: var(--bonus-bg); border-radius: 12px; font-size: 14px; }
   .bonusrow .bhead { font-weight: 700; color: var(--bonus); }
-  .bonusrow.hint { margin: 0; background: var(--neutral-bg); border-left-color: var(--muted); color: var(--neutral-text); font-size: 15px; }
-  .bonusrow .bnote { margin-top: 4px; font-size: 14px; color: var(--muted); }
+  .bonusrow.hint { margin: 0; background: var(--neutral-bg); color: var(--neutral-text); }
+  .bonusrow .bnote { margin-top: 4px; font-size: 12.5px; color: var(--muted); }
   /* Cards below the everyday rate, and rows where every bonus card is below it: kept for reference, muted. */
   .bonusrow .bbelow { color: var(--muted); }
-  .bonusrow.muted { background: var(--surface); border-left-color: var(--line); color: var(--muted); }
+  .bonusrow.muted { background: var(--surface); color: var(--muted); }
   .bonusrow.muted .bhead { color: var(--muted); }
   /* "For “starbucks”" / "For Travel": which bonus rows come from the search and which from the button. */
   .bgroup { margin: 4px 2px -2px; font-size: 13px; font-weight: 700; letter-spacing: .03em; color: var(--muted); }
@@ -352,9 +380,9 @@
   footer[hidden] { display: none; }
 
   /* Offer freshness (footer): collapsed one-liner, tap to list each card's last full read. */
-  details.fresh { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; }
+  details.fresh { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--box-shadow); }
   details.fresh > summary {
-    min-height: 48px; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px;
+    min-height: 44px; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px;
     padding: 6px 14px; font-size: 15px; font-weight: 600; color: var(--text); cursor: pointer; list-style: none;
     -webkit-tap-highlight-color: transparent;
   }
@@ -368,19 +396,19 @@
   .fchip { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; white-space: nowrap; }
   .fdot { width: 10px; height: 10px; border-radius: 50%; background: currentColor; flex: none; }
   .fbody { padding: 0 14px 12px; }
-  .fnote { margin: 0 0 6px; font-size: 14px; color: var(--muted); }
+  .fnote { margin: 0 0 6px; font-size: 12.5px; color: var(--muted); }
   ul.flist { list-style: none; margin: 0; padding: 0; }
   li.frow { border-top: 1px solid var(--line); }
   .fhead {
     display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: baseline; gap: 0 12px;
-    width: 100%; min-height: 48px; padding: 8px 0; margin: 0;
-    font: inherit; font-size: 16px; color: var(--text); text-align: left;
+    width: 100%; min-height: 44px; padding: 8px 0; margin: 0;
+    font: inherit; font-size: 14px; color: var(--text); text-align: left;
     background: none; border: 0; cursor: pointer; -webkit-tap-highlight-color: transparent;
   }
   .fhead:focus-visible { outline: 3px solid var(--accent); outline-offset: -2px; border-radius: 8px; }
   .fname { font-weight: 650; overflow-wrap: anywhere; }
   .fstatus { font-weight: 700; text-align: right; }
-  .fage { grid-column: 1; color: var(--muted); font-size: 14px; }
+  .fage { grid-column: 1; color: var(--muted); font-size: 13px; }
   .fdetail { margin: 0; padding: 0 0 10px; font-size: 14px; color: var(--text); overflow-wrap: anywhere; }
   .fdetail[hidden] { display: none; }
   .s-fresh { color: var(--f-fresh); }
@@ -453,20 +481,29 @@
   .savebar.live .savemsg { font-size: 13px; color: var(--muted); }
   .savebar.live .savebtns .edlink { font-size: 13px; }
   .wrap.barpad { padding-bottom: 90px; }
-  .editmode { margin-top: 10px; }
+  .editmode { margin-top: 8px; }
   .editmode summary .edon, .editmode summary .edoff { margin-left: 8px; font-size: 14px; font-weight: 700; }
   .edon { color: var(--bonus); }
   .edoff { color: var(--muted); }
   .edwarn { color: var(--f-old); font-weight: 650; }
   .fnote a { color: var(--accent); }
   .signin { display: grid; gap: 6px; }
-  .signin label { font-size: 15px; font-weight: 650; }
+  .signin label { font-size: 13px; font-weight: 600; color: var(--muted); }
   .signin input {
-    width: 100%; height: 46px; padding: 0 12px; font: inherit; font-size: 16px;
-    color: var(--text); background: var(--surface); border: 1.5px solid var(--line); border-radius: 10px;
+    width: 100%; height: 44px; padding: 0 12px; font: inherit; font-size: 16px;
+    color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 8px;
   }
   .signin input:focus { outline: none; border-color: var(--accent); }
-  .signin .edbtn { justify-self: start; margin-top: 4px; }
+  /* Sign in: the one filled button. */
+  .signin .edbtn {
+    justify-self: start; margin-top: 4px; min-height: 44px; font-size: 15px; font-weight: 600;
+    color: #fff; background: var(--accent); border: 0; border-radius: 8px;
+  }
+  @media (prefers-color-scheme: dark) {
+    #q { box-shadow: none; }
+    #q:focus { box-shadow: 0 0 0 4px rgba(122, 178, 255, .18); }
+    .signin .edbtn { color: #0f1115; }
+  }
   .ferr { margin: 0; min-height: 1.2em; font-size: 15px; color: var(--f-old); overflow-wrap: anywhere; }
 </style>
 </head>
