@@ -405,7 +405,7 @@
     };
     // A clean date ("Dec 14"); Citi's dates are worked out from a "12d left" countdown, so they say so.
     var exp = o.expires
-      ? fmtDate(o.expires) + (/^Citi /.test(o.card) && /\bleft\b/.test(o.expires_text || "") ? " (estimate)" : "")
+      ? fmtDate(o.expires) + (estimatedEnd(o) ? " (estimate)" : "")
       : o.expires_text;
     add("Expires", exp, "expiry");
     add("Spending cap", tidy(o.spend_cap), "spending cap");
@@ -628,18 +628,24 @@
     return l && l.row_name ? l.row_name : c;
   }
 
-  // "Ends today" / "Ends tomorrow" / "Ends in N days" for an active offer ending within 7 days (local date), else null.
+  // Citi dates come from a "12d left" countdown, so they are estimates (the details say "(estimate)").
+  function estimatedEnd(o) { return /^Citi /.test(o.card) && /\bleft\b/.test(o.expires_text || ""); }
+
+  // "Ends today" / "Ends tomorrow" / "Ends in N days" for an active offer ending within 7 days (local date), else
+  // null; on an estimated Citi date "Ends about today" / "Ends about tomorrow" / "Ends in about N days".
   function endsSoonText(o) {
     if (o.status !== "active") return null;
     var end = parseDay(o.expires), today = parseDay(todayISO());
     if (end === null || today === null) return null;
     var n = end - today;
     if (n < 0 || n > 7) return null;
-    return n === 0 ? "Ends today" : n === 1 ? "Ends tomorrow" : "Ends in " + n + " days";
+    var about = estimatedEnd(o) ? "about " : "";
+    return n === 0 ? "Ends " + about + "today" : n === 1 ? "Ends " + about + "tomorrow" : "Ends in " + about + n + " days";
   }
 
   function renderOffer(o, id, gone) {
     var li = el("li", gone ? "offer gone" : "offer");
+    li.setAttribute("data-oid", o.id); // the day redraw finds the row again by it (focus)
     var row = el("div", "row");
     var btn = el("button", "toggle");
     btn.type = "button";
@@ -1803,6 +1809,7 @@
           return;
         }
         var row = el("details", cls);
+        row.setAttribute("data-topic", (grp.label || "") + "|" + t.name); // the day redraw reopens it by it when its lead changed
         var sum = el("summary", "bsum");
         var l1 = el("span", "bl1");
         l1.appendChild(tagIcon());
@@ -1893,6 +1900,7 @@
     var ed = editing();
     live.forEach(function (e) {
       var li = el("li"), head = el("div"), more = [];
+      li.setAttribute("data-eid", e.id); // the day redraw finds the entry again by it (More details, focus)
       li.appendChild(head);
       head.appendChild(withDot(el("span", "bcard", e.card + ": "), e.card));
       var rate = function (r) { head.appendChild(el("span", "brate", pct(r) + "%")); };
@@ -2026,6 +2034,8 @@
     if (sig !== totalSig) { totalCache = {}; totalSig = sig; }
     var query = input.value;
     var today = todayISO();
+    lastDay = today; // the date this render used (the day redraw compares it)
+    window.__renders = (window.__renders || 0) + 1; // for the tests
     main.textContent = "";
     if (lineFit) lineFit.disconnect(); // the old bonus rows are gone
     var hasQuery = compact(query) !== "";
@@ -2271,12 +2281,98 @@
   function scheduleFreshness() {
     clearTimeout(freshTimer);
     var n = new Date(), next = new Date(n.getFullYear(), n.getMonth(), n.getDate() + 1, 0, 0, 0, 500);
-    freshTimer = setTimeout(function () { renderFreshness(); scheduleFreshness(); }, Math.max(1000, next - n));
+    freshTimer = setTimeout(function () { renderFreshness(); scheduleFreshness(); checkDay(); }, Math.max(1000, next - n));
   }
   function refreshFreshness() { renderFreshness(); scheduleFreshness(); }
-  document.addEventListener("visibilitychange", function () { if (!document.hidden) refreshFreshness(); });
-  window.addEventListener("pageshow", refreshFreshness);
-  window.addEventListener("focus", refreshFreshness);
+  function comeBackDay() { refreshFreshness(); checkDay(); }
+  document.addEventListener("visibilitychange", function () { if (!document.hidden) comeBackDay(); });
+  window.addEventListener("pageshow", comeBackDay);
+  window.addEventListener("focus", comeBackDay);
+
+  // ---- A new local day (midnight, or the tab coming back the next day): offers that ended yesterday leave the
+  // list, the Ends badges, the bonus strip and the headline follow today. Never during a save or while an edit
+  // control has focus (then dayPending, redrawn when the save ends or the focus leaves). Everything the owner
+  // has open or picked stays, and focus and scroll stay where they are.
+  var lastDay = null, dayPending = false;
+  function dayBlocked() {
+    if (saving) return true;
+    var f = document.activeElement;
+    return !!f && (main.contains(f) || blist.contains(f)) && f.matches("select, .edsm, .edfill, .edlink");
+  }
+  function checkDay() {
+    if (!data || lastDay === null || (!dayPending && todayISO() === lastDay)) return;
+    if (dayBlocked()) { dayPending = true; return; }
+    dayPending = false;
+    dayRedraw();
+  }
+  // An edit control losing focus may let a held redraw go.
+  document.addEventListener("focusout", function () {
+    if (dayPending) setTimeout(function () { if (dayPending) checkDay(); }, 0);
+  });
+  // Where focus is, as something that can be found again after the redraw: the offer row, bonus row or strip
+  // entry it sits in (else its container), and its kind, text and place among its kind there.
+  function focusSpot() {
+    var f = document.activeElement;
+    if (!f || f === document.body || f === input) return null;
+    var row = f.closest("[data-oid], [data-eid], details.bonusrow"), home = f.closest("[id]");
+    var at = !row ? { id: home && home.id } : row.hasAttribute("data-oid") ? { oid: row.getAttribute("data-oid") } :
+      row.hasAttribute("data-eid") ? { eid: row.getAttribute("data-eid") } : { lead: row.querySelector(".bhead").textContent, topic: row.getAttribute("data-topic") };
+    var kin = function (scope) {
+      return Array.prototype.filter.call(scope.querySelectorAll(f.tagName), function (x) { return x.className === f.className; });
+    };
+    var scope = row || home || document;
+    return { el: f, at: at, kin: kin, i: kin(scope).indexOf(f), text: f.textContent };
+  }
+  function findSpot(s) {
+    var scope = s.at.oid ? main.querySelector("[data-oid=\"" + CSS.escape(s.at.oid) + "\"]") :
+      s.at.eid ? blist.querySelector("[data-eid=\"" + CSS.escape(s.at.eid) + "\"]") :
+      s.at.lead != null ? Array.prototype.filter.call(main.querySelectorAll("details.bonusrow"), function (d) {
+        return d.querySelector(".bhead").textContent === s.at.lead;
+      })[0] || Array.prototype.filter.call(main.querySelectorAll("details.bonusrow"), function (d) {
+        return d.getAttribute("data-topic") === s.at.topic;
+      })[0] : s.at.id ? document.getElementById(s.at.id) : document;
+    if (!scope) return null;
+    var list = s.kin(scope);
+    return list.filter(function (x) { return x.textContent === s.text; })[0] || list[s.i] || null;
+  }
+  function dayRedraw() {
+    var y = window.scrollY, spot = focusSpot();
+    // What render() and renderStrip() would draw closed again: Recently unavailable, the open bonus rows (by
+    // lead, else by topic when the lead changed: "Dining at <merchant>" names what matched), the strip's open
+    // "More details" and an unsaved Focus or Choice pick (by entry).
+    var ex = main.querySelector("details.expired"), exOpen = ex ? ex.open : null;
+    var rowsOpen = Array.prototype.map.call(main.querySelectorAll("details.bonusrow[open]"), function (d) {
+      return { lead: d.querySelector(".bhead").textContent, topic: d.getAttribute("data-topic") };
+    });
+    var moreOpen = Array.prototype.map.call(blist.querySelectorAll("li[data-eid] > details.bmore[open]"), function (d) { return d.parentNode.getAttribute("data-eid"); });
+    var picks = Array.prototype.map.call(blist.querySelectorAll(".bfocus select"), function (sel) { return [sel.id, sel.value]; });
+    totalCache = {}; totalSig = ""; // Best offer totals, worked out again for today
+    renderCats(); renderCards(); renderStrip(); renderCuisines(); render();
+    var ex2 = main.querySelector("details.expired");
+    if (ex2 && exOpen !== null) ex2.open = exOpen;
+    var rowsNow = Array.prototype.slice.call(main.querySelectorAll("details.bonusrow"));
+    rowsOpen.forEach(function (r) {
+      var d = rowsNow.filter(function (x) { return x.querySelector(".bhead").textContent === r.lead; })[0] ||
+        rowsNow.filter(function (x) { return x.getAttribute("data-topic") === r.topic; })[0];
+      if (d) d.open = true;
+    });
+    moreOpen.forEach(function (id) {
+      var d = blist.querySelector("li[data-eid=\"" + CSS.escape(id) + "\"] > details.bmore");
+      if (d) d.open = true;
+    });
+    picks.forEach(function (p) {
+      var sel = document.getElementById(p[0]);
+      if (sel && sel.value !== p[1] && Array.prototype.some.call(sel.options, function (op) { return op.value === p[1]; })) {
+        sel.value = p[1];
+        sel.dispatchEvent(new Event("change")); // shows its Save
+      }
+    });
+    if (spot && !spot.el.isConnected) {
+      var f = findSpot(spot);
+      if (f) f.focus({ preventScroll: true });
+    }
+    window.scrollTo(0, y);
+  }
 
   // The sticky search box casts a shadow once the page is scrolled (one check per frame).
   var searchBar = document.querySelector(".searchbar"), shadowQueued = false;
@@ -2596,6 +2692,8 @@
     }
   }
   function redraw() {
+    // A new day held back by the save: the full day redraw instead (once).
+    if (dayPending && !dayBlocked()) { dayPending = false; dayRedraw(); return; }
     renderStrip();
     if (data) { renderCuisines(); render(); }
   }
