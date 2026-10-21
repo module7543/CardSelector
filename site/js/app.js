@@ -535,7 +535,8 @@
     return t;
   }
 
-  // Small stroked icons for the offer meta line (aria-hidden, no fill): check (done), shop (in-store), globe (online).
+  // Small stroked icons for the offer meta line (aria-hidden, no fill): check (done), shop (in-store), globe (online),
+  // clock (ends soon).
   function metaIcon(kind) {
     var svg = document.createElementNS(SVG_NS, "svg");
     svg.setAttribute("class", "bico");
@@ -557,6 +558,10 @@
     } else if (kind === "shop") {
       svg.setAttribute("stroke-width", "1.4");
       add("path", { d: "M2 5l1-3h6l1 3M2 5v5h8V5M2 5h8M5 10V7h2v3" });
+    } else if (kind === "clock") {
+      svg.setAttribute("stroke-width", "1.3");
+      add("circle", { cx: "6", cy: "6", r: "4.5" });
+      add("path", { d: "M6 3.5V6l1.8 1.2" });
     } else {
       svg.setAttribute("stroke-width", "1.3");
       add("circle", { cx: "6", cy: "6", r: "4.5" });
@@ -623,6 +628,16 @@
     return l && l.row_name ? l.row_name : c;
   }
 
+  // "Ends today" / "Ends tomorrow" / "Ends in N days" for an active offer ending within 7 days (local date), else null.
+  function endsSoonText(o) {
+    if (o.status !== "active") return null;
+    var end = parseDay(o.expires), today = parseDay(todayISO());
+    if (end === null || today === null) return null;
+    var n = end - today;
+    if (n < 0 || n > 7) return null;
+    return n === 0 ? "Ends today" : n === 1 ? "Ends tomorrow" : "Ends in " + n + " days";
+  }
+
   function renderOffer(o, id, gone) {
     var li = el("li", gone ? "offer gone" : "offer");
     var row = el("div", "row");
@@ -675,6 +690,12 @@
       var ab = el("span", "badge act " + a[1], a[0]);
       if (a[1] === "done") ab.insertBefore(metaIcon("check"), ab.firstChild);
       meta.appendChild(ab);
+      var soon = endsSoonText(o);
+      if (soon) {
+        var sb = el("span", "badge soon", soon);
+        sb.insertBefore(metaIcon("clock"), sb.firstChild);
+        meta.appendChild(sb);
+      }
     }
     var ch = channel(o);
     if (ch) {
@@ -1735,14 +1756,17 @@
     }
   }
 
-  // One card entry: dot, name, rate, then (open list only) its status wording.
-  function bonusEntry(tag, cls, it, status) {
+  // One card entry: dot, name, rate, then (open list only) its status wording. warn (closed line only): a "⚠"
+  // before the name and a hidden ", not activated" after the rate.
+  function bonusEntry(tag, cls, it, status, warn) {
     var e = el(tag, cls);
     var d = issuerDot(it.e.card);
     if (d) e.appendChild(d);
+    if (warn) e.appendChild(el("span", "bwarnmk", "⚠")).setAttribute("aria-hidden", "true");
     e.appendChild(el("span", "bcn", it.e.card));
     e.appendChild(document.createTextNode(" "));
     e.appendChild(el("span", "brate", pct(it.g._rate) + "%"));
+    if (warn) e.appendChild(el("span", "sr-only", ", not activated"));
     if (status) e.appendChild(document.createTextNode(status));
     return e;
   }
@@ -1792,7 +1816,7 @@
         var line = el("span", "bline"), below = 0;
         items.forEach(function (it) {
           if (it.below && ev) { below++; return; }
-          var e = bonusEntry("span", "bent", it);
+          var e = bonusEntry("span", "bent", it, null, it.e.activation === "not_confirmed");
           if (line.firstChild) e.insertBefore(el("span", "sr-only", ", "), e.firstChild);
           line.appendChild(e);
         });
@@ -1802,6 +1826,8 @@
         line.appendChild(more);
         line.setAttribute("data-below", String(below));
         sum.appendChild(line);
+        // Closed: the row's caveats on one truncated line (open, they show in full under the entries).
+        if (t.notes.length) sum.appendChild(el("span", "bcav", t.notes.join(" ")));
         row.appendChild(sum);
         // Open: one entry per line, then the notes.
         var body = el("div", "bbody"), ul = el("ul", "blist");
@@ -2251,6 +2277,14 @@
   document.addEventListener("visibilitychange", function () { if (!document.hidden) refreshFreshness(); });
   window.addEventListener("pageshow", refreshFreshness);
   window.addEventListener("focus", refreshFreshness);
+
+  // The sticky search box casts a shadow once the page is scrolled (one check per frame).
+  var searchBar = document.querySelector(".searchbar"), shadowQueued = false;
+  function syncShadow() { shadowQueued = false; searchBar.classList.toggle("scrolled", window.scrollY > 0); }
+  window.addEventListener("scroll", function () {
+    if (!shadowQueued) { shadowQueued = true; requestAnimationFrame(syncShadow); }
+  }, { passive: true });
+  syncShadow();
 
   // Once a new search settles (no typing for a moment), bring the "Use:" line and the start of the results
   // up under the sticky search box. Scrolling never moves focus, so the keyboard stays up.

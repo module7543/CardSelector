@@ -3,7 +3,7 @@
 // Needs Playwright (npm i playwright). CHROMIUM_PATH picks a browser binary if Playwright's own isn't installed.
 // The checks use the live data where they can; "shell" adds one test-only Shell offer in the browser, because
 // no Shell offer is active today. Nothing is written to the data files.
-const http = require("http"), fs = require("fs"), path = require("path");
+const http = require("http"), fs = require("fs"), path = require("path"), { execFileSync } = require("child_process");
 const { chromium } = require("playwright");
 const SITE = path.join(__dirname, "../site");
 const TYPES = { ".html": "text/html", ".js": "text/javascript", ".json": "application/json", ".css": "text/css", ".svg": "image/svg+xml", ".png": "image/png" };
@@ -68,7 +68,7 @@ const label = r => r.merchant + " | " + r.card + " | " + r.bonus;
   const base = "http://127.0.0.1:" + server.address().port + "/";
   const browser = await chromium.launch(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {});
   // Service workers blocked: the saved copy (sw.js) would answer requests before page.route sees them.
-  const page = await browser.newPage({ viewport: { width: 390, height: 844 }, serviceWorkers: "block" });
+  let page = await browser.newPage({ viewport: { width: 390, height: 844 }, serviceWorkers: "block" });
   const rows = () => page.$$eval("#main > ul.results > li.offer", ls => ls.map(li => ({
     merchant: li.querySelector(".merchant").textContent,
     card: li.querySelector(".mcard").textContent,
@@ -326,6 +326,153 @@ const label = r => r.merchant + " | " + r.card + " | " + r.bonus;
   [...names].filter(n => !(n in WANT)).forEach(n => wrong.push([n, got[probe.indexOf(n)], "a listed issuer (add it to WANT)"]));
   ok(names.size > 0 && !wrong.length, "issuerOf: " + names.size + " cards.json names and 5 unknown names give the right key" +
     (wrong.length ? " (wrong: " + wrong.map(([n, g, w]) => JSON.stringify(n) + " -> " + g + ", want " + w).join("; ") + ")" : ""));
+
+  // Ends soon: with a fixed "today", test-only active offers ending in 0, 1, 2, 7 and 8 days (and one with no
+  // date, one already gone) get "Ends today", "Ends tomorrow", "Ends in 2 days", "Ends in 7 days" and nothing,
+  // between the activation and channel badges; never on a Recently unavailable row.
+  const mainPage = page;
+  const fixedCtx = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: "block" });
+  page = await fixedCtx.newPage();
+  await page.clock.setFixedTime(new Date(2026, 9, 21, 12, 0, 0));
+  const plusDays = n => { const d = new Date(2026, 9, 21 + n); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); };
+  const EXP = [["Zzexp Day0", 0, "Ends today"], ["Zzexp Day1", 1, "Ends tomorrow"], ["Zzexp Day2", 2, "Ends in 2 days"],
+    ["Zzexp Day7", 7, "Ends in 7 days"], ["Zzexp Day8", 8, null], ["Zzexp Nodate", null, null]];
+  await page.route("**/data/offers.json", async route => {
+    const d = await (await route.fetch()).json();
+    const mk = (merchant, n, status) => ({ id: "test/" + merchant.toLowerCase().replace(/ /g, "-"), card: "U.S. Bank", merchant, category: "Clothing & Jewelry",
+      bonus: "5% cash back", expires: n == null ? null : plusDays(n), expires_text: null, activation: "needs_activation", channel: "online",
+      spend_cap: null, minimum_spend: null, fine_print: null, other_details: [], last_read: "2026-10-18", first_seen: "2026-10-18",
+      status: status || "active", status_since: "2026-10-18" });
+    EXP.forEach(([m, n]) => d.offers.push(mk(m, n)));
+    d.offers.push(mk("Zzexp Gone", 1, "missing"));
+    await route.fulfill({ json: d });
+  });
+  await setup("zzexp");
+  const exp = await page.evaluate(() => {
+    const out = {};
+    document.querySelectorAll("li.offer").forEach(li => {
+      const m = li.querySelector(".meta"), kids = [...m.children], soon = m.querySelector(".badge.soon");
+      out[li.querySelector(".merchant").textContent] = { gone: li.classList.contains("gone"), text: soon ? soon.textContent : null,
+        icon: soon ? !!soon.querySelector("svg.bico[aria-hidden='true'] circle") : null,
+        after: soon ? kids.indexOf(soon) > kids.indexOf(m.querySelector(".badge.act")) && kids.indexOf(m.querySelector(".badge.act")) !== -1 : null,
+        before: soon ? kids.indexOf(soon) < kids.indexOf(m.querySelector(".badge.chan")) : null };
+    });
+    return out;
+  });
+  await page.unroute("**/data/offers.json");
+  for (const [m, , want] of EXP) {
+    const x = exp[m];
+    ok(x && !x.gone && x.text === want && (!want || (x.icon && x.after && x.before)),
+      m + ": " + (want ? "\"" + want + "\" with a clock, after activation, before channel" : "no ends-soon badge") + " (" + JSON.stringify(x) + ")");
+  }
+  ok(exp["Zzexp Gone"] && exp["Zzexp Gone"].gone && exp["Zzexp Gone"].text === null, "Zzexp Gone (Recently unavailable, ends tomorrow): no ends-soon badge (" + JSON.stringify(exp["Zzexp Gone"]) + ")");
+  // The badge is display only: the first 10 rows of 12 searches, on the same fixed day, match the base branch's
+  // app.js (BASE_REF, else origin/main, else main, else main fetched from origin), when git can get it.
+  let baseApp = null, baseRef = null;
+  for (const ref of [process.env.BASE_REF, "origin/main", "main"].filter(Boolean)) {
+    try { baseApp = execFileSync("git", ["show", ref + ":site/js/app.js"], { cwd: path.join(__dirname, ".."), stdio: ["ignore", "pipe", "ignore"] }); baseRef = ref; break; } catch (e) {}
+  }
+  // A shallow pull request checkout has neither ref: fetch main's tip once.
+  if (!baseApp) {
+    try {
+      const git = args => execFileSync("git", args, { cwd: path.join(__dirname, ".."), stdio: ["ignore", "pipe", "ignore"] });
+      git(["fetch", "--depth=1", "origin", "main"]);
+      baseApp = git(["show", "FETCH_HEAD:site/js/app.js"]); baseRef = "origin main (fetched)";
+    } catch (e) {}
+  }
+  const SEARCHES = ["pizza", "grill", "round table", "charley", "book", "shell", "bp", "persian", "costco gas", "levain", "target", "zzqx"];
+  if (!baseApp) skip("ends soon: no base app.js in git (set BASE_REF), first-10 order not compared");
+  else {
+    const diff = [];
+    let soonSeen = 0;
+    for (const q of SEARCHES) {
+      const mine = (await setup(q)).slice(0, 10).map(label);
+      soonSeen += await page.locator("#main .badge.soon").count();
+      await page.route("**/js/app.js", route => route.fulfill({ body: baseApp, contentType: "text/javascript" }));
+      const theirs = (await setup(q)).slice(0, 10).map(label);
+      await page.unroute("**/js/app.js");
+      if (JSON.stringify(mine) !== JSON.stringify(theirs)) diff.push(q);
+    }
+    ok(!diff.length, "ends soon: first 10 rows of " + SEARCHES.length + " searches match " + baseRef + " on 2026-10-21 (" + soonSeen + " ends-soon badges on them)" + (diff.length ? " (differ: " + diff.join(", ") + ")" : ""));
+  }
+  await fixedCtx.close();
+  page = mainPage;
+
+  // Not activated: with the three quarterly entries forced to not_confirmed, the closed line puts a "⚠" (the
+  // strip warning's color and size) before exactly those cards, with a hidden ", not activated"; the line still
+  // fits whole names and +N counts the rest, at 390 and 360px.
+  const FORCE = new Set(["Freedom Flex", "Freedom", "Discover it"]);
+  await page.route("**/data/bonus-categories.json", async route => {
+    const d = await (await route.fetch()).json();
+    d.entries.forEach(e => { if (FORCE.has(e.card)) e.activation = "not_confirmed"; });
+    await route.fulfill({ json: d });
+  });
+  const marks = () => page.$$eval("#main details.bonusrow .bent", (es, force) => {
+    const ref = document.querySelector("#bsum .bwarn"), rs = ref && getComputedStyle(ref);
+    return es.map(e => {
+      const mk = e.querySelector(".bwarnmk"), ms = mk && getComputedStyle(mk), sr = e.querySelector(".sr-only:last-child");
+      return { card: e.querySelector(".bcn").textContent, mk: !!mk, want: force.includes(e.querySelector(".bcn").textContent),
+        sr: !!sr && sr.textContent === ", not activated", hidden: !!mk && mk.getAttribute("aria-hidden") === "true",
+        style: !mk || (!!rs && ms.color === rs.color && ms.fontSize === rs.fontSize), afterDot: !mk || !mk.previousElementSibling || mk.previousElementSibling.classList.contains("idot") };
+    });
+  }, [...FORCE]);
+  for (const w of [390, 360]) {
+    await page.setViewportSize({ width: w, height: 844 });
+    let warned = 0;
+    for (const [q, o] of [["round table"], ["pizza"], ["costco gas"], ["", { cat: "Dining" }], ["", { cat: "Travel" }], ["", { cat: "Groceries" }]]) {
+      await setup(q, o);
+      await page.waitForTimeout(100);
+      const name = (q || o.cat) + " @" + w + ", not activated";
+      const mm = await marks(), br = await bonusRows();
+      if (!br.length) { skip(name + ": no bonus row"); continue; }
+      warned += mm.filter(m => m.mk).length;
+      const bad = mm.filter(m => m.mk !== m.want || (m.mk && !(m.sr && m.hidden && m.style && m.afterDot)) || (!m.mk && m.sr));
+      ok(!bad.length, name + ": ⚠ and hidden text on exactly " + [...new Set(mm.filter(m => m.mk).map(m => m.card))].join(", ") + (bad.length ? " (wrong: " + JSON.stringify(bad) + ")" : ""));
+      ok(br.every(r => !r.cut.length) && br.every(r => r.shown + r.n === r.total && (r.n > 0 || r.shown === r.total)),
+        name + ": whole names only, +N right (" + br.map(r => r.shown + " shown +" + r.n + " of " + r.total + (r.cut.length ? ", cut " + r.cut.join(", ") : "")).join("; ") + ")");
+    }
+    ok(warned > 0, "not activated @" + w + ": " + warned + " ⚠ marks seen");
+  }
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.unroute("**/data/bonus-categories.json");
+
+  // Caveat line: a closed row with notes shows them as one cut line (no Matched, no Likely); open, the line hides
+  // and every note shows in full.
+  for (const [q, o] of [["", { cat: "Streaming" }], ["", { cat: "Groceries" }], ["instacart"], ["stubhub"]]) {
+    await setup(q, o);
+    await page.waitForTimeout(100);
+    const name = (q || o.cat) + ", caveat line";
+    const cv = await page.$$eval("#main details.bonusrow", ds => ds.map(d => {
+      const c = d.querySelector(".bcav"), notes = [...d.querySelectorAll(".bnote")].map(n => n.textContent);
+      const own = notes.filter(n => !/^Matched: |^Likely, not certain/.test(n));
+      if (!c) return { none: true, own: own.length };
+      const r = c.getBoundingClientRect(), s = d.querySelector("summary").getBoundingClientRect();
+      return { text: c.textContent, want: own.join(" "), visible: c.checkVisibility(), h: r.height, rects: c.getClientRects().length,
+        inside: r.right <= s.right + 0.5, sumH: s.height, white: getComputedStyle(c).whiteSpace, ell: getComputedStyle(c).textOverflow };
+    }));
+    const withC = cv.filter(x => !x.none);
+    if (!withC.length) { ok(false, name + ": no row shows a caveat line (" + JSON.stringify(cv) + ")"); continue; }
+    ok(cv.every(x => !x.none || !x.own), name + ": every row with notes has the line");
+    ok(withC.every(x => x.visible && x.text === x.want && !/Matched: |Likely, not certain/.test(x.text)),
+      name + ": " + withC.length + " line(s) show the notes, no Matched or Likely (" + withC.map(x => x.text.slice(0, 60)).join(" | ") + ")");
+    ok(withC.every(x => Math.abs(x.h - 18) < 0.5 && x.rects === 1 && x.white === "nowrap" && x.ell === "ellipsis" && x.inside && x.sumH >= 44),
+      name + ": one 18px line, cut with an ellipsis inside the summary, summary 44px+ (" + withC.map(x => x.h + "px, " + x.sumH + "px").join("; ") + ")");
+    const i = cv.findIndex(x => !x.none);
+    await page.locator("#main details.bonusrow > summary").nth(i).click();
+    const op = await page.$eval("#main", (m, i) => {
+      const d = m.querySelectorAll("details.bonusrow")[i];
+      return { open: d.open, cav: d.querySelector(".bcav").checkVisibility(), notes: [...d.querySelectorAll(".bnote")].map(n => n.checkVisibility() && n.getClientRects().length > 0 ? n.textContent : null) };
+    }, i);
+    ok(op.open && !op.cav && op.notes.length && op.notes.every(Boolean), name + ": open hides the line and shows all " + op.notes.length + " notes in full");
+  }
+
+  // Search box shadow: off at the top, on once scrolled, off again back at the top.
+  await setup("pizza");
+  await page.evaluate(() => document.activeElement && document.activeElement.blur());
+  const frames = () => page.evaluate(() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))));
+  const shadow = async y => { await page.evaluate(y => window.scrollTo(0, y), y); await frames(); return page.$eval(".searchbar", b => ({ y: window.scrollY, on: b.classList.contains("scrolled") })); };
+  const s0 = await shadow(0), s1 = await shadow(400), s2 = await shadow(0);
+  ok(!s0.on && s1.y > 0 && s1.on && !s2.on, "search box shadow: off at 0, on at " + s1.y + ", off back at 0 (" + JSON.stringify([s0, s1, s2]) + ")");
 
   await browser.close();
   server.close();

@@ -34,6 +34,7 @@
     --f-fresh: #0b6b3a;
     --f-aging: #7a5700;
     --f-soon: #b04400;
+    --soon: #b04400;
     --f-old: #b3261e;
     --f-unknown: #5a6270;
     --tint: #eaf6ef;
@@ -65,6 +66,7 @@
       --f-fresh: #5fd493;
       --f-aging: #f2c94c;
       --f-soon: #ff9e57;
+      --soon: #ff9e57;
       --f-old: #ff8a80;
       --f-unknown: #a2a9b5;
       --tint: #13281c;
@@ -86,7 +88,10 @@
     position: sticky; top: 0; z-index: 5;
     background: var(--bg);
     padding: 12px 0 8px;
+    transition: box-shadow 150ms;
   }
+  /* Scrolled: a hairline and a soft shadow under the sticky search box. */
+  .searchbar.scrolled { box-shadow: 0 1px 0 #e1e5eb, 0 6px 12px -8px rgba(16, 24, 40, .25); }
   .sr-only, .sr {
     position: absolute; width: 1px; height: 1px; overflow: hidden;
     clip: rect(0 0 0 0); white-space: nowrap;
@@ -290,6 +295,9 @@
   .badge.chan .bico { width: 12px; height: 12px; color: var(--muted); }
   .badge.chan .bicos { display: inline-flex; gap: 3px; }
   .badge.nochan { font-style: italic; }
+  /* Ends within 7 days: a clock and "Ends in N days". */
+  .badge.soon { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; font-weight: 650; color: var(--soon); }
+  .badge.soon .bico { width: 12px; height: 12px; }
   .badge.cuis { gap: 5px; color: var(--cuis); font-weight: 500; }
   .badge.cuis::before { content: ""; width: 8px; height: 8px; border-radius: 2px; background: currentColor; flex: none; }
 
@@ -425,6 +433,14 @@
   .bonusrow .bout { display: none; }
   .bonusrow .bplus { flex: none; font-size: 13px; font-weight: 600; color: var(--muted); }
   .bonusrow .bcn { font-weight: 600; }
+  /* Not activated: a "⚠" before the name, the color and size of the strip's "⚠ N not activated". */
+  .bonusrow .bwarnmk { margin-right: 3px; font-size: 15px; font-weight: 600; color: var(--warn-text); }
+  /* Closed: the row's caveats on one line, cut with "…"; open, they show in full below. */
+  .bonusrow .bcav {
+    display: block; margin-top: 2px; font-size: 12.5px; line-height: 18px; color: var(--muted);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .bonusrow[open] .bcav { display: none; }
   .bonusrow .brate { font-weight: 700; color: var(--bonus); }
   /* Open: one entry per line, then the notes. */
   .bonusrow .bbody { padding: 0 14px 10px; }
@@ -568,6 +584,7 @@
   }
   @media (prefers-color-scheme: dark) {
     #q { box-shadow: none; }
+    .searchbar.scrolled { box-shadow: 0 1px 0 #2a3039, 0 6px 12px -6px rgba(0, 0, 0, .6); }
     #q:focus { box-shadow: 0 0 0 4px rgba(122, 178, 255, .18); }
     .signin .edbtn { color: #0f1115; }
   }
