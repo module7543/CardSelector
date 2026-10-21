@@ -557,6 +557,149 @@ async function usedChecks(page, load, search, testEdits) {
   ok(await usedBtn() === null, "signed out, blank search: no Used filter");
 }
 
+// A new day while saving (signed in, phone width, the clock at 23:59:50 on Oct 21): no redraw while the save runs,
+// exactly one right after it ends (the offer that ended Oct 21 moves to Recently unavailable), the save bar and Undo
+// as always. The same with the Custom Cash Focus picker in use (focused, an unsaved pick): no redraw until it loses
+// focus, then one, and the pick is still there. Saves go to a stub CardStore.save that waits until told to finish.
+async function dayChecks(br, base) {
+  const iso = n => { const t = new Date(2026, 9, 21 + n); return t.getFullYear() + "-" + String(t.getMonth() + 1).padStart(2, "0") + "-" + String(t.getDate()).padStart(2, "0"); };
+  const mk = (merchant, n, i) => ({ id: "test/zzday-" + i, card: "Chase Freedom Flex", merchant, category: "Dining", bonus: (10 + i) + "% cash back",
+    expires: n == null ? null : iso(n), expires_text: null, activation: "needs_activation", channel: "online", spend_cap: null, minimum_spend: null,
+    fine_print: null, other_details: [], last_read: "2026-10-18", first_seen: "2026-10-18", status: "active", status_since: "2026-10-18" });
+  const tests = [mk("Zzday Ends Today", 0, 0), mk("Zzday Ends Tomorrow", 1, 1)];
+  const open = async () => {
+    const ctx = await br.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: "block" });
+    const page = await ctx.newPage();
+    await page.clock.install({ time: new Date(2026, 9, 21, 23, 59, 0) });
+    await page.route("https://api.github.com/**", r => r.abort());
+    await page.route("**/data/phone-edits.json", r => r.fulfill({ status: 200, contentType: "application/json", body: "{}\n" }));
+    await page.route("**/data/offers.json", async r => { const j = await (await r.fetch()).json(); j.offers.push(...tests); await r.fulfill({ json: j }); });
+    await page.goto(base);
+    await page.evaluate(() => { try { localStorage.clear(); localStorage.setItem("cardselector.token", "test"); } catch (e) {} });
+    await page.goto(base);
+    await page.waitForFunction(() => /active offers loaded/.test(document.body.innerText));
+    await page.evaluate(([recs, today]) => {
+      window.__recs = recs; window.__pend = [];
+      CardStore.save = function (change) {
+        return new Promise(function (res) {
+          window.__pend.push(function () {
+            if (/^bonus\./.test(change.type)) return res({ status: "saved", message: "Focus: " + change.to, undo: { type: change.type, id: change.id, from: change.to, to: change.from },
+              record: { activation: "not_needed", planned: change.type === "bonus.planned" ? change.to : null, choice: change.type === "bonus.choice" ? change.to : null } });
+            var rec = window.__recs[change.id], r = CardEdits.apply({ offers: { offers: [rec] } }, change, today);
+            res({ status: "saved", message: r.summary, record: JSON.parse(JSON.stringify(rec)), undo: CardEdits.inverse(change, r.before) });
+          });
+        });
+      };
+      CardStore.liveStatus = function () { return Promise.resolve({ state: "live" }); };
+    }, [Object.fromEntries(tests.map(o => [o.id, JSON.parse(JSON.stringify(o))])), iso(1)]);
+    await page.fill("#q", "zzday");
+    await page.waitForTimeout(900);
+    await page.clock.pauseAt(new Date(2026, 9, 21, 23, 59, 50));
+    return { ctx, page };
+  };
+  const st = page => page.evaluate(() => {
+    const row = m => [...document.querySelectorAll("li.offer")].find(l => l.querySelector(".merchant").textContent === m);
+    const t = row("Zzday Ends Today"), b = document.getElementById("savebar");
+    return { renders: window.__renders, today: t ? (t.classList.contains("gone") ? "gone" : "live") : "none",
+      bar: b.hidden ? null : (btns => document.getElementById("savemsg").firstChild.textContent + (btns.length ? " · " + btns.join(" ") : ""))([...document.querySelectorAll("#savebtns button")].map(x => x.textContent)),
+      live: b.classList.contains("live"), q: document.getElementById("q").value,
+      open: [...document.querySelectorAll("li.offer button.toggle[aria-expanded=true]")].map(x => x.closest("li").querySelector(".merchant").textContent) };
+  });
+
+  // 1. A save running across midnight.
+  let { ctx, page } = await open();
+  await page.locator("li.offer:has(.merchant:text-is('Zzday Ends Tomorrow')) button.toggle").first().click();
+  await page.locator("li.offer:has(.merchant:text-is('Zzday Ends Tomorrow')) button", { hasText: /^Mark activated$/ }).click();
+  const s0 = await st(page);
+  await page.clock.runFor(15000); // past midnight, the save still running
+  const s1 = await st(page);
+  ok(s0.bar === "Saving…" && s1.renders === s0.renders && s1.today === "live", "save across midnight: no redraw while it runs (" + JSON.stringify([s0, s1]) + ")");
+  await page.evaluate(() => window.__pend.shift()());
+  await page.waitForTimeout(50);
+  const s2 = await st(page);
+  ok(s2.renders === s1.renders + 1 && s2.today === "gone" && s2.q === "zzday" && JSON.stringify(s2.open) === JSON.stringify(["Zzday Ends Tomorrow"]),
+    "save across midnight: exactly one redraw when it ends, the ended offer moved, search and open details kept (" + (s2.renders - s1.renders) + " renders, " + JSON.stringify(s2) + ")");
+  ok(s2.bar === "Saved · Deploying · Undo ×" && !s2.live, "save across midnight: bar \"" + s2.bar + "\"");
+  ok(/Already activated/.test(await page.locator("li.offer:has(.merchant:text-is('Zzday Ends Tomorrow'))").first().innerText()), "save across midnight: the offer shows Already activated");
+  await page.clock.runFor(6000);
+  await page.waitForTimeout(50);
+  const s3 = await st(page);
+  ok(s3.bar === "Live · Undo ×" && s3.live && s3.renders === s2.renders, "save across midnight: then \"" + s3.bar + "\" as a pill, no more redraws");
+  await page.locator("#savebtns button", { hasText: /^Undo$/ }).click();
+  await page.evaluate(() => window.__pend.shift()());
+  await page.waitForTimeout(50);
+  const s4 = await st(page);
+  ok(s4.bar === "Saved · Deploying · Undo ×" && s4.renders === s3.renders + 2 &&
+    /Needs activation/.test(await page.locator("li.offer:has(.merchant:text-is('Zzday Ends Tomorrow'))").first().innerText()),
+    "save across midnight: Undo saves as always (bar \"" + s4.bar + "\", " + (s4.renders - s3.renders) + " renders, back to Needs activation)");
+  await ctx.close();
+
+  // 2. The Focus picker in use across midnight.
+  ({ ctx, page } = await open());
+  await page.click("#bstrip > summary");
+  const sel = "#blist li[data-eid='citi-custom-cash/standing'] .bfocus select";
+  const cur = await page.$eval(sel, s => s.value);
+  const other = await page.$eval(sel, s => [...s.options].map(o => o.value).find(v => v !== s.value));
+  await page.focus(sel);
+  await page.selectOption(sel, other);
+  await page.focus(sel);
+  const f0 = await st(page);
+  await page.clock.runFor(15000);
+  const f1 = await st(page);
+  ok(f1.renders === f0.renders && f1.today === "live", "Focus picker in use across midnight: no redraw while it has focus (" + (f1.renders - f0.renders) + " renders)");
+  await page.evaluate(() => document.activeElement.blur());
+  await page.clock.runFor(10);
+  await page.waitForTimeout(50);
+  const f2 = await st(page);
+  const pick = await page.$eval(sel, s => ({ value: s.value, save: !s.parentNode.querySelector("button").hidden, focus: document.activeElement === document.body }));
+  ok(f2.renders === f1.renders + 1 && f2.today === "gone", "Focus picker: one redraw once it loses focus, the ended offer moved (" + (f2.renders - f1.renders) + " renders)");
+  ok(pick.value === other && other !== cur && pick.save && pick.focus, "Focus picker: the unsaved pick (" + cur + " -> " + other + ") and its Save survive, focus not moved (" + JSON.stringify(pick) + ")");
+  await ctx.close();
+
+  // 3. A Focus save running across midnight: afterwards the picker shows the saved value, with no Save.
+  ({ ctx, page } = await open());
+  await page.click("#bstrip > summary");
+  await page.selectOption(sel, other);
+  await page.locator("#blist li[data-eid='citi-custom-cash/standing'] .bfocus button", { hasText: /^Save$/ }).click();
+  await page.clock.runFor(15000);
+  await page.evaluate(() => window.__pend.shift()());
+  await page.waitForTimeout(50);
+  const fs3 = await page.$eval(sel, s => ({ value: s.value, save: !s.parentNode.querySelector("button").hidden }));
+  const g3 = await st(page);
+  ok(fs3.value === other && !fs3.save && g3.today === "gone" && g3.bar === "Saved · Deploying · Undo ×",
+    "Focus saved across midnight: the picker shows the saved " + other + " with no Save, the ended offer moved (" + JSON.stringify([fs3, g3.bar]) + ")");
+  await ctx.close();
+
+  // 4. A held redraw doesn't eat a tap: midnight passes with the Focus picker focused, then Save is tapped the way
+  // iOS taps (the button takes no focus, so focus leaves the picker on the press, before the click).
+  ({ ctx, page } = await open());
+  await page.click("#bstrip > summary");
+  await page.focus(sel);
+  await page.selectOption(sel, other);
+  await page.focus(sel);
+  await page.clock.runFor(15000);
+  await page.evaluate(() => document.addEventListener("mousedown", function (e) {
+    if (e.target.closest(".bfocus button")) { e.preventDefault(); document.activeElement.blur(); }
+  }, true));
+  const box = await page.locator("#blist li[data-eid='citi-custom-cash/standing'] .bfocus button", { hasText: /^Save$/ }).boundingBox();
+  const r4 = (await st(page)).renders;
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.clock.runFor(20); // the focusout's release gets its chance between press and click
+  await page.waitForTimeout(30);
+  await page.mouse.up();
+  await page.clock.runFor(10); // the tap's end (a 0 ms timer, long before a real save returns)
+  await page.waitForTimeout(50);
+  const n4 = await page.evaluate(() => window.__pend.length);
+  ok(n4 === 1, "tap after a held midnight redraw: the Save tap starts one save (" + n4 + ")");
+  await page.evaluate(() => (window.__pend.shift() || function () {})()); // none when the tap was lost
+  await page.clock.runFor(10);
+  await page.waitForTimeout(50);
+  const g4 = await st(page);
+  ok(g4.today === "gone" && g4.renders === r4 + 2, "tap after a held midnight redraw: the save's own redraws carry the new day (" + (g4.renders - r4) + " renders: save start, save end)");
+  await ctx.close();
+}
+
 async function browser() {
   console.log("-- browser, phone width");
   const http = require("http"), { chromium } = require("playwright");
@@ -664,6 +807,8 @@ async function browser() {
   });
   const res2 = await page.evaluate(id => CardStore.save({ type: "offer.activation", id: id, from: "needs_activation", to: "already_activated" }), ID.chase);
   ok(res2.kind === "reload" && !calls.some(c => /^POST/.test(c)), "browser: a different offers.json on main -> reload, nothing written: " + res2.message);
+
+  await dayChecks(br, base);
 
   await br.close();
   server.close();

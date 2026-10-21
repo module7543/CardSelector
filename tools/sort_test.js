@@ -329,21 +329,26 @@ const label = r => r.merchant + " | " + r.card + " | " + r.bonus;
 
   // Ends soon: with a fixed "today", test-only active offers ending in 0, 1, 2, 7 and 8 days (and one with no
   // date, one already gone) get "Ends today", "Ends tomorrow", "Ends in 2 days", "Ends in 7 days" and nothing,
-  // between the activation and channel badges; never on a Recently unavailable row.
+  // between the activation and channel badges; never on a Recently unavailable row. Estimated Citi dates (a "12d left"
+  // countdown) say "about"; a Chase offer with the same countdown text doesn't.
   const mainPage = page;
   const fixedCtx = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: "block" });
   page = await fixedCtx.newPage();
   await page.clock.setFixedTime(new Date(2026, 9, 21, 12, 0, 0));
   const plusDays = n => { const d = new Date(2026, 9, 21 + n); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); };
   const EXP = [["Zzexp Day0", 0, "Ends today"], ["Zzexp Day1", 1, "Ends tomorrow"], ["Zzexp Day2", 2, "Ends in 2 days"],
-    ["Zzexp Day7", 7, "Ends in 7 days"], ["Zzexp Day8", 8, null], ["Zzexp Nodate", null, null]];
+    ["Zzexp Day7", 7, "Ends in 7 days"], ["Zzexp Day8", 8, null], ["Zzexp Nodate", null, null],
+    ["Zzexp Citi0", 0, "Ends about today", "Citi Double Cash", "12d left"], ["Zzexp Citi1", 1, "Ends about tomorrow", "Citi Custom Cash", "12d left"],
+    ["Zzexp Citi3", 3, "Ends in about 3 days", "Citi Double Cash", "12d left"], ["Zzexp Citi8", 8, null, "Citi Double Cash", "12d left"],
+    ["Zzexp Chase0", 0, "Ends today", "Chase Freedom Flex", "12d left"], ["Zzexp Chase1", 1, "Ends tomorrow", "Chase Freedom Flex", "12d left"],
+    ["Zzexp Chase3", 3, "Ends in 3 days", "Chase Freedom Flex", "12d left"]];
   await page.route("**/data/offers.json", async route => {
     const d = await (await route.fetch()).json();
-    const mk = (merchant, n, status) => ({ id: "test/" + merchant.toLowerCase().replace(/ /g, "-"), card: "U.S. Bank", merchant, category: "Clothing & Jewelry",
-      bonus: "5% cash back", expires: n == null ? null : plusDays(n), expires_text: null, activation: "needs_activation", channel: "online",
+    const mk = (merchant, n, status, card, text) => ({ id: "test/" + merchant.toLowerCase().replace(/ /g, "-"), card: card || "U.S. Bank", merchant, category: "Clothing & Jewelry",
+      bonus: "5% cash back", expires: n == null ? null : plusDays(n), expires_text: text || null, activation: "needs_activation", channel: "online",
       spend_cap: null, minimum_spend: null, fine_print: null, other_details: [], last_read: "2026-10-18", first_seen: "2026-10-18",
       status: status || "active", status_since: "2026-10-18" });
-    EXP.forEach(([m, n]) => d.offers.push(mk(m, n)));
+    EXP.forEach(([m, n, , card, text]) => d.offers.push(mk(m, n, null, card, text)));
     d.offers.push(mk("Zzexp Gone", 1, "missing"));
     await route.fulfill({ json: d });
   });
@@ -396,6 +401,192 @@ const label = r => r.merchant + " | " + r.card + " | " + r.bonus;
     ok(!diff.length, "ends soon: first 10 rows of " + SEARCHES.length + " searches match " + baseRef + " on 2026-10-21 (" + soonSeen + " ends-soon badges on them)" + (diff.length ? " (differ: " + diff.join(", ") + ")" : ""));
   }
   await fixedCtx.close();
+  page = mainPage;
+
+  // Day rollover: loaded at 23:59 on Oct 21 with a search, the Dining and Chase Freedom Flex filters, a cuisine,
+  // Online, Needs activation, A to Z, one offer's details, the Filters panel, the bonus strip with one "More
+  // details", one bonus row, Recently unavailable, Offer freshness and Edit mode open, scrolled down, focus on the open
+  // offer's row. Crossing midnight (the timer; a tab hidden across it and shown again; a bfcache pageshow) redraws
+  // once: the offer that ended Oct 21 moves to Recently unavailable, "Ends tomorrow" becomes "Ends today", and every
+  // piece of state stays. visibilitychange, focus and pageshow on the same day draw nothing.
+  const dayPlus = (y, m, d, n) => { const t = new Date(y, m, d + n); return t.getFullYear() + "-" + String(t.getMonth() + 1).padStart(2, "0") + "-" + String(t.getDate()).padStart(2, "0"); };
+  const dayOffers = (y, m, d) => async route => {
+    const j = await (await route.fetch()).json();
+    const mk = (merchant, n, i) => ({ id: "test/zzday-" + i, card: "Chase Freedom Flex", merchant, category: "Dining",
+      bonus: (10 + i) + "% cash back", expires: n == null ? null : dayPlus(y, m, d, n), expires_text: null, activation: "needs_activation",
+      channel: "online", spend_cap: null, minimum_spend: null, fine_print: null, other_details: [], last_read: "2026-10-18",
+      first_seen: "2026-10-18", status: "active", status_since: "2026-10-18" });
+    j.offers.push(mk("Zzday Ends Today", 0, 0), mk("Zzday Ends Tomorrow", 1, 1), Object.assign(mk("Zzday Dropped", null, 16), { status: "missing" }));
+    for (let i = 2; i < 16; i++) j.offers.push(mk("Zzday Filler " + i, null, i));
+    await route.fulfill({ json: j });
+  };
+  const dayState = () => page.evaluate(() => {
+    const q = document.getElementById("q"), f = document.activeElement, li = f && f.closest("li[data-oid]");
+    const pressed = id => [...document.querySelectorAll("#" + id + " button[aria-pressed=true]")].map(b => b.textContent.replace(/\s*\(?\d+\)?$/, "").trim());
+    const rowOf = m => [...document.querySelectorAll("li.offer")].find(l => l.querySelector(".merchant").textContent === m);
+    const soon = m => { const l = rowOf(m); const b = l && l.querySelector(".badge.soon"); return b ? b.textContent : null; };
+    return {
+      renders: window.__renders, y: Math.round(window.scrollY), q: q.value, caret: [q.selectionStart, q.selectionEnd],
+      focus: f === q ? "input" : li ? li.getAttribute("data-oid") + " " + f.tagName + "." + f.className : f ? f.tagName + "#" + f.id + "." + f.className : null,
+      cats: pressed("cats"), cards: pressed("cards"), cuis: pressed("cuis"), chans: pressed("chans"), acts: pressed("acts"), sort: document.getElementById("sort").value,
+      open: [...document.querySelectorAll("li.offer button.toggle[aria-expanded=true]")].map(b => b.closest("li").querySelector(".merchant").textContent),
+      filters: document.getElementById("filters").classList.contains("open"), strip: document.getElementById("bstrip").open,
+      more: [...document.querySelectorAll("#blist li[data-eid] > details.bmore[open]")].map(d => d.parentNode.getAttribute("data-eid")),
+      rows: [...document.querySelectorAll("#main details.bonusrow[open]")].map(d => d.getAttribute("data-topic")),
+      leads: [...document.querySelectorAll("#main details.bonusrow[open] .bhead")].map(h => h.textContent),
+      expired: (document.querySelector("#main details.expired") || {}).open,
+      fresh: document.getElementById("foot").open, edit: document.getElementById("editmode").open,
+      gone: [...document.querySelectorAll("#main details.expired li.offer .merchant")].map(e => e.textContent),
+      today: rowOf("Zzday Ends Today") ? (rowOf("Zzday Ends Today").classList.contains("gone") ? "gone" : "live") : "none",
+      soonToday: soon("Zzday Ends Today"), soonTomorrow: soon("Zzday Ends Tomorrow")
+    };
+  });
+  // Loads the page at 23:59:00 on the day, sets every piece of state, then pauses the clock at 23:59:50.
+  const dayCtx = async (y, m, d) => {
+    const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: "block" });
+    page = await ctx.newPage();
+    await page.clock.install({ time: new Date(y, m, d, 23, 59, 0) });
+    await page.route("**/data/offers.json", dayOffers(y, m, d));
+    await page.goto(base);
+    await page.waitForFunction(() => /active offers loaded/.test(document.body.innerText));
+    return ctx;
+  };
+  const daySetup = async () => {
+    if (await page.locator("#ftoggle").isVisible()) await page.click("#ftoggle");
+    await page.selectOption("#sort", "az");
+    await page.locator("#cats button", { hasText: /^Dining/ }).first().click();
+    await page.locator("#cards button", { hasText: /^Chase Freedom Flex/ }).first().click();
+    await page.locator("#chans button", { hasText: /^Online/ }).first().click();
+    await page.locator("#acts button", { hasText: /^Needs activation/ }).first().click();
+    await page.fill("#q", "zzday");
+    await page.waitForTimeout(900); // past the after-typing scroll
+    await page.locator("#cuis button", { hasText: /^Unclassified/ }).first().click();
+    await page.locator("li.offer:has(.merchant:text-is('Zzday Ends Tomorrow')) button.toggle").first().click();
+    await page.click("#bstrip > summary");
+    await page.locator("#blist li[data-eid='citi-custom-cash/standing'] > details.bmore > summary").click();
+    await page.locator("#main details.bonusrow > summary").first().click();
+    await page.locator("#main details.expired > summary").click(); // closed (it opens under a search)
+    await page.evaluate(() => { document.getElementById("foot").open = true; document.getElementById("editmode").open = true; });
+    await page.evaluate(() => { const q = document.getElementById("q"); q.setSelectionRange(2, 2); });
+    await page.evaluate(() => document.querySelector("li.offer:not(.gone) button.toggle[aria-expanded=true]").focus({ preventScroll: true }));
+    await page.evaluate(() => window.scrollTo(0, Math.min(700, document.documentElement.scrollHeight - innerHeight)));
+    await page.clock.pauseAt(new Date(2026, 9, 21, 23, 59, 50));
+  };
+  const sameState = (a, b) => ["q", "caret", "focus", "cats", "cards", "cuis", "chans", "acts", "sort", "open", "filters", "strip", "more", "rows", "expired", "fresh", "edit"]
+    .filter(k => JSON.stringify(a[k]) !== JSON.stringify(b[k]));
+  for (const how of ["midnight timer", "hidden across midnight, visibilitychange", "bfcache pageshow"]) {
+    const ctx = await dayCtx(2026, 9, 21);
+    await daySetup();
+    const before = await dayState();
+    if (how === "midnight timer") await page.clock.runFor(15000);
+    else {
+      if (how !== "bfcache pageshow") await page.evaluate(() => {
+        Object.defineProperty(document, "hidden", { configurable: true, get: () => true });
+        Object.defineProperty(document, "visibilityState", { configurable: true, get: () => "hidden" });
+        document.dispatchEvent(new Event("visibilitychange"));
+      });
+      await page.clock.setSystemTime(new Date(2026, 9, 22, 7, 30, 0)); // no timer runs
+      const mid = await dayState();
+      ok(mid.renders === before.renders && mid.today === "live", how + ": nothing drawn before the page comes back (" + (mid.renders - before.renders) + " renders)");
+      await page.evaluate(h => {
+        if (h === "bfcache pageshow") { window.dispatchEvent(new PageTransitionEvent("pageshow", { persisted: true })); return; }
+        Object.defineProperty(document, "hidden", { configurable: true, get: () => false });
+        Object.defineProperty(document, "visibilityState", { configurable: true, get: () => "visible" });
+        document.dispatchEvent(new Event("visibilitychange"));
+      }, how);
+    }
+    const after = await dayState();
+    ok(before.today === "live" && before.soonToday === "Ends today" && before.soonTomorrow === "Ends tomorrow" && before.y > 300,
+      how + ": set up at 23:59:50 (" + JSON.stringify({ today: before.today, soon: [before.soonToday, before.soonTomorrow], y: before.y, focus: before.focus, rows: before.rows, leads: before.leads }) + ")");
+    ok(after.renders - before.renders === 1, how + ": one redraw (" + (after.renders - before.renders) + ")");
+    ok(after.today === "gone" && after.gone.includes("Zzday Ends Today") && after.soonTomorrow === "Ends today",
+      how + ": the offer that ended moved to Recently unavailable, \"Ends tomorrow\" -> \"" + after.soonTomorrow + "\"");
+    const lost = sameState(before, after);
+    ok(!lost.length && before.open.length === 1 && before.rows.length === 1 && before.more.length === 1 && before.strip && before.filters && before.expired === false && before.fresh && before.edit,
+      how + ": search, caret, focus, filters, sort, open details, strip, More details, bonus row, Recently unavailable, freshness and Edit mode kept" + (lost.length ? " (lost: " + lost.map(k => k + " " + JSON.stringify(before[k]) + " -> " + JSON.stringify(after[k])).join("; ") + ")" : ""));
+    ok(Math.abs(after.y - before.y) <= 2, how + ": scroll kept (" + before.y + " -> " + after.y + ")");
+    // A later visibilitychange, focus and pageshow on the new day draw nothing more.
+    await page.evaluate(() => { document.dispatchEvent(new Event("visibilitychange")); window.dispatchEvent(new Event("focus")); window.dispatchEvent(new PageTransitionEvent("pageshow", { persisted: true })); });
+    ok((await dayState()).renders === after.renders, how + ": visibilitychange, focus and pageshow later the same day draw nothing");
+    await ctx.close();
+  }
+  {
+    // Same day: no redraw at all.
+    const ctx = await dayCtx(2026, 9, 21);
+    await daySetup();
+    const before = await dayState();
+    await page.clock.runFor(5000); // 23:59:55
+    await page.evaluate(() => {
+      document.dispatchEvent(new Event("visibilitychange"));
+      window.dispatchEvent(new Event("focus"));
+      window.dispatchEvent(new PageTransitionEvent("pageshow", { persisted: true }));
+      window.dispatchEvent(new PageTransitionEvent("pageshow", { persisted: false }));
+    });
+    const after = await dayState();
+    ok(after.renders === before.renders && !sameState(before, after).length && after.y === before.y, "same day: visibilitychange, focus and pageshow cause no redraw (" + (after.renders - before.renders) + " renders)");
+    await ctx.close();
+  }
+  {
+    // Dec 31 -> Jan 1: the quarter's entries leave the bonus strip at midnight.
+    const ctx = await dayCtx(2026, 11, 31);
+    await page.clock.pauseAt(new Date(2026, 11, 31, 23, 59, 50));
+    const strip = () => page.$$eval("#blist li[data-eid]", ls => ls.map(l => l.getAttribute("data-eid")));
+    const s0 = await strip();
+    await page.clock.runFor(15000);
+    const s1 = await strip();
+    ok(s0.includes("chase-freedom-flex/2026-q4") && !s1.some(id => /2026-q4$/.test(id)) && s1.length > 0,
+      "Dec 31 -> Jan 1: the 2026 Q4 entries leave the bonus strip (" + s0.length + " -> " + s1.length + " entries)");
+    await ctx.close();
+  }
+  {
+    // Typing just after midnight, before the midnight timer: the results follow the new day at once, and the timer
+    // still redraws the strip.
+    const ctx = await dayCtx(2026, 11, 31);
+    await page.clock.pauseAt(new Date(2026, 11, 31, 23, 59, 59, 900));
+    await page.clock.runFor(300); // 00:00:00.2, the timer (00:00:00.5) not yet run
+    await page.fill("#q", "pi");
+    await page.clock.runFor(5000);
+    const s2 = await page.$$eval("#blist li[data-eid]", ls => ls.map(l => l.getAttribute("data-eid")));
+    ok(!s2.some(id => /2026-q4$/.test(id)) && s2.length > 0, "typed at 00:00:00.2 on Jan 1: the timer still takes the 2026 Q4 entries out of the strip (" + s2.join(", ") + ")");
+    await ctx.close();
+  }
+  {
+    // The bonus file didn't load (no strip): focus, visibilitychange and pageshow the same day draw nothing.
+    const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: "block" });
+    page = await ctx.newPage();
+    await page.clock.setFixedTime(new Date(2026, 9, 21, 12));
+    await page.route("**/data/bonus-categories.json", r => r.abort());
+    await page.goto(base);
+    await page.waitForFunction(() => /active offers loaded/.test(document.body.innerText));
+    await page.fill("#q", "pizza");
+    await page.waitForTimeout(900);
+    const r0 = await page.evaluate(() => window.__renders);
+    await page.evaluate(() => { window.dispatchEvent(new Event("focus")); document.dispatchEvent(new Event("visibilitychange")); window.dispatchEvent(new PageTransitionEvent("pageshow", { persisted: true })); });
+    const r1 = await page.evaluate(() => window.__renders);
+    ok(r1 === r0, "no bonus file, same day: focus, visibilitychange and pageshow draw nothing (" + (r1 - r0) + " renders)");
+    await ctx.close();
+  }
+  {
+    // A press cut off by hiding the tab (no pointerup or pointercancel) doesn't hold the redraw: back the next day,
+    // it redraws once.
+    const ctx = await dayCtx(2026, 9, 21);
+    await page.fill("#q", "zzday");
+    await page.waitForTimeout(900);
+    await page.clock.pauseAt(new Date(2026, 9, 21, 23, 59, 50));
+    const vis = h => page.evaluate(h => {
+      Object.defineProperty(document, "hidden", { configurable: true, get: () => h });
+      Object.defineProperty(document, "visibilityState", { configurable: true, get: () => h ? "hidden" : "visible" });
+      document.dispatchEvent(new Event("visibilitychange"));
+    }, h);
+    await page.evaluate(() => document.getElementById("main").dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, pointerType: "touch" })));
+    await vis(true);
+    await page.clock.setSystemTime(new Date(2026, 9, 22, 8, 0, 0));
+    const r0 = await page.evaluate(() => window.__renders);
+    await vis(false);
+    const r1 = await page.evaluate(() => window.__renders);
+    ok(r1 === r0 + 1, "press cut off by hiding the tab, back the next day: one redraw (" + (r1 - r0) + " renders)");
+    await ctx.close();
+  }
   page = mainPage;
 
   // Not activated: with the three quarterly entries forced to not_confirmed, the closed line puts a "⚠" (the
