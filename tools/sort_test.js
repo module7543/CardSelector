@@ -223,6 +223,24 @@ const label = r => r.merchant + " | " + r.card + " | " + r.bonus;
     if (part.length) ok(part.every(m => !whole(m, q)), q + ": " + part.join(", ") + " not whole-word matches");
   }
 
+  // Issuer dots: issuerOf() gives the right issuer for every card and offer-list name in cards.json
+  // (card names, offer-list keys, their row names and card lists), and null for a name it doesn't know.
+  const WANT = {
+    "Freedom": "chase", "Freedom Flex": "chase", "Chase Freedom": "chase", "Chase Freedom Flex": "chase",
+    "Smartly": "usb", "Cash+": "usb", "U.S. Bank": "usb", "Smartly / Cash+": "usb",
+    "Unlimited Cash": "boa", "Customized Cash": "boa", "Bank of America": "boa", "Customized Cash / Unlimited Cash": "boa",
+    "Double Cash": "citi", "Citi Custom Cash": "citi", "Costco Visa": "citi", "Citi Double Cash": "citi",
+    "Quicksilver": "cap1", "Discover it": "cap1", "Capital One": "cap1", "Quicksilver / Discover it": "cap1"
+  };
+  const cj = JSON.parse(fs.readFileSync(path.join(SITE, "data/cards.json"), "utf8"));
+  const names = new Set(cj.cards.map(c => c.name));
+  for (const [k, l] of Object.entries(cj.offer_lists)) { names.add(k); if (l.row_name) names.add(l.row_name); (l.cards || []).forEach(c => names.add(c)); }
+  const probe = [...names, "Mystery Card", "", "Citizens Cash", "Chaser", null];
+  const got = await page.evaluate(ns => ns.map(n => window.__issuerOf(n)), probe);
+  const wrong = probe.map((n, i) => [n, got[i], n in WANT ? WANT[n] : null]).filter(([, g, w]) => g !== w);
+  ok(names.size > 0 && !wrong.length, "issuerOf: " + names.size + " cards.json names and 5 unknown names give the right key" +
+    (wrong.length ? " (wrong: " + wrong.map(([n, g, w]) => JSON.stringify(n) + " -> " + g + ", want " + w).join("; ") + ")" : ""));
+
   await browser.close();
   server.close();
   console.log(failed ? failed + " check(s) failed" : "All sort checks passed");
