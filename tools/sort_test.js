@@ -238,6 +238,8 @@ const label = r => r.merchant + " | " + r.card + " | " + r.bonus;
   const probe = [...names, "Mystery Card", "", "Citizens Cash", "Chaser", null];
   const got = await page.evaluate(ns => ns.map(n => window.__issuerOf(n)), probe);
   const wrong = probe.map((n, i) => [n, got[i], n in WANT ? WANT[n] : null]).filter(([, g, w]) => g !== w);
+  // A card added to cards.json must get an issuer here too, or its rows would show no dot.
+  [...names].filter(n => !(n in WANT)).forEach(n => wrong.push([n, got[probe.indexOf(n)], "a listed issuer (add it to WANT)"]));
   ok(names.size > 0 && !wrong.length, "issuerOf: " + names.size + " cards.json names and 5 unknown names give the right key" +
     (wrong.length ? " (wrong: " + wrong.map(([n, g, w]) => JSON.stringify(n) + " -> " + g + ", want " + w).join("; ") + ")" : ""));
 

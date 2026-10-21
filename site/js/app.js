@@ -643,9 +643,9 @@
     if (mx) bon.appendChild(el("span", "maxr", ", max " + mx));
     // What it likely earns with its card ("· 15% with Freedom"), when the card adds something.
     var tot = gone ? null : offerTotal(o, todayISO());
-    // A hidden space keeps the bonus and the pill apart in the text a screen reader or copy reads.
+    // A hidden ", " keeps the bonus and the pill apart in the text a screen reader or copy reads.
     if (tot && tot.rate > 0) {
-      bon.appendChild(el("span", "sr-only", " "));
+      bon.appendChild(el("span", "sr-only", ", "));
       bon.appendChild(el("span", "total", (tot.upTo ? "up to " : "") + pct(tot.total) + "% with " + tot.C.name));
     }
     row.appendChild(bon);
