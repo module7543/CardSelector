@@ -158,7 +158,7 @@
   }
   #sort {
     display: block; width: 100%; min-height: 44px; padding: 0 40px 0 14px;
-    font: inherit; font-size: 15px; color: var(--text); background: var(--surface);
+    font: inherit; font-size: 16px; color: var(--text); background: var(--surface);
     border: 1px solid var(--line); border-radius: 8px;
     -webkit-appearance: none; appearance: none; cursor: pointer;
   }
@@ -224,7 +224,8 @@
   a.glink:focus-visible { outline: 3px solid var(--accent); outline-offset: -2px; border-radius: 8px; }
   a.glink .ext { width: 15px; height: 15px; margin: 0; vertical-align: middle; }
   .gone a.glink { color: var(--muted); }
-  .names { min-width: 0; }
+  /* Same size as the name, so the line is no taller than the name itself. */
+  .names { min-width: 0; font-size: 16px; }
   /* Card offers-page link: a boxed card glyph, so it reads differently from the plain Google arrow icon.
      44px tap target via a matching negative margin, like a.merchant. */
   a.cardlink {
@@ -320,7 +321,7 @@
   details.bstrip[hidden] { display: none; }
   details.bstrip > summary {
     min-height: 44px; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px;
-    padding: 0 14px; font-size: 15px; font-weight: 600; cursor: pointer; list-style: none;
+    padding: 6px 14px; font-size: 15px; font-weight: 600; cursor: pointer; list-style: none;
     -webkit-tap-highlight-color: transparent;
   }
   details.bstrip > summary::-webkit-details-marker { display: none; }
@@ -382,7 +383,7 @@
   details.fresh { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--box-shadow); }
   details.fresh > summary {
     min-height: 44px; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px;
-    padding: 0 14px; font-size: 15px; font-weight: 600; color: var(--text); cursor: pointer; list-style: none;
+    padding: 6px 14px; font-size: 15px; font-weight: 600; color: var(--text); cursor: pointer; list-style: none;
     -webkit-tap-highlight-color: transparent;
   }
   details.fresh > summary::-webkit-details-marker { display: none; }
