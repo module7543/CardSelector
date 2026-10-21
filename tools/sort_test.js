@@ -367,10 +367,18 @@ const label = r => r.merchant + " | " + r.card + " | " + r.bonus;
   }
   ok(exp["Zzexp Gone"] && exp["Zzexp Gone"].gone && exp["Zzexp Gone"].text === null, "Zzexp Gone (Recently unavailable, ends tomorrow): no ends-soon badge (" + JSON.stringify(exp["Zzexp Gone"]) + ")");
   // The badge is display only: the first 10 rows of 12 searches, on the same fixed day, match the base branch's
-  // app.js (BASE_REF, else origin/main, else main), when git has it.
+  // app.js (BASE_REF, else origin/main, else main, else main fetched from origin), when git can get it.
   let baseApp = null, baseRef = null;
   for (const ref of [process.env.BASE_REF, "origin/main", "main"].filter(Boolean)) {
     try { baseApp = execFileSync("git", ["show", ref + ":site/js/app.js"], { cwd: path.join(__dirname, ".."), stdio: ["ignore", "pipe", "ignore"] }); baseRef = ref; break; } catch (e) {}
+  }
+  // A shallow pull request checkout has neither ref: fetch main's tip once.
+  if (!baseApp) {
+    try {
+      const git = args => execFileSync("git", args, { cwd: path.join(__dirname, ".."), stdio: ["ignore", "pipe", "ignore"] });
+      git(["fetch", "--depth=1", "origin", "main"]);
+      baseApp = git(["show", "FETCH_HEAD:site/js/app.js"]); baseRef = "origin main (fetched)";
+    } catch (e) {}
   }
   const SEARCHES = ["pizza", "grill", "round table", "charley", "book", "shell", "bp", "persian", "costco gas", "levain", "target", "zzqx"];
   if (!baseApp) skip("ends soon: no base app.js in git (set BASE_REF), first-10 order not compared");
