@@ -87,7 +87,7 @@
     background: var(--bg);
     padding: 12px 0 8px;
   }
-  .sr-only {
+  .sr-only, .sr {
     position: absolute; width: 1px; height: 1px; overflow: hidden;
     clip: rect(0 0 0 0); white-space: nowrap;
   }
@@ -120,6 +120,14 @@
   .usehead { font-size: 16px; font-weight: 600; overflow-wrap: anywhere; }
   .usehead strong { font-size: 17px; font-weight: 750; letter-spacing: -0.01em; color: var(--bonus); }
   .usehead .useextra { font-size: 14px; font-weight: 400; color: var(--muted); }
+  /* The dot of the card a headline total names first. */
+  .usehead .idot { width: 9px; height: 9px; margin-right: 6px; vertical-align: 1px; }
+  /* "Likely": a category rate decides the total (the full sentence is in .sr for screen readers). */
+  .usehead .likely {
+    display: inline-block; margin-left: 6px; padding: 0 6px; line-height: 17px;
+    font-size: 11.5px; font-weight: 600; color: var(--muted);
+    border: 1px solid var(--line); border-radius: 5px; vertical-align: 2px;
+  }
   .usenote { margin-top: 3px; font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
   .useat {
     margin-bottom: 2px; font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .07em;
@@ -280,6 +288,7 @@
   .badge .bico { width: 11px; height: 11px; flex: none; }
   .badge.chan { gap: 4px; }
   .badge.chan .bico { width: 12px; height: 12px; color: var(--muted); }
+  .badge.chan .bicos { display: inline-flex; gap: 3px; }
   .badge.nochan { font-style: italic; }
   .badge.cuis { gap: 5px; color: var(--cuis); font-weight: 500; }
   .badge.cuis::before { content: ""; width: 8px; height: 8px; border-radius: 2px; background: currentColor; flex: none; }
@@ -390,11 +399,40 @@
   .bonusrow { padding: 10px 14px; background: var(--bonus-bg); border-radius: 12px; font-size: 14px; }
   .bonusrow .bhead { font-weight: 700; color: var(--bonus); }
   .bonusrow.hint { margin: 0; background: var(--neutral-bg); color: var(--neutral-text); }
-  .bonusrow .bnote { margin-top: 4px; font-size: 12.5px; color: var(--muted); }
+  .bonusrow .bnote { margin-top: 6px; font-size: 12.5px; color: var(--muted); }
+  /* A row that opens: the summary fills the row (the row's padding moves onto it), a 44px tap target. */
+  details.bonusrow { padding: 0; min-width: 0; }
+  .bonusrow > summary {
+    display: block; min-height: 44px; padding: 10px 14px; box-sizing: border-box;
+    list-style: none; cursor: pointer; border-radius: 12px; -webkit-tap-highlight-color: transparent;
+  }
+  .bonusrow > summary::-webkit-details-marker { display: none; }
+  .bonusrow > summary::marker { content: ""; }
+  .bonusrow > summary:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+  .bonusrow .bl1 { display: flex; align-items: center; gap: 6px; }
+  .bonusrow .btag { width: 12px; height: 12px; flex: none; color: var(--bonus); }
+  .bonusrow .bl1 .bhead { flex: 1; min-width: 0; font-size: 13.5px; overflow-wrap: anywhere; }
+  .bonusrow .bchev {
+    width: 7px; height: 7px; margin: -3px 4px 0 6px; flex: none;
+    border-right: 1.5px solid var(--muted); border-bottom: 1.5px solid var(--muted); transform: rotate(45deg);
+  }
+  .bonusrow[open] .bchev { margin-top: 3px; transform: rotate(-135deg); }
+  /* Closed: one line of whole entries, then "+N". */
+  .bonusrow .bline { display: flex; align-items: center; gap: 12px; margin-top: 2px; white-space: nowrap; overflow: hidden; font-size: 14px; }
+  .bonusrow[open] .bline { display: none; }
+  .bonusrow .bent { display: block; flex: none; }
+  .bonusrow .bout { display: none; }
+  .bonusrow .bmore { flex: none; font-size: 13px; font-weight: 600; color: var(--muted); }
+  .bonusrow .bcn { font-weight: 600; }
+  .bonusrow .brate { font-weight: 700; color: var(--bonus); }
+  /* Open: one entry per line, then the notes. */
+  .bonusrow .bbody { padding: 0 14px 10px; }
+  .bonusrow .blist { display: grid; gap: 4px; margin: 0; padding: 6px 0 0; list-style: none; font-size: 14px; }
   /* Cards below the everyday rate, and rows where every bonus card is below it: kept for reference, muted. */
-  .bonusrow .bbelow { color: var(--muted); }
+  .bonusrow .bbelow, .bonusrow .bbelow .brate { color: var(--muted); }
+  .bonusrow .bbelow .idot { opacity: .5; }
   .bonusrow.muted { background: var(--surface); color: var(--muted); }
-  .bonusrow.muted .bhead { color: var(--muted); }
+  .bonusrow.muted .bhead, .bonusrow.muted .btag, .bonusrow.muted .brate { color: var(--muted); }
   /* "For “starbucks”" / "For Travel": which bonus rows come from the search and which from the button. */
   .bgroup { margin: 4px 2px -2px; font-size: 13px; font-weight: 700; letter-spacing: .03em; color: var(--muted); }
 

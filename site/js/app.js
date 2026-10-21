@@ -521,6 +521,20 @@
     return node;
   }
 
+  // A bold headline total led by the dot of the card it names first ("● Freedom Flex 5% or Freedom 5%").
+  function useStrong(node, text, cardName) {
+    var d = issuerDot(cardName);
+    if (d) node.appendChild(d);
+    node.appendChild(el("strong", null, text));
+  }
+  // The "Likely" tag that ends the headline when a named total has a category rate (the full sentence is for
+  // screen readers).
+  function likelyTag() {
+    var t = el("span", "likely", "Likely");
+    t.appendChild(el("span", "sr", ", not certain: how the merchant codes the purchase decides it."));
+    return t;
+  }
+
   // Small stroked icons for the offer meta line (aria-hidden, no fill): check (done), shop (in-store), globe (online).
   function metaIcon(kind) {
     var svg = document.createElementNS(SVG_NS, "svg");
@@ -664,8 +678,14 @@
     }
     var ch = channel(o);
     if (ch) {
+      // In-store & online: shop and globe; online: globe; every other channel (pay at pump, in-app too): shop.
       var cb = el("span", "badge chan", ch);
-      cb.insertBefore(metaIcon(o.channel === "online" ? "globe" : "shop"), cb.firstChild);
+      if (o.channel === "in_store_and_online") {
+        var pair = el("span", "bicos");
+        pair.appendChild(metaIcon("shop"));
+        pair.appendChild(metaIcon("globe"));
+        cb.insertBefore(pair, cb.firstChild);
+      } else cb.insertBefore(metaIcon(o.channel === "online" ? "globe" : "shop"), cb.firstChild);
       meta.appendChild(cb);
     }
     else if (chanMode !== "any" && !(usedMode && editing())) meta.appendChild(el("span", "badge nochan", "channel not shown"));
@@ -1115,7 +1135,7 @@
         extra += " · in store: " + sw.map(function (c) { return c.e.card + " " + pct(c.rate) + "%"; }).join(" or ");
       }
     }
-    return { lead: lead, text: text, extra: extra, likely: likely, notes: notes, top: top };
+    return { lead: lead, text: text, extra: extra, likely: likely, notes: notes, top: top, first: wins[0].e.card };
   }
 
   // ctx: { query, hits } (every match in scope, before the Activation filter). A search matching 1 to 3
@@ -1130,7 +1150,7 @@
     if (ctx && ev && compact(ctx.query) !== "" && !(ctx.hits || []).length && !rows.length) {
       var nm = el("div", "usehead");
       nm.appendChild(document.createTextNode("No match. Your default: "));
-      nm.appendChild(el("strong", null, ev.card + " " + pct(ev.rate) + "%"));
+      useStrong(nm, ev.card + " " + pct(ev.rate) + "%", ev.card);
       nm.appendChild(document.createTextNode("."));
       useEl.appendChild(nm);
       return;
@@ -1139,7 +1159,7 @@
     var head = el("div", "usehead");
     if (h) {
       head.appendChild(document.createTextNode("Use" + (h.lead ? " at " + h.lead : "") + ": "));
-      head.appendChild(el("strong", null, h.text));
+      useStrong(head, h.text, h.first);
       if (h.extra) head.appendChild(el("span", "useextra", h.extra));
     } else {
       // A bonus covers this but isn't activated yet (it doesn't count as a winner): say so, not "no match".
@@ -1151,7 +1171,7 @@
       });
       if (off.length) {
         head.appendChild(document.createTextNode("Bonus here needs activation: "));
-        head.appendChild(el("strong", null, off.map(function (it) { return it.e.card + " " + pct(it.g._rate) + "%"; }).join(", ")));
+        useStrong(head, off.map(function (it) { return it.e.card + " " + pct(it.g._rate) + "%"; }).join(", "), off[0].e.card);
         useEl.appendChild(head);
         off.forEach(function (it) {
           useEl.appendChild(el("div", "usenote", it.e.card + ": not activated" +
@@ -1163,7 +1183,7 @@
       head.textContent = "No " + (card || "card") + " bonus category matches here.";
     }
     useEl.appendChild(head);
-    if (h && h.likely) useEl.appendChild(el("div", "usenote", "Likely, not certain: how the merchant codes the purchase decides it."));
+    if (h && h.likely) head.appendChild(likelyTag());
     if (h) h.notes.forEach(function (n) { useEl.appendChild(el("div", "usenote", n)); });
     // Broad matches: the best offer total among them, when it beats the line above.
     var tp = ctx ? topOffer(ctx.hits, today) : null;
@@ -1510,7 +1530,7 @@
     if (smartlyTie) w.slice(1).forEach(function (c) {
       extra.push(c.C.name + " also " + pct(c.total) + "%" + (c.base.g && c.base.g.rate_note ? ", " + c.base.g.rate_note : ""));
     });
-    return { mnc: !!mnc, names: names, more: more > 0 ? ", +" + more + " more at " + pct(p.total) + "%" : "",
+    return { mnc: !!mnc, names: names, first: first.C.name, more: more > 0 ? ", +" + more + " more at " + pct(p.total) + "%" : "",
       extra: extra.length ? " (" + extra.join(", ") + ")" : "", named: smartlyTie ? [first] : w.slice(0, 2) };
   }
 
@@ -1518,6 +1538,7 @@
   function dealText(d) {
     var v = d.v;
     return {
+      first: d.C.name,
       names: d.C.name + " +" + (v.upTo ? "up to " : "") + money(v.amt) + (v.min ? " on " + money(v.min) + "+" : "") +
         (d.o.channel === "online" ? " online" : ""),
       extra: " (plus " + pct(d.base.rate) + "%" + (d.base.label ? " " + d.base.label : "") +
@@ -1542,23 +1563,23 @@
       store = " · in store: " + (sTie ? [sw[0]] : sw.slice(0, 2)).map(function (c) { return c.C.name + " " + pct(c.total) + "%"; }).join(" or ");
       out.named = out.named.concat(sTie ? [sw[0]] : sw.slice(0, 2));
     }
-    out.lines.push({ label: "Ready now", text: r.names, extra: r.more + r.extra + orElse + store, short: r.names, mnc: r.mnc, orElse: orElse, store: store });
+    out.lines.push({ label: "Ready now", first: r.first, text: r.names, extra: r.more + r.extra + orElse + store, short: r.names, mnc: r.mnc, orElse: orElse, store: store });
     out.named = out.named.concat(r.named);
     var best = t.ready.total, aft = t.after && t.after.total > best ? t.after : null;
     var deal = null;
     t.deals.forEach(function (d) { if (d.value !== null && (!deal || d.value > deal.value)) deal = d; });
     if (deal && deal.value > Math.max(best, aft ? aft.total : 0)) {
       var dt = dealText(deal);
-      out.lines.push({ label: "Best deal", text: dt.names, extra: dt.extra, short: dt.names });
+      out.lines.push({ label: "Best deal", first: dt.first, text: dt.names, extra: dt.extra, short: dt.names });
       out.named.push(deal);
     } else if (aft) {
       var a = winText(aft, today, M.name);
-      out.lines.push({ label: "After activating", text: a.names, extra: a.more + a.extra, short: a.names, mnc: a.mnc });
+      out.lines.push({ label: "After activating", first: a.first, text: a.names, extra: a.more + a.extra, short: a.names, mnc: a.mnc });
       out.named = out.named.concat(a.named);
     } else if (t.upto && t.upto.total > best) {
       // Only when no definite second line: "Up to: Quicksilver 21.5% (1.5% + up to 20% Capital One offer, ...)".
       var u = winText(t.upto, today, M.name);
-      out.lines.push({ label: "Up to", text: u.names, extra: u.more + u.extra, short: u.names.replace(/ (\d[\d.]*%)/g, " up to $1"), bare: true });
+      out.lines.push({ label: "Up to", first: u.first, text: u.names, extra: u.more + u.extra, short: u.names.replace(/ (\d[\d.]*%)/g, " up to $1"), bare: true });
       out.named = out.named.concat(u.named);
     }
     t.discounts.forEach(function (x) {
@@ -1577,16 +1598,17 @@
     if (!groups.length || groups.length > 3) return false;
     var per = groups.map(function (M) { return { M: M, L: merchantLines(M, today) }; }).filter(function (x) { return x.L; });
     if (!per.length) return false;
-    var named = [], likely = false, notes = [];
+    var named = [], likely = false, notes = [], last = null;
     if (per.length === 1) {
       var M = per[0].M, L = per[0].L;
       if (compact(M.name) !== compact(query)) useEl.appendChild(el("div", "useat", "At " + M.name));
       L.lines.forEach(function (ln) {
         var d = el("div", "usehead");
         d.appendChild(document.createTextNode(ln.label + ": "));
-        d.appendChild(el("strong", null, ln.text));
+        useStrong(d, ln.text, ln.first);
         if (ln.extra) d.appendChild(el("span", "useextra", ln.extra));
         useEl.appendChild(d);
+        last = d;
       });
       named = L.named;
       L.also.forEach(function (a) { notes.push("Also: " + a + "."); });
@@ -1596,12 +1618,13 @@
         d.appendChild(el("span", "usemname", x.M.name + ": "));
         x.L.lines.forEach(function (ln, i) {
           if (i) d.appendChild(document.createTextNode(" · "));
-          d.appendChild(el("strong", null, ln.short));
+          useStrong(d, ln.short, ln.first);
           if (!ln.bare) d.appendChild(el("span", "useextra", " " + ln.label.toLowerCase()));
           if (ln.mnc) d.appendChild(el("span", "useextra", " (may not count)" + (ln.orElse || "")));
           if (ln.store) d.appendChild(el("span", "useextra", ln.store));
         });
         useEl.appendChild(d);
+        last = d;
         named = named.concat(x.L.named);
       });
     }
@@ -1613,9 +1636,8 @@
       var bn = c.C && boostNote(c.C.name);
       if (bn && notes.indexOf(bn) === -1) notes.push(bn);
     });
-    if (likely) useEl.appendChild(el("div", "usenote", "Likely, not certain: how the merchant codes the purchase decides it."));
+    if (likely && last) last.appendChild(likelyTag());
     notes.forEach(function (n) { useEl.appendChild(el("div", "usenote", n)); });
-    useEl.appendChild(el("div", "usesub", "Totals add the card's rate and the merchant offer. Offer terms are in the offers below."));
     return true;
   }
 
@@ -1664,9 +1686,71 @@
     return parts.length ? " (" + parts.join(", ") + ")" : "";
   }
   function cap(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
-  // "5% on dining: Freedom Flex (not activated), Citi Custom Cash (if dining is your top category)";
-  // with mixed rates, "On dining: Freedom Flex 5%, ..., Costco Visa 3%", highest rate first.
-  // Led by the merchant when it is not what was typed: "Dining at Amazonia Bowl: 5% with Freedom Flex ...".
+
+  // The tag icon that leads a bonus row (aria-hidden).
+  function tagIcon() {
+    var svg = document.createElementNS(SVG_NS, "svg");
+    svg.setAttribute("class", "btag");
+    svg.setAttribute("viewBox", "0 0 12 12");
+    svg.setAttribute("aria-hidden", "true");
+    svg.setAttribute("focusable", "false");
+    var path = document.createElementNS(SVG_NS, "path");
+    path.setAttribute("d", "M1.5 1.5h4.2l4.8 4.8-4.2 4.2-4.8-4.8z");
+    path.setAttribute("fill", "none");
+    path.setAttribute("stroke", "currentColor");
+    path.setAttribute("stroke-width", "1.4");
+    path.setAttribute("stroke-linejoin", "round");
+    var dot = document.createElementNS(SVG_NS, "circle");
+    dot.setAttribute("cx", "4"); dot.setAttribute("cy", "4"); dot.setAttribute("r", "0.9");
+    dot.setAttribute("fill", "currentColor");
+    svg.appendChild(path);
+    svg.appendChild(dot);
+    return svg;
+  }
+
+  // A closed bonus row's one line: as many whole entries as fit, then "+N" for the rest (the entries left out
+  // and the ones below the everyday rate, never shown on the line). Refitted whenever the line's width changes.
+  var lineFit = typeof ResizeObserver === "function" ? new ResizeObserver(function (list) {
+    list.forEach(function (r) { fitLine(r.target); });
+  }) : null;
+  window.addEventListener("resize", function () {
+    if (lineFit) return;
+    Array.prototype.forEach.call(document.querySelectorAll(".bline"), fitLine);
+  });
+  function fitLine(line) {
+    var w = line.clientWidth;
+    if (!w || line._w === w) return; // hidden (row open) or already fitted at this width
+    line._w = w;
+    var ents = Array.prototype.slice.call(line.querySelectorAll(".bent"));
+    var more = line.querySelector(".bmore"), extra = +line.getAttribute("data-below") || 0;
+    var right = line.getBoundingClientRect().right - (parseFloat(getComputedStyle(line).paddingRight) || 0);
+    for (var k = ents.length; k >= 0; k--) {
+      ents.forEach(function (e, i) { e.classList.toggle("bout", i >= k); });
+      var n = ents.length - k + extra;
+      more.classList.toggle("bout", !n);
+      more.firstChild.textContent = "+" + n;
+      more.lastChild.textContent = ", and " + n + " more";
+      var lastShown = n ? more : ents[k - 1];
+      if (!lastShown || lastShown.getBoundingClientRect().right <= right + 0.5) return;
+    }
+  }
+
+  // One card entry: dot, name, rate, then (open list only) its status wording.
+  function bonusEntry(tag, cls, it, status) {
+    var e = el(tag, cls);
+    var d = issuerDot(it.e.card);
+    if (d) e.appendChild(d);
+    e.appendChild(el("span", "bcn", it.e.card));
+    e.appendChild(document.createTextNode(" "));
+    e.appendChild(el("span", "brate", pct(it.g._rate) + "%"));
+    if (status) e.appendChild(document.createTextNode(status));
+    return e;
+  }
+
+  // A row per bonus topic, closed by default: the summary leads with "5% on gas", "On dining" or "Dining at
+  // Amazonia Bowl" (when what matched is not what was typed) over a one-line list of the cards and rates; open,
+  // every card with its status ("(activated)", "(below Smartly 4%)"), highest rate first, then the notes.
+  // Rows with no card and the Custom Cash focus hints stay plain.
   // groups: [{ label: "For “starbucks”" or null, rows }].
   function renderBonusRows(groups) {
     var box = el("div", "bonusrows");
@@ -1679,37 +1763,62 @@
         var rates = [];
         items.forEach(function (it) { if (rates.indexOf(it.g._rate) === -1) rates.push(it.g._rate); });
         var same = rates.length === 1;
-        var row = el("div", t.muted || !items.length ? "bonusrow muted" : "bonusrow");
-        var ev = items.filter(function (it) { return it.everyday; })[0];
-        // One span per card, so a card below the everyday rate can be muted: "Costco Visa 3% (below Smartly 4%)".
-        var cards = el("span", "bcards");
-        items.forEach(function (it, i) {
-          if (i) cards.appendChild(document.createTextNode(", "));
-          var txt = it.e.card + (same ? "" : " " + pct(it.g._rate) + "%") + bonusStatus(it.e, it.g);
-          if (it.below && ev) txt += " (below " + ev.e.card + " " + pct(ev.g._rate) + "%)";
-          cards.appendChild(el("span", it.below ? "bbelow" : null, txt));
-        });
-        if (!items.length) {
-          row.appendChild(el("span", "bhead", cap(t.name) + (t.lead ? " at " + t.lead : "") + ": "));
-          row.appendChild(document.createTextNode("no card bonus is likely here (see note below)."));
-        } else if (t.lead) {
-          row.appendChild(el("span", "bhead", cap(t.name) + " at " + t.lead + ": "));
-          if (same) row.appendChild(document.createTextNode(pct(rates[0]) + "% with "));
-          row.appendChild(cards);
-        } else {
-          row.appendChild(el("span", "bhead", (same ? pct(rates[0]) + "% on " : "On ") + t.name + ": "));
-          row.appendChild(cards);
-        }
+        var cls = t.muted || !items.length ? "bonusrow muted" : "bonusrow";
+        var notes = [];
         // What triggered the row (a search only; the Dining button names none), so a stray match is easy to spot.
-        if (t.names.length) row.appendChild(el("div", "bnote", "Matched: " + t.names.slice(0, 3).join(", ") +
-          (t.names.length > 3 ? " and " + (t.names.length - 3) + " more" : "")));
-        if (items.length) row.appendChild(el("div", "bnote", "Likely, not certain: how the merchant codes the purchase decides it."));
-        t.notes.forEach(function (n) { row.appendChild(el("div", "bnote", n)); });
+        if (t.names.length) notes.push("Matched: " + t.names.slice(0, 3).join(", ") +
+          (t.names.length > 3 ? " and " + (t.names.length - 3) + " more" : ""));
+        if (items.length) notes.push("Likely, not certain: how the merchant codes the purchase decides it.");
+        notes = notes.concat(t.notes);
+        if (!items.length) {
+          var plain = el("div", cls);
+          plain.appendChild(el("div", "bhead", cap(t.name) + (t.lead ? " at " + t.lead : "")));
+          plain.appendChild(el("div", null, "no card bonus is likely here (see note below)."));
+          notes.forEach(function (n) { plain.appendChild(el("div", "bnote", n)); });
+          box.appendChild(plain);
+          return;
+        }
+        var row = el("details", cls);
+        var sum = el("summary", "bsum");
+        var l1 = el("span", "bl1");
+        l1.appendChild(tagIcon());
+        l1.appendChild(el("span", "bhead", t.lead ? cap(t.name) + " at " + t.lead : (same ? pct(rates[0]) + "% on " : "On ") + t.name));
+        var chev = el("span", "bchev");
+        chev.setAttribute("aria-hidden", "true");
+        l1.appendChild(chev);
+        sum.appendChild(l1);
+        var ev = items.filter(function (it) { return it.everyday; })[0];
+        // Closed: the entries at or above the everyday rate on one line; "+N" counts the rest.
+        var line = el("span", "bline"), below = 0;
+        items.forEach(function (it) {
+          if (it.below && ev) { below++; return; }
+          var e = bonusEntry("span", "bent", it);
+          if (line.firstChild) e.insertBefore(el("span", "sr-only", ", "), e.firstChild);
+          line.appendChild(e);
+        });
+        var more = el("span", "bmore");
+        more.appendChild(el("span", null, "")).setAttribute("aria-hidden", "true");
+        more.appendChild(el("span", "sr-only", ""));
+        line.appendChild(more);
+        line.setAttribute("data-below", String(below));
+        sum.appendChild(line);
+        row.appendChild(sum);
+        // Open: one entry per line, then the notes.
+        var body = el("div", "bbody"), ul = el("ul", "blist");
+        items.forEach(function (it) {
+          var st = bonusStatus(it.e, it.g) + (it.below && ev ? " (below " + ev.e.card + " " + pct(ev.g._rate) + "%)" : "");
+          ul.appendChild(bonusEntry("li", it.below ? "bbelow" : null, it, st));
+        });
+        body.appendChild(ul);
+        notes.forEach(function (n) { body.appendChild(el("div", "bnote", n)); });
+        row.appendChild(body);
+        if (lineFit) lineFit.observe(line);
+        else setTimeout(function () { fitLine(line); }, 0);
         box.appendChild(row);
       });
-      // "Citi Custom Cash: 5% here if you set your focus to select travel or select transit"
+      // "Citi Custom Cash 5% here if you set your focus to select travel or select transit"
       (rows.hints || []).forEach(function (h) {
-        box.appendChild(el("div", "bonusrow hint", h.entry.card + ": " + pct(h.entry.rate) + "% here if you set your focus to " +
+        box.appendChild(el("div", "bonusrow hint", h.entry.card + " " + pct(h.entry.rate) + "% here if you set your focus to " +
           h.names.join(" or ")));
       });
     });
@@ -1892,6 +2001,7 @@
     var query = input.value;
     var today = todayISO();
     main.textContent = "";
+    if (lineFit) lineFit.disconnect(); // the old bonus rows are gone
     var hasQuery = compact(query) !== "";
     var filtered = category !== null || card !== null;
     var usedOn = usedMode && editing();

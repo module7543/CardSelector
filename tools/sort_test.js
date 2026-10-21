@@ -223,6 +223,90 @@ const label = r => r.merchant + " | " + r.card + " | " + r.bonus;
     if (part.length) ok(part.every(m => !whole(m, q)), q + ": " + part.join(", ") + " not whole-word matches");
   }
 
+  // Bonus rows open and close, closed on every render. Closed, one line of whole entries then "+N" for the rest
+  // (entries left off plus the ones below the everyday rate); open, every entry on its own line, then the notes.
+  const bonusRows = () => page.$$eval("#main .bonusrows > details.bonusrow", ds => ds.map(d => {
+    const line = d.querySelector(".bline"), lr = line.getBoundingClientRect();
+    const shown = [...line.querySelectorAll(".bent")].filter(e => getComputedStyle(e).display !== "none");
+    const more = line.querySelector(".bmore"), moreOn = getComputedStyle(more).display !== "none";
+    const n = moreOn ? +/^\+(\d+)$/.exec(more.firstChild.textContent)[1] : 0;
+    const sum = d.querySelector("summary").getBoundingClientRect();
+    return { open: d.open, lead: d.querySelector(".bhead").textContent, shown: shown.length, n, total: d.querySelectorAll(".blist > li").length,
+      // Against the line's own edge and the screen's (a line wider than the screen would hide the cut).
+      cut: shown.concat(moreOn ? [more] : []).filter(e => e.getBoundingClientRect().right > Math.min(lr.right, document.documentElement.clientWidth - 16) + 0.5).map(e => e.textContent),
+      bodyHidden: !d.querySelector(".bbody").checkVisibility() && !d.querySelector(".bnote").checkVisibility(), sumH: sum.height, sumW: Math.round(sum.width), rowW: Math.round(d.getBoundingClientRect().width) };
+  }));
+  for (const w of [390, 360]) {
+    await page.setViewportSize({ width: w, height: 844 });
+    const seen = [];
+    for (const [q, o] of [["round table"], ["pizza"], ["shell"], ["costco gas"], ["", { cat: "Dining" }], ["", { cat: "Travel" }]]) {
+      await setup(q, o);
+      await page.waitForTimeout(100);
+      const br = await bonusRows();
+      const name = (q || o.cat) + " @" + w;
+      if (!br.length) { skip(name + ": no bonus row"); continue; }
+      seen.push(name);
+      ok(br.every(r => !r.open && r.bodyHidden), name + ": " + br.length + " bonus row(s) render closed");
+      ok(br.every(r => !r.cut.length), name + ": closed line cuts off no name" + (br.some(r => r.cut.length) ? " (cut: " + br.map(r => r.cut.join(", ")).join("; ") + ")" : ""));
+      ok(br.every(r => r.shown + r.n === r.total && (r.n > 0 || r.shown === r.total)),
+        name + ": +N counts every entry not on the line (" + br.map(r => r.shown + " shown +" + r.n + " of " + r.total).join("; ") + ")");
+      ok(br.every(r => r.sumH >= 44 && Math.abs(r.sumW - r.rowW) <= 1 && r.rowW <= w - 32), name + ": summary is a full-width 44px+ tap target (" + br.map(r => r.sumW + "x" + r.sumH).join("; ") + ")");
+      if (q === "round table" || o) {
+        await page.locator("#main details.bonusrow > summary").first().click();
+        const op = await page.$eval("#main details.bonusrow", d => ({ open: d.open,
+          lis: [...d.querySelectorAll(".blist > li")].map(li => li.checkVisibility() ? li.textContent : null),
+          notes: [...d.querySelectorAll(".bnote")].map(n => n.checkVisibility() ? n.textContent : null),
+          lineHidden: !d.querySelector(".bline").checkVisibility() }));
+        ok(op.open && op.lineHidden && op.lis.length === br[0].total && op.lis.every(Boolean) && op.notes.length && op.notes.every(Boolean) &&
+          op.notes.some(n => /^Likely, not certain/.test(n)),
+          name + ": opening the first row shows all " + op.lis.length + " entries and " + op.notes.length + " notes, line 2 hidden");
+        await page.locator("#main details.bonusrow > summary").first().click();
+        ok(!(await page.$eval("#main details.bonusrow", d => d.open)), name + ": tapping again closes it");
+      }
+    }
+    ok(seen.length >= 4, "bonus rows checked at " + w + "px (" + seen.join(", ") + ")");
+  }
+  await page.setViewportSize({ width: 390, height: 844 });
+  // The round table row squeezed to 150px refits and still shows only whole names.
+  await setup("round table");
+  const fitNarrow = await page.evaluate(() => {
+    const d = document.querySelector("#main details.bonusrow"); d.parentNode.style.width = "150px";
+    return new Promise(r => requestAnimationFrame(() => requestAnimationFrame(() => {
+      const line = d.querySelector(".bline"), lr = line.getBoundingClientRect();
+      const shown = [...line.querySelectorAll(".bent")].filter(e => getComputedStyle(e).display !== "none");
+      const more = line.querySelector(".bmore");
+      r({ cut: shown.concat([more]).filter(e => getComputedStyle(e).display !== "none" && e.getBoundingClientRect().right > lr.right + 0.5).length,
+        shown: shown.length, more: more.firstChild.textContent, total: d.querySelectorAll(".blist > li").length });
+    })));
+  });
+  ok(!fitNarrow.cut && fitNarrow.more === "+" + (fitNarrow.total - fitNarrow.shown), "round table, row squeezed to 150px: refits on resize, no cut name (" + fitNarrow.shown + " shown, " + fitNarrow.more + ")");
+
+  // Headline: one issuer dot before every bold total, for the card it names first; the "Likely" tag ends the last
+  // headline line where the old "Likely, not certain" note was, and that sentence is no longer a visible note.
+  const headDots = () => page.$$eval("#use .usehead strong", ss => ss.map(s => {
+    const d = s.previousElementSibling, m = /^(.*?) (?:\+|up to |\d)/.exec(s.textContent);
+    return { text: s.textContent, dot: d && d.classList.contains("idot") ? [...d.classList].find(c => /^i-/.test(c)).slice(2) : null,
+      want: m ? window.__issuerOf(m[1]) : "?", dots: s.parentNode.querySelectorAll(".idot").length, strongs: s.parentNode.querySelectorAll("strong").length };
+  }));
+  const likelyAt = () => page.evaluate(() => {
+    const tags = [...document.querySelectorAll("#use .likely")], heads = [...document.querySelectorAll("#use .usehead")];
+    const last = heads[heads.length - 1];
+    return { n: tags.length, atEnd: !tags.length || (tags[0].parentNode === last && last.lastElementChild === tags[0]),
+      visible: tags.length ? tags[0].firstChild.textContent : null, sr: tags.length ? tags[0].querySelector(".sr").textContent : null,
+      oldNote: [...document.querySelectorAll("#use .usenote, #use .usesub")].some(e => /^Likely, not certain|^Totals add/.test(e.textContent)) };
+  });
+  await setup("round table");
+  const rtDots = await headDots();
+  ok(rtDots.length >= 1 && rtDots.every(x => x.dot && x.dot === x.want && x.dots === x.strongs),
+    "round table: exactly one dot per bold total, matching its first card (" + rtDots.map(x => x.text + " -> " + x.dot).join("; ") + ")");
+  for (const [q, want] of [["round table", true], ["pizza", true], ["costco gas", true], ["jamba", true], ["shell", false], ["zzqx", false]]) {
+    await setup(q);
+    const la = await likelyAt(), hd = await headDots();
+    ok(la.n === (want ? 1 : 0) && la.atEnd && !la.oldNote && (!want || (la.visible === "Likely" && /^, not certain: how the merchant codes/.test(la.sr))),
+      q + ": " + (want ? "one \"Likely\" tag at the end of the last headline line" : "no \"Likely\" tag") + ", no old note (" + JSON.stringify(la) + ")");
+    ok(hd.every(x => x.dot === x.want && x.dots === x.strongs), q + ": one matching dot per bold total (" + hd.map(x => x.text + " -> " + x.dot).join("; ") + ")");
+  }
+
   // Issuer dots: issuerOf() gives the right issuer for every card and offer-list name in cards.json
   // (card names, offer-list keys, their row names and card lists), and null for a name it doesn't know.
   const WANT = {
