@@ -69,6 +69,11 @@
       "card": "Citi Custom Cash",
       "read_date": "2026-10-18",
       "offers_found": 343
+    },
+    {
+      "card": "U.S. Bank",
+      "read_date": "2026-10-23",
+      "offers_found": 127
     }
   ],
   "offers": [
@@ -4590,7 +4595,7 @@
       "minimum_spend": null,
       "fine_print": "Earn 5% cash back on your McDonald's purchase, with a $1.50 cash back maximum.",
       "other_details": [],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-23",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -4611,7 +4616,7 @@
       "other_details": [
         "Logo shows 'In-Store Only'"
       ],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-23",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -4630,7 +4635,7 @@
       "minimum_spend": null,
       "fine_print": "Earn 10% cash back on your Round Table Pizza purchase, with a $6 cash back maximum.",
       "other_details": [],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-23",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-19"
@@ -4651,7 +4656,7 @@
       "other_details": [
         "Logo shows 'Subscription Only'"
       ],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-23",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -4670,7 +4675,7 @@
       "minimum_spend": null,
       "fine_print": "Earn 15% cash back on your La Colombe purchase, with a $15 cash back maximum. Offer valid online only.",
       "other_details": [],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-23",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -4689,7 +4694,7 @@
       "minimum_spend": null,
       "fine_print": "Earn 10% cash back on your ezCater purchase, with a $60 cash back maximum.",
       "other_details": [],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-23",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -4710,7 +4715,7 @@
       "other_details": [
         "Logo shows 'Subscription Only'"
       ],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-23",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -4729,7 +4734,7 @@
       "minimum_spend": null,
       "fine_print": "Earn 15% cash back on your Blue Apron purchase, with a $13.50 cash back maximum. Offer valid online only.",
       "other_details": [],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-23",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -4750,7 +4755,7 @@
       "other_details": [
         "Logo shows 'Subscription Only'"
       ],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-23",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -4762,14 +4767,14 @@
       "category": "Groceries & Food Delivery",
       "bonus": "$20 cash back",
       "expires": "2026-10-30",
-      "expires_text": null,
+      "expires_text": "7 days left",
       "activation": "needs_activation",
       "channel": "online",
       "spend_cap": null,
       "minimum_spend": "40",
       "fine_print": "Earn $20 cash back on your first payment of a Nurture Life subscription, when you spend $40 or more.",
       "other_details": [],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-23",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -4788,7 +4793,7 @@
       "minimum_spend": null,
       "fine_print": "Earn 10% cash back on your Tiff's Treats purchase, with an $8 cash back maximum.",
       "other_details": [],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-23",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -4809,7 +4814,7 @@
       "other_details": [
         "Offer only applies to the following location: 1267 W Temple St, Los Angeles, CA 90026"
       ],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-23",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -4822,7 +4827,7 @@
       "bonus": "5% cash back",
       "expires": "2026-11-08",
       "expires_text": null,
-      "activation": "needs_activation",
+      "activation": "already_activated",
       "channel": "in_store",
       "spend_cap": null,
       "minimum_spend": null,
@@ -4830,7 +4835,7 @@
       "other_details": [
         "Offer only applies to the following location: 6256 Topanga Canyon Blvd Ste 2, Woodland Hills, CA 91367"
       ],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-23",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -4852,7 +4857,7 @@
         "Name truncated on screen",
         "Offer only applies to the following location: 118 Japanese Vlg Plz Mall, Los Angeles, CA 90012"
       ],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-23",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -4865,7 +4870,7 @@
       "bonus": "5% cash back",
       "expires": "2026-11-08",
       "expires_text": null,
-      "activation": "needs_activation",
+      "activation": "already_activated",
       "channel": "in_store",
       "spend_cap": null,
       "minimum_spend": null,
@@ -4873,7 +4878,7 @@
       "other_details": [
         "Offer only applies to the following location: 617 S Olive St, Los Angeles, CA 90014"
       ],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-23",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -4894,7 +4899,7 @@
       "other_details": [
         "Offer only applies to the following location: 812 N Evergreen Ave, Los Angeles, CA 90033"
       ],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-23",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -4915,7 +4920,7 @@
       "other_details": [
         "Offer only applies to the following location: 705 W 9Th St, Los Angeles, CA 90015"
       ],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-23",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -4936,7 +4941,7 @@
       "other_details": [
         "Offer only applies to the following location: 717 W 7Th St, Los Angeles, CA 90017"
       ],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-23",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -4957,7 +4962,7 @@
       "other_details": [
         "Offer only applies to the following location: 1111 S Hope St # 100, Los Angeles, CA 90015"
       ],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-23",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -4979,7 +4984,7 @@
         "Name truncated on screen",
         "Offer only applies to the following location: 3155 Glendale Blvd, Los Angeles, CA 90039"
       ],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-23",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -5000,7 +5005,7 @@
       "other_details": [
         "Offer only applies to the following location: 2396 Glendale Blvd, Los Angeles, CA 90039"
       ],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-23",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -5021,7 +5026,7 @@
       "other_details": [
         "Offer only applies to the following location: 7610 Reseda Blvd, Reseda, CA 91335"
       ],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-23",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -5042,7 +5047,7 @@
       "other_details": [
         "Offer only applies to the following location: 120 S Brand Blvd, Glendale, CA 91204"
       ],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-23",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -5066,8 +5071,8 @@
       ],
       "last_read": "2026-10-18",
       "first_seen": "2026-10-18",
-      "status": "active",
-      "status_since": "2026-10-20"
+      "status": "expired",
+      "status_since": "2026-10-23"
     },
     {
       "id": "us-bank/health-nut",
@@ -5085,7 +5090,7 @@
       "other_details": [
         "Offer only applies to the following location: 23365 Mulholland Dr, Woodland Hills, CA 91364"
       ],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-23",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -5106,7 +5111,7 @@
       "other_details": [
         "Offer only applies to the following location: 449 S Hewitt St, Los Angeles, CA 90013"
       ],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-23",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -5118,14 +5123,14 @@
       "category": "Groceries & Food Delivery",
       "bonus": "5% cash back",
       "expires": "2026-10-25",
-      "expires_text": "7 days left",
+      "expires_text": "2 days left",
       "activation": "already_activated",
       "channel": "in_store",
       "spend_cap": null,
       "minimum_spend": null,
       "fine_print": "Earn 5% cash back on your Sprouts Farmers Market purchase, with a $4 cash back maximum. Offer valid in-store only.",
       "other_details": [],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-23",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -5144,7 +5149,7 @@
       "minimum_spend": null,
       "fine_print": "Earn 10% cash back on your El Pollo Loco purchase, with a $3 cash back maximum.",
       "other_details": [],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-23",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -5163,7 +5168,7 @@
       "minimum_spend": null,
       "fine_print": "Earn 10% cash back on your Jamba Juice purchase, with a $4 cash back maximum.",
       "other_details": [],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-23",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -5182,7 +5187,7 @@
       "minimum_spend": null,
       "fine_print": "Earn 7% cash back on your Nothing Bundt Cakes purchase, with a $3.50 cash back maximum.",
       "other_details": [],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-23",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -5204,7 +5209,7 @@
         "Name truncated on screen",
         "Offer only applies to the following location: 18743 Ventura Blvd, Tarzana, CA 91356"
       ],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-23",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -5225,7 +5230,7 @@
       "other_details": [
         "Offer only applies to the following location: 2121 Hillhurst Ave, Los Angeles, CA 90027"
       ],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-23",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -5237,7 +5242,7 @@
       "category": "Dining",
       "bonus": "5% cash back",
       "expires": "2026-10-25",
-      "expires_text": "7 days left",
+      "expires_text": "2 days left",
       "activation": "already_activated",
       "channel": "in_store",
       "spend_cap": null,
@@ -5246,7 +5251,7 @@
       "other_details": [
         "Offer only applies to the following location: 21534 Devonshire St Ste J, Chatsworth, CA 91311"
       ],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-23",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -5268,7 +5273,7 @@
         "Name truncated on screen",
         "Offer only applies to the following location: 20790 Nordhoff St, Chatsworth, CA 91311"
       ],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-23",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -5280,7 +5285,7 @@
       "category": "Dining",
       "bonus": "5% cash back",
       "expires": "2026-10-29",
-      "expires_text": null,
+      "expires_text": "6 days left",
       "activation": "already_activated",
       "channel": "in_store",
       "spend_cap": null,
@@ -5290,7 +5295,7 @@
         "Name truncated on screen",
         "Offer only applies to the following location: 23349B Mulholland Dr, Woodland Hills, CA 91364"
       ],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-23",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -5312,7 +5317,7 @@
         "Name truncated on screen",
         "Offer only applies to the following location: 626 S Spring St, Los Angeles, CA 90014"
       ],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-23",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -5333,7 +5338,7 @@
       "other_details": [
         "Offer only applies to the following location: 9029 De Soto Ave, Canoga Park, CA 91304"
       ],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-23",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -5345,7 +5350,7 @@
       "category": "Dining",
       "bonus": "5% cash back",
       "expires": "2026-10-25",
-      "expires_text": "7 days left",
+      "expires_text": "2 days left",
       "activation": "already_activated",
       "channel": "in_store",
       "spend_cap": null,
@@ -5354,7 +5359,7 @@
       "other_details": [
         "Offer only applies to the following location: 20022 Ventura Blvd, Woodland Hills, CA 91364"
       ],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-23",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -5375,7 +5380,7 @@
       "other_details": [
         "Logo shows 'Membership Only'"
       ],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-23",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -5394,7 +5399,7 @@
       "minimum_spend": null,
       "fine_print": "Earn 10% cash back on your DUCKHORN purchase, with a $27.50 cash back maximum.",
       "other_details": [],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-23",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -5406,14 +5411,14 @@
       "category": "Electronics & Software",
       "bonus": "$10 cash back",
       "expires": "2026-10-24",
-      "expires_text": "6 days left",
+      "expires_text": "1 day left",
       "activation": "needs_activation",
       "channel": "online",
       "spend_cap": null,
       "minimum_spend": "220",
       "fine_print": "Earn $10 cash back on your Meta Glasses purchase, when you spend $220 or more. Offer valid online only.",
       "other_details": [],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-23",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -5434,8 +5439,8 @@
       "other_details": [],
       "last_read": "2026-10-18",
       "first_seen": "2026-10-18",
-      "status": "active",
-      "status_since": "2026-10-18"
+      "status": "missing",
+      "status_since": "2026-10-23"
     },
     {
       "id": "us-bank/giftory",
@@ -5451,7 +5456,7 @@
       "minimum_spend": null,
       "fine_print": "Earn 10% cash back on your Giftory purchase, with a $15 cash back maximum. Offer valid online only.",
       "other_details": [],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-23",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -5470,7 +5475,7 @@
       "minimum_spend": null,
       "fine_print": "Earn 10% cash back on all of your Lululemon purchases, until a $16 cash back maximum is reached.",
       "other_details": [],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-23",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -5489,7 +5494,7 @@
       "minimum_spend": null,
       "fine_print": "Earn 5% cash back on your FragranceNet.com purchase, with an $8 cash back maximum. Offer valid online only.",
       "other_details": [],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-23",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -5500,7 +5505,7 @@
       "merchant": "Empire Today",
       "category": "Home & Garden",
       "bonus": "10% cash back",
-      "expires": "2026-10-30",
+      "expires": "2026-11-07",
       "expires_text": null,
       "activation": "needs_activation",
       "channel": "in_store_and_online",
@@ -5508,7 +5513,7 @@
       "minimum_spend": null,
       "fine_print": "Earn 10% cash back on your Empire Today purchase, with a $350 cash back maximum.",
       "other_details": [],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-23",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -5527,7 +5532,7 @@
       "minimum_spend": null,
       "fine_print": "Earn 7% cash back on your On purchase, with a $22 cash back maximum.",
       "other_details": [],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-23",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -5539,14 +5544,14 @@
       "category": "Clothing & Jewelry",
       "bonus": "5% cash back",
       "expires": "2026-10-30",
-      "expires_text": null,
+      "expires_text": "7 days left",
       "activation": "needs_activation",
       "channel": "in_store_and_online",
       "spend_cap": null,
       "minimum_spend": null,
       "fine_print": "Earn 5% cash back on your Aldo purchase, with a $7 cash back maximum.",
       "other_details": [],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-23",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -5559,13 +5564,13 @@
       "bonus": "$30 cash back",
       "expires": "2026-11-13",
       "expires_text": null,
-      "activation": "needs_activation",
+      "activation": "already_activated",
       "channel": "in_store_and_online",
       "spend_cap": null,
       "minimum_spend": "250",
       "fine_print": "Earn $30 cash back on your Bob's Discount Furniture purchase when you spend $250 or more.",
       "other_details": [],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-23",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -5584,7 +5589,7 @@
       "minimum_spend": null,
       "fine_print": "Earn 10% cash back on your David's Bridal purchase, with a $30 cash back maximum.",
       "other_details": [],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-23",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -5605,7 +5610,7 @@
       "other_details": [
         "Page text says: Exclusive for Smart Rewards, offer valid one time only"
       ],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-23",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -5624,7 +5629,7 @@
       "minimum_spend": null,
       "fine_print": "Earn 10% cash back on your Vistaprint purchase, with a $16 cash back maximum. Offer valid online only.",
       "other_details": [],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-23",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -5643,7 +5648,7 @@
       "minimum_spend": null,
       "fine_print": "Earn 10% cash back on all of your Ariat purchases, until a $24 cash back maximum is reached.",
       "other_details": [],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-23",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -5654,15 +5659,15 @@
       "merchant": "Hallmark.com",
       "category": "Marketplaces & Department Stores",
       "bonus": "10% cash back",
-      "expires": "2026-10-19",
-      "expires_text": "1 day left",
+      "expires": "2026-12-03",
+      "expires_text": null,
       "activation": "needs_activation",
       "channel": "online",
       "spend_cap": null,
       "minimum_spend": null,
       "fine_print": "Earn 10% cash back on your Hallmark.com purchase, with an $8 cash back maximum. Offer valid online only.",
       "other_details": [],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-23",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -5681,7 +5686,7 @@
       "minimum_spend": null,
       "fine_print": "Earn 5% cash back on your Sleep Number purchase, with a $300 cash back maximum.",
       "other_details": [],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-23",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -5700,7 +5705,7 @@
       "minimum_spend": null,
       "fine_print": "Earn 5% cash back on your Brilliant Earth purchase, with a $234 cash back maximum.",
       "other_details": [],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-23",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -5721,7 +5726,7 @@
       "other_details": [
         "Logo shows 'Subscription Only'"
       ],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-23",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -5740,7 +5745,7 @@
       "minimum_spend": null,
       "fine_print": "Earn 15% cash back on your PAKA Apparel purchase, with a $45 cash back maximum. Offer valid online only.",
       "other_details": [],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-23",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -5759,7 +5764,7 @@
       "minimum_spend": "25",
       "fine_print": "Earn $12 cash back on your Stitch Fix purchase, when you spend $25 or more.",
       "other_details": [],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-23",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -5780,7 +5785,7 @@
       "other_details": [
         "Logo shows 'Membership Only'"
       ],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-23",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -5799,7 +5804,7 @@
       "minimum_spend": null,
       "fine_print": "Earn 10% cash back on your Sharper Image purchase, with an $18 cash back maximum. Offer valid online only.",
       "other_details": [],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-23",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -5818,7 +5823,7 @@
       "minimum_spend": null,
       "fine_print": "Earn 10% cash back on all of your Moen purchases, until a $50 cash back maximum is reached.",
       "other_details": [],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-23",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -5837,7 +5842,7 @@
       "minimum_spend": "150",
       "fine_print": "Earn 5% cash back on your NordicTrack purchase, with a $225 cash back maximum, when you spend $150 or more. Offer valid online only.",
       "other_details": [],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-23",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -5856,7 +5861,7 @@
       "minimum_spend": "1000",
       "fine_print": "Earn $100 cash back on your Thuma purchase, when you spend $1000 or more.",
       "other_details": [],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-23",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -5868,14 +5873,14 @@
       "category": "Clothing & Jewelry",
       "bonus": "10% cash back",
       "expires": "2026-10-30",
-      "expires_text": null,
+      "expires_text": "7 days left",
       "activation": "needs_activation",
       "channel": "in_store_and_online",
       "spend_cap": null,
       "minimum_spend": null,
       "fine_print": "Earn 10% cash back on your Mejuri purchase, with a $33 cash back maximum.",
       "other_details": [],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-23",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -5894,7 +5899,7 @@
       "minimum_spend": null,
       "fine_print": "Earn 10% cash back on your MERIT Beauty purchase, with a $15 cash back maximum. Offer valid online only.",
       "other_details": [],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-23",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -5915,7 +5920,7 @@
       "other_details": [
         "Logo shows 'Subscription Only'"
       ],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-23",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -5934,7 +5939,7 @@
       "minimum_spend": null,
       "fine_print": "Earn 10% cash back on your Cozy Earth purchase, with a $44 cash back maximum. Offer valid online only.",
       "other_details": [],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-23",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -5953,7 +5958,7 @@
       "minimum_spend": null,
       "fine_print": "Earn 10% cash back on your Tommy John purchase, with an $18 cash back maximum.",
       "other_details": [],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-23",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -5972,7 +5977,7 @@
       "minimum_spend": null,
       "fine_print": "Earn 10% cash back on your CAKES Body purchase, with an $8 cash back maximum. Offer valid online only.",
       "other_details": [],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-23",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -5991,7 +5996,7 @@
       "minimum_spend": null,
       "fine_print": "Earn 10% cash back on all of your BloomsyBox purchases, until a $23 cash back maximum is reached. Offer valid online only.",
       "other_details": [],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-23",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -6010,7 +6015,7 @@
       "minimum_spend": null,
       "fine_print": "Earn 10% cash back on your Harper Wilde purchase, with a $14 cash back maximum. Offer valid online only.",
       "other_details": [],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-23",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -6031,7 +6036,7 @@
       "other_details": [
         "Logo shows 'Subscription Only'"
       ],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-23",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -6052,7 +6057,7 @@
       "other_details": [
         "Offer only applies to the following location: 5621 N Figueroa St, Los Angeles, CA 90042"
       ],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-23",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -6065,7 +6070,7 @@
       "bonus": "5% cash back",
       "expires": "2026-11-15",
       "expires_text": null,
-      "activation": "needs_activation",
+      "activation": "already_activated",
       "channel": "in_store",
       "spend_cap": null,
       "minimum_spend": null,
@@ -6076,7 +6081,7 @@
         "Name truncated on screen",
         "Offer only applies to the following location: 5210 Melrose Ave, Los Angeles, CA 90038"
       ],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-23",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -6087,8 +6092,8 @@
       "merchant": "Amazon Business",
       "category": "Marketplaces & Department Stores",
       "bonus": "10% cash back",
-      "expires": "2026-10-18",
-      "expires_text": "Expiring today",
+      "expires": "2026-11-22",
+      "expires_text": null,
       "activation": "needs_activation",
       "channel": "none_shown",
       "spend_cap": null,
@@ -6097,7 +6102,7 @@
       "other_details": [
         "Logo shows 'Subscription Only'"
       ],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-23",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -6118,8 +6123,8 @@
       "other_details": [],
       "last_read": "2026-10-18",
       "first_seen": "2026-10-18",
-      "status": "active",
-      "status_since": "2026-10-18"
+      "status": "expired",
+      "status_since": "2026-10-23"
     },
     {
       "id": "us-bank/fanatics",
@@ -6135,7 +6140,7 @@
       "minimum_spend": null,
       "fine_print": "Earn 10% cash back on all of your Fanatics purchases, until an $11 cash back maximum is reached.",
       "other_details": [],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-23",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -6154,7 +6159,7 @@
       "minimum_spend": null,
       "fine_print": "Earn 10% cash back on all of your Floor & Decor purchases, until a $79 cash back maximum is reached.",
       "other_details": [],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-23",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -6173,7 +6178,7 @@
       "minimum_spend": null,
       "fine_print": "Earn 7% cash back on your Puma purchase, with a $13 cash back maximum. Offer valid in-store only.",
       "other_details": [],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-23",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -6184,15 +6189,15 @@
       "merchant": "eBay",
       "category": "Marketplaces & Department Stores",
       "bonus": "2% cash back",
-      "expires": "2026-10-21",
-      "expires_text": "3 days left",
+      "expires": "2026-10-31",
+      "expires_text": null,
       "activation": "already_activated",
       "channel": "online",
       "spend_cap": null,
       "minimum_spend": null,
       "fine_print": "Earn 2% cash back on all of your eBay purchases, until a $10 cash back maximum is reached.",
       "other_details": [],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-23",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -6211,7 +6216,7 @@
       "minimum_spend": "100",
       "fine_print": "Earn 10% cash back on your Hilton stay, with a $65 cash back maximum, when you spend $100 or more.",
       "other_details": [],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-23",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -6230,7 +6235,7 @@
       "minimum_spend": null,
       "fine_print": "Earn 5% cash back on your Norwegian Cruise Line purchase, with a $60 cash back maximum. Offer valid online only.",
       "other_details": [],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-23",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -6241,7 +6246,7 @@
       "merchant": "Turo",
       "category": "Travel",
       "bonus": "$10 cash back",
-      "expires": "2026-10-31",
+      "expires": "2026-11-30",
       "expires_text": null,
       "activation": "needs_activation",
       "channel": "online",
@@ -6249,7 +6254,7 @@
       "minimum_spend": "100",
       "fine_print": "Earn $10 cash back on your Turo purchase, when you spend $100 or more. Offer valid online only.",
       "other_details": [],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-23",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -6268,7 +6273,7 @@
       "minimum_spend": "250",
       "fine_print": "Earn 5% cash back on your British Airways purchase, with a $100 cash back maximum, when you spend $250 or more.",
       "other_details": [],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-23",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -6289,8 +6294,8 @@
       "other_details": [],
       "last_read": "2026-10-18",
       "first_seen": "2026-10-18",
-      "status": "active",
-      "status_since": "2026-10-18"
+      "status": "expired",
+      "status_since": "2026-10-23"
     },
     {
       "id": "us-bank/gaylord-hotels",
@@ -6306,7 +6311,7 @@
       "minimum_spend": "100",
       "fine_print": "Earn 10% cash back on your Gaylord Hotels stay, with a $42 cash back maximum, when you spend $100 or more.",
       "other_details": [],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-23",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -6327,7 +6332,7 @@
       "other_details": [
         "Name truncated on screen"
       ],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-23",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -6348,7 +6353,7 @@
       "other_details": [
         "Name truncated on screen"
       ],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-23",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -6369,8 +6374,8 @@
       "other_details": [],
       "last_read": "2026-10-18",
       "first_seen": "2026-10-18",
-      "status": "active",
-      "status_since": "2026-10-18"
+      "status": "missing",
+      "status_since": "2026-10-23"
     },
     {
       "id": "us-bank/ihg-hotels-resorts",
@@ -6388,8 +6393,8 @@
       "other_details": [],
       "last_read": "2026-10-18",
       "first_seen": "2026-10-18",
-      "status": "active",
-      "status_since": "2026-10-18"
+      "status": "missing",
+      "status_since": "2026-10-23"
     },
     {
       "id": "us-bank/great-wolf-lodge",
@@ -6405,7 +6410,7 @@
       "minimum_spend": "100",
       "fine_print": "Earn 15% cash back on your Great Wolf Lodge stay, with a $72 cash back maximum, when you spend $100 or more.",
       "other_details": [],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-23",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -6416,7 +6421,7 @@
       "merchant": "Intrepid Travel",
       "category": "Travel",
       "bonus": "10% cash back",
-      "expires": "2026-10-31",
+      "expires": "2026-12-31",
       "expires_text": null,
       "activation": "needs_activation",
       "channel": "online",
@@ -6424,7 +6429,7 @@
       "minimum_spend": null,
       "fine_print": "Earn 10% cash back on your Intrepid Travel purchase, with a $300 cash back maximum. Offer valid online only.",
       "other_details": [],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-23",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -6443,7 +6448,7 @@
       "minimum_spend": "100",
       "fine_print": "Earn 7% cash back on your Hyatt Vacation Club stay, with a $56 cash back maximum, when you spend $100 or more.",
       "other_details": [],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-23",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -6462,7 +6467,7 @@
       "minimum_spend": "100",
       "fine_print": "Earn 15% cash back on your Hyatt Under Canvas stay, with a $40 cash back maximum, when you spend $100 or more.",
       "other_details": [],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-23",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -6481,7 +6486,7 @@
       "minimum_spend": "50",
       "fine_print": "Earn 30% cash back on your first payment of a Tovala subscription, with a $22.50 cash back maximum, when you spend $50 or more.",
       "other_details": [],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-23",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -6500,7 +6505,7 @@
       "minimum_spend": null,
       "fine_print": "Earn 15% cash back on your first payment of an Ancestry.com subscription, with a $12 cash back maximum.",
       "other_details": [],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-23",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -6521,7 +6526,7 @@
       "other_details": [
         "Name truncated on screen"
       ],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-23",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -6533,14 +6538,14 @@
       "category": "Health, Fitness & Vision",
       "bonus": "$10 cash back",
       "expires": "2026-10-25",
-      "expires_text": "7 days left",
+      "expires_text": "2 days left",
       "activation": "needs_activation",
       "channel": "online",
       "spend_cap": null,
       "minimum_spend": "10",
       "fine_print": "Earn $10 cash back on your Weight Watchers membership, when you spend $10 or more.",
       "other_details": [],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-23",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -6559,7 +6564,7 @@
       "minimum_spend": "50",
       "fine_print": "Earn 20% cash back on your Blueland purchase, with a $20 cash back maximum, when you spend $50 or more. Offer valid online only.",
       "other_details": [],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-23",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -6570,15 +6575,15 @@
       "merchant": "Boost Mobile",
       "category": "Services & Utilities",
       "bonus": "$5 cash back",
-      "expires": "2026-10-21",
-      "expires_text": "3 days left",
+      "expires": "2026-11-29",
+      "expires_text": null,
       "activation": "needs_activation",
       "channel": "in_store_and_online",
       "spend_cap": null,
       "minimum_spend": "10",
       "fine_print": "Earn $5 cash back on your second payment of a Boost Mobile plan, when you spend $10 or more on each payment.",
       "other_details": [],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-23",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -6597,7 +6602,7 @@
       "minimum_spend": null,
       "fine_print": "Earn 5% cash back on your SeatGeek purchase, with a $31 cash back maximum. Offer valid online only.",
       "other_details": [],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-23",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -6609,14 +6614,14 @@
       "category": "Streaming & Entertainment",
       "bonus": "$3 cash back",
       "expires": "2026-10-23",
-      "expires_text": "5 days left",
+      "expires_text": null,
       "activation": "needs_activation",
       "channel": "online",
       "spend_cap": null,
       "minimum_spend": "3",
       "fine_print": "Earn $3 cash back on your first payment of a STARZ subscription, when you spend $3 or more.",
       "other_details": [],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-23",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -6627,7 +6632,7 @@
       "merchant": "Paramount+",
       "category": "Streaming & Entertainment",
       "bonus": "$5 cash back",
-      "expires": "2026-11-07",
+      "expires": "2026-11-17",
       "expires_text": null,
       "activation": "needs_activation",
       "channel": "online",
@@ -6635,7 +6640,7 @@
       "minimum_spend": "5",
       "fine_print": "Earn $5 cash back on your first payment of a Paramount+ subscription, when you spend $5 or more.",
       "other_details": [],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-23",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -6647,14 +6652,14 @@
       "category": "Streaming & Entertainment",
       "bonus": "$20 cash back",
       "expires": "2026-10-29",
-      "expires_text": null,
+      "expires_text": "6 days left",
       "activation": "needs_activation",
       "channel": "online",
       "spend_cap": null,
       "minimum_spend": "39.99",
       "fine_print": "Earn $20 cash back on your YouTube TV subscription, when you spend $39.99 or more.",
       "other_details": [],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-23",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -6675,7 +6680,7 @@
       "other_details": [
         "Logo shows 'Subscription Only'"
       ],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-23",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -6696,7 +6701,7 @@
       "other_details": [
         "Logo shows 'Subscription Only'"
       ],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-23",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -6715,7 +6720,7 @@
       "minimum_spend": null,
       "fine_print": "Earn 20% cash back on your Kindle purchase, with a $4 cash back maximum. Offer valid online only.",
       "other_details": [],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-23",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -6734,7 +6739,7 @@
       "minimum_spend": null,
       "fine_print": "Earn 20% cash back on your first payment of a Kindle Unlimited subscription, with a $6 cash back maximum.",
       "other_details": [],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-23",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -6753,7 +6758,7 @@
       "minimum_spend": "60",
       "fine_print": "Earn 15% cash back on your Optimum purchase, with a $27 cash back maximum, when you spend $60 or more.",
       "other_details": [],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-23",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -6764,15 +6769,15 @@
       "merchant": "SeaWorld",
       "category": "Streaming & Entertainment",
       "bonus": "5% cash back",
-      "expires": "2026-10-18",
-      "expires_text": "Expiring today",
+      "expires": "2026-11-24",
+      "expires_text": null,
       "activation": "needs_activation",
       "channel": "in_store_and_online",
       "spend_cap": null,
       "minimum_spend": "80",
       "fine_print": "Earn 5% cash back on your SeaWorld purchase, with a $45 cash back maximum, when you spend $80 or more.",
       "other_details": [],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-23",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -6791,7 +6796,7 @@
       "minimum_spend": null,
       "fine_print": "Earn 10% cash back on your Sky Zone purchase, with a $14 cash back maximum.",
       "other_details": [],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-23",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -6802,15 +6807,15 @@
       "merchant": "fubo",
       "category": "Streaming & Entertainment",
       "bonus": "$20 cash back",
-      "expires": "2026-10-18",
-      "expires_text": "Expiring today",
+      "expires": "2026-12-02",
+      "expires_text": null,
       "activation": "needs_activation",
       "channel": "online",
       "spend_cap": null,
       "minimum_spend": "60",
       "fine_print": "Earn $20 cash back on your first payment of a fubo subscription when you spend $60 or more.",
       "other_details": [],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-23",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -6821,15 +6826,15 @@
       "merchant": "Busch Gardens",
       "category": "Streaming & Entertainment",
       "bonus": "5% cash back",
-      "expires": "2026-10-18",
-      "expires_text": "Expiring today",
+      "expires": "2026-11-24",
+      "expires_text": null,
       "activation": "needs_activation",
       "channel": "in_store_and_online",
       "spend_cap": null,
       "minimum_spend": "80",
       "fine_print": "Earn 5% cash back on your Busch Gardens purchase, with a $45 cash back maximum, when you spend $80 or more.",
       "other_details": [],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-23",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -6840,15 +6845,15 @@
       "merchant": "Sesame Place",
       "category": "Streaming & Entertainment",
       "bonus": "5% cash back",
-      "expires": "2026-10-18",
-      "expires_text": "Expiring today",
+      "expires": "2026-11-24",
+      "expires_text": null,
       "activation": "needs_activation",
       "channel": "in_store_and_online",
       "spend_cap": null,
       "minimum_spend": "80",
       "fine_print": "Earn 5% cash back on your Sesame Place purchase, with a $45 cash back maximum, when you spend $80 or more.",
       "other_details": [],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-23",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -6867,7 +6872,7 @@
       "minimum_spend": null,
       "fine_print": "Earn 10% cash back on your Six Flags purchase, with a $28 cash back maximum.",
       "other_details": [],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-23",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -6888,7 +6893,7 @@
       "other_details": [
         "Logo shows 'Subscription Only'"
       ],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-23",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -6909,8 +6914,8 @@
       "other_details": [],
       "last_read": "2026-10-18",
       "first_seen": "2026-10-18",
-      "status": "active",
-      "status_since": "2026-10-18"
+      "status": "missing",
+      "status_since": "2026-10-23"
     },
     {
       "id": "us-bank/safelite",
@@ -6928,8 +6933,8 @@
       "other_details": [],
       "last_read": "2026-10-18",
       "first_seen": "2026-10-18",
-      "status": "active",
-      "status_since": "2026-10-18"
+      "status": "missing",
+      "status_since": "2026-10-23"
     },
     {
       "id": "us-bank/chevron",
@@ -6947,7 +6952,7 @@
       "other_details": [
         "Tile label reads 'Pay at pump only'"
       ],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-23",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -6968,8 +6973,295 @@
       "other_details": [],
       "last_read": "2026-10-18",
       "first_seen": "2026-10-18",
+      "status": "missing",
+      "status_since": "2026-10-23"
+    },
+    {
+      "id": "us-bank/discovery-cove",
+      "card": "U.S. Bank",
+      "merchant": "Discovery Cove",
+      "category": "Streaming & Entertainment",
+      "bonus": "5% cash back",
+      "expires": "2026-11-24",
+      "expires_text": null,
+      "activation": "needs_activation",
+      "channel": "in_store_and_online",
+      "spend_cap": null,
+      "minimum_spend": "80",
+      "fine_print": "Earn 5% cash back on your Discovery Cove purchase, with a $45 cash back maximum, when you spend $80 or more.",
+      "other_details": [],
+      "last_read": "2026-10-23",
+      "first_seen": "2026-10-23",
       "status": "active",
-      "status_since": "2026-10-18"
+      "status_since": "2026-10-23"
+    },
+    {
+      "id": "us-bank/massage-envy",
+      "card": "U.S. Bank",
+      "merchant": "Massage Envy",
+      "category": "Health, Fitness & Vision",
+      "bonus": "7% cash back",
+      "expires": "2026-10-31",
+      "expires_text": null,
+      "activation": "needs_activation",
+      "channel": "in_store_and_online",
+      "spend_cap": null,
+      "minimum_spend": null,
+      "fine_print": "Earn 7% cash back on your Massage Envy purchase, with a $15 cash back maximum.",
+      "other_details": [],
+      "last_read": "2026-10-23",
+      "first_seen": "2026-10-23",
+      "status": "active",
+      "status_since": "2026-10-23"
+    },
+    {
+      "id": "us-bank/club-pilates",
+      "card": "U.S. Bank",
+      "merchant": "Club Pilates",
+      "category": "Health, Fitness & Vision",
+      "bonus": "$12 cash back",
+      "expires": "2026-11-22",
+      "expires_text": null,
+      "activation": "needs_activation",
+      "channel": "in_store_and_online",
+      "spend_cap": null,
+      "minimum_spend": "50",
+      "fine_print": "Earn $12 cash back on your Club Pilates purchase when you spend $50 or more.",
+      "other_details": [],
+      "last_read": "2026-10-23",
+      "first_seen": "2026-10-23",
+      "status": "active",
+      "status_since": "2026-10-23"
+    },
+    {
+      "id": "us-bank/pure-barre",
+      "card": "U.S. Bank",
+      "merchant": "Pure Barre",
+      "category": "Health, Fitness & Vision",
+      "bonus": "$12 cash back",
+      "expires": "2026-11-22",
+      "expires_text": null,
+      "activation": "needs_activation",
+      "channel": "in_store_and_online",
+      "spend_cap": null,
+      "minimum_spend": "50",
+      "fine_print": "Earn $12 cash back on your Pure Barre purchase, when you spend $50 or more.",
+      "other_details": [],
+      "last_read": "2026-10-23",
+      "first_seen": "2026-10-23",
+      "status": "active",
+      "status_since": "2026-10-23"
+    },
+    {
+      "id": "us-bank/stretchlab",
+      "card": "U.S. Bank",
+      "merchant": "StretchLab",
+      "category": "Health, Fitness & Vision",
+      "bonus": "$12 cash back",
+      "expires": "2026-11-22",
+      "expires_text": null,
+      "activation": "needs_activation",
+      "channel": "in_store_and_online",
+      "spend_cap": null,
+      "minimum_spend": "49",
+      "fine_print": "Earn $12 cash back on your StretchLab purchase when you spend $49 or more.",
+      "other_details": [],
+      "last_read": "2026-10-23",
+      "first_seen": "2026-10-23",
+      "status": "active",
+      "status_since": "2026-10-23"
+    },
+    {
+      "id": "us-bank/kicks-crew",
+      "card": "U.S. Bank",
+      "merchant": "KICKS CREW",
+      "category": "Clothing & Jewelry",
+      "bonus": "10% cash back",
+      "expires": "2026-12-04",
+      "expires_text": null,
+      "activation": "needs_activation",
+      "channel": "online",
+      "spend_cap": null,
+      "minimum_spend": null,
+      "fine_print": "Earn 10% cash back on all of your KICKS CREW purchases, until a $16 cash back maximum is reached.",
+      "other_details": [],
+      "last_read": "2026-10-23",
+      "first_seen": "2026-10-23",
+      "status": "active",
+      "status_since": "2026-10-23"
+    },
+    {
+      "id": "us-bank/salt-stone",
+      "card": "U.S. Bank",
+      "merchant": "Salt & Stone",
+      "category": "Beauty & Personal Care",
+      "bonus": "10% cash back",
+      "expires": "2026-11-30",
+      "expires_text": null,
+      "activation": "needs_activation",
+      "channel": "online",
+      "spend_cap": null,
+      "minimum_spend": null,
+      "fine_print": "Earn 10% cash back on your Salt & Stone purchase, with a $12 cash back maximum. Offer valid online only.",
+      "other_details": [],
+      "last_read": "2026-10-23",
+      "first_seen": "2026-10-23",
+      "status": "active",
+      "status_since": "2026-10-23"
+    },
+    {
+      "id": "us-bank/qvc",
+      "card": "U.S. Bank",
+      "merchant": "QVC",
+      "category": "Marketplaces & Department Stores",
+      "bonus": "10% cash back",
+      "expires": "2026-11-21",
+      "expires_text": null,
+      "activation": "needs_activation",
+      "channel": "in_store_and_online",
+      "spend_cap": null,
+      "minimum_spend": null,
+      "fine_print": "Earn 10% cash back on all of your QVC purchases, until a $9 cash back maximum is reached.",
+      "other_details": [],
+      "last_read": "2026-10-23",
+      "first_seen": "2026-10-23",
+      "status": "active",
+      "status_since": "2026-10-23"
+    },
+    {
+      "id": "us-bank/grudrun-sjoden",
+      "card": "U.S. Bank",
+      "merchant": "Grudrun Sjoden",
+      "category": "Clothing & Jewelry",
+      "bonus": "10% cash back",
+      "expires": "2026-12-02",
+      "expires_text": null,
+      "activation": "needs_activation",
+      "channel": "in_store_and_online",
+      "spend_cap": null,
+      "minimum_spend": null,
+      "fine_print": "Earn 10% cash back on your Grudrun Sjoden purchase, with a $20 cash back maximum.",
+      "other_details": [],
+      "last_read": "2026-10-23",
+      "first_seen": "2026-10-23",
+      "status": "active",
+      "status_since": "2026-10-23"
+    },
+    {
+      "id": "us-bank/hallmark",
+      "card": "U.S. Bank",
+      "merchant": "Hallmark",
+      "category": "Marketplaces & Department Stores",
+      "bonus": "10% cash back",
+      "expires": "2026-12-24",
+      "expires_text": null,
+      "activation": "needs_activation",
+      "channel": "in_store",
+      "spend_cap": null,
+      "minimum_spend": null,
+      "fine_print": "Earn 10% cash back on your Hallmark purchase, with an $8 cash back maximum. Offer valid in-store only.",
+      "other_details": [],
+      "last_read": "2026-10-23",
+      "first_seen": "2026-10-23",
+      "status": "active",
+      "status_since": "2026-10-23"
+    },
+    {
+      "id": "us-bank/hsn",
+      "card": "U.S. Bank",
+      "merchant": "HSN",
+      "category": "Marketplaces & Department Stores",
+      "bonus": "10% cash back",
+      "expires": "2026-11-21",
+      "expires_text": null,
+      "activation": "needs_activation",
+      "channel": "in_store_and_online",
+      "spend_cap": null,
+      "minimum_spend": null,
+      "fine_print": "Earn 10% cash back on all of your HSN purchases, until a $9 cash back maximum is reached.",
+      "other_details": [],
+      "last_read": "2026-10-23",
+      "first_seen": "2026-10-23",
+      "status": "active",
+      "status_since": "2026-10-23"
+    },
+    {
+      "id": "us-bank/emirates",
+      "card": "U.S. Bank",
+      "merchant": "Emirates",
+      "category": "Travel",
+      "bonus": "5% cash back",
+      "expires": "2026-11-08",
+      "expires_text": null,
+      "activation": "needs_activation",
+      "channel": "in_store_and_online",
+      "spend_cap": null,
+      "minimum_spend": "500",
+      "fine_print": "Earn 5% cash back on your Emirates purchase, with a $100 cash back maximum, when you spend $500 or more.",
+      "other_details": [],
+      "last_read": "2026-10-23",
+      "first_seen": "2026-10-23",
+      "status": "active",
+      "status_since": "2026-10-23"
+    },
+    {
+      "id": "us-bank/pizza-hut",
+      "card": "U.S. Bank",
+      "merchant": "Pizza Hut",
+      "category": "Dining",
+      "bonus": "5% cash back",
+      "expires": "2026-11-15",
+      "expires_text": null,
+      "activation": "already_activated",
+      "channel": "in_store_and_online",
+      "spend_cap": null,
+      "minimum_spend": null,
+      "fine_print": "Earn 5% cash back on your Pizza Hut purchase, with a $2 cash back maximum.",
+      "other_details": [],
+      "last_read": "2026-10-23",
+      "first_seen": "2026-10-23",
+      "status": "active",
+      "status_since": "2026-10-23"
+    },
+    {
+      "id": "us-bank/shake-shack",
+      "card": "U.S. Bank",
+      "merchant": "Shake Shack",
+      "category": "Dining",
+      "bonus": "5% cash back",
+      "expires": "2026-11-21",
+      "expires_text": null,
+      "activation": "already_activated",
+      "channel": "in_store_and_online",
+      "spend_cap": null,
+      "minimum_spend": null,
+      "fine_print": "Earn 5% cash back on your Shake Shack purchase, with a $2 cash back maximum.",
+      "other_details": [],
+      "last_read": "2026-10-23",
+      "first_seen": "2026-10-23",
+      "status": "active",
+      "status_since": "2026-10-23"
+    },
+    {
+      "id": "us-bank/taqueria-el-tapatio-woodland-hills",
+      "card": "U.S. Bank",
+      "merchant": "Taqueria El Tapatio - Woodland Hills",
+      "category": "Dining",
+      "bonus": "5% cash back",
+      "expires": "2026-11-18",
+      "expires_text": null,
+      "activation": "already_activated",
+      "channel": "in_store",
+      "spend_cap": null,
+      "minimum_spend": null,
+      "fine_print": "Earn 5% cash back on all of your Taqueria El Tapatio - Woodland Hills purchases, until a $100 cash back maximum is reached.",
+      "other_details": [
+        "Offer only applies to the following location: 22806 Victory Blvd, Woodland Hills, CA 91367"
+      ],
+      "last_read": "2026-10-23",
+      "first_seen": "2026-10-23",
+      "status": "active",
+      "status_since": "2026-10-23"
     },
     {
       "id": "capital-one/cvs",
