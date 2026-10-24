@@ -891,6 +891,7 @@
     "The Black Cow Cafe": {"cuisine": "Breakfast & Brunch", "confidence": "Likely", "evidence": "Earlier lookup found the place: American brunch", "source": "Earlier web lookup (pasted seed list, no link saved)", "checked": "2026-10-19", "locked": false},
     "The Black Trumpet Bistro": {"cuisine": "Persian & Mediterranean", "confidence": "Unsure", "detail": "Mediterranean/Italian", "evidence": "Earlier lookup found the place: Mediterranean tapas/Italian", "source": "Earlier web lookup (pasted seed list, no link saved)", "checked": "2026-10-19", "locked": false},
     "The Blazin' Claw": {"cuisine": "Steak & Seafood", "confidence": "Likely", "detail": "Cajun seafood", "evidence": "Mastercard Local listing for The Blazin' Claw (Norwalk) describes Cajun seafood: crawfish, king crab legs, oysters, clams", "source": "local.mastercard.com/kinecta/offers/RN-171122", "checked": "2026-10-19", "locked": false},
+    "The Blue Owl": {"cuisine": "American", "confidence": "Unsure", "detail": "Californian-Asian", "evidence": "Official Santa Barbara site names California before Asian in its fusion concept; regional match uncertain.", "source": "https://theblueowlsb.com/", "checked": "2026-10-19", "locked": false},
     "The Breakfast Bar": {"cuisine": "American", "confidence": "Likely", "evidence": "Earlier lookup found the place: American", "source": "Earlier web lookup (pasted seed list, no link saved)", "checked": "2026-10-19", "locked": false},
     "The Buffalo Spot": {"cuisine": "American", "confidence": "Likely", "evidence": "Recognized business, classified from general knowledge", "source": "general knowledge", "checked": "2026-10-19", "locked": false},
     "The Butchers Daughter - West Hollywood": {"cuisine": "Healthy, Vegan & Salads", "confidence": "Likely", "detail": "Vegetarian", "evidence": "Recognized business, classified from general knowledge", "source": "general knowledge", "checked": "2026-10-19", "locked": false},
@@ -1019,6 +1020,5 @@
     "Üca Terraza": {"cuisine": "Mexican", "confidence": "Likely", "evidence": "Earlier lookup found the place: Mexican rooftop bar", "source": "Earlier web lookup (pasted seed list, no link saved)", "checked": "2026-10-19", "locked": false}
   },
   "to_classify": [
-    "The Blue Owl"
   ]
 }
