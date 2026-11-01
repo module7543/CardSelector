@@ -623,15 +623,16 @@ def file_cards(rows):
     return named, cols, partial
 
 
-def card_check(card, rows, incs, view_list, batches):
+def card_check(card, rows, incs, view_list, batches, read_date):
     """(refusal or None, stop or None, warning or None). The file's own `card` / `card_name` column decides: naming
     this card accepts, naming any other card refuses; an unknown value or, on the four sibling cards, no such column
     stops for the owner (`card_check`). The file name is never evidence. A list that leans to the sibling card's
     exclusive offers is only a warning. An offer is exclusive to one sibling only if it was already on that card when
     the other card was last read (`first_seen` on or before the other card's newest batch) and the other card does not
     have it: offers one card gained after the other's last read are not evidence either way, since right after one
-    card's refresh the other's page shows the new offers too. It warns when the file has more than half of the
-    sibling's exclusive offers and a larger share of them than of this card's own."""
+    card's refresh the other's page shows the new offers too. Only offers still live on the read date count (not
+    missing, expired or past `expires`), and names also match ignoring punctuation. It warns when the file has more
+    than half of the sibling's exclusive offers and more of them than of this card's own."""
     named, cols, partial = file_cards(rows)
     refusal = stop = warning = None
     known = [n for n in named if n in ADAPTERS]
@@ -650,19 +651,23 @@ def card_check(card, rows, incs, view_list, batches):
     other = SIBLING.get(card)
     if other and not refusal:
         last = {c: max((b["read_date"] for b in batches if b.get("card") == c), default=None) for c in (card, other)}
-        ks = lambda o: {(nkey(x), bonus_key(o["bonus"])) for x in [o["merchant"]] + o.get("aliases", [])}
+
+        def names(merchant, aliases, bonus):  # names compared both as matching does ('&' = 'and') and ignoring punctuation
+            bk = bonus_key(bonus)
+            return {k for n in [merchant] + list(aliases) for k in (("n", nkey(n), bk), ("c", compact(n), bk))}
+        ks = lambda o: names(o["merchant"], o.get("aliases", []), o["bonus"])
         keys = {c: set().union(*[ks(o) for o in view_list if o["card"] == c]) for c in (card, other)}
 
-        def only(c, d):  # c's offers that were on c by d's last read and that d does not have
-            return [o for o in view_list if o["card"] == c and not ks(o) & keys[d]
+        def only(c, d):
+            # c's offers still live on the read date that were on c by d's last read and that d does not have
+            return [o for o in view_list if o["card"] == c and o["status"] not in ("missing", "expired")
+                    and not (o.get("expires") and o["expires"] < read_date) and not ks(o) & keys[d]
                     and (last[d] is None or (o.get("first_seen") or "") <= last[d])]
-        in_file = {(nkey(n), bonus_key(i.bonus)) for i in incs for n in [i.merchant] + i.new_aliases}
+        in_file = set().union(*[names(i.merchant, i.new_aliases, i.bonus) for i in incs])
         own_x, sib_x = only(card, other), only(other, card)
         a, b = (sum(1 for o in xs if ks(o) & in_file) for xs in (own_x, sib_x))
-        share = lambda n, xs: n / len(xs) if xs else 0
-        # Warn when the file has most of the sibling's exclusive offers, and a larger share of them than of this
-        # card's: a few are normal (a card picks up offers the other already had), a wrong-card file has nearly all.
-        if 2 * b > len(sib_x) and share(b, sib_x) > share(a, own_x):
+        # A card picking up a few of its sibling's offers is normal; a wrong-card file has most of them.
+        if 2 * b > len(sib_x) and b > a:
             since = lambda c: f" when {c} was last read ({last[c]})" if last[c] else ""
             warning = (f"the list has {b} of the {len(sib_x)} offers only {other} had{since(card)}, and {a} of the "
                        f"{len(own_x)} only {card} had{since(other)}; check that {card} was the card picked on the page")
@@ -859,7 +864,7 @@ def plan(card, paths, given_date, decisions=None, part=False, complete_parts=Fal
         return bool(o.get("expires")) and o["expires"] < read_date
     prior_active = sum(1 for o in mine if o["status"] == "active" and not ended(o))
     prior_ended = sum(1 for o in mine if o["status"] == "active" and ended(o))
-    wrong, card_stop, card_warning = card_check(card, rows, incs, view_list, data["batches"])
+    wrong, card_stop, card_warning = card_check(card, rows, incs, view_list, data["batches"], read_date)
     if wrong:
         raise Refused(f"this is not the {card} file: {wrong}. Each card is its own read; never combined")
 
