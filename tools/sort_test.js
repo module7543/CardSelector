@@ -701,6 +701,8 @@ const label = r => r.merchant + " | " + r.card + " | " + r.bonus;
       wo("Citi Double Cash", "Zq Papa Pens", "2026-10-18", "active", "2026-10-18"), // first read: not new
       wo("Citi Double Cash", "Zq Quebec Quills", "2026-10-18", "missing", "2026-10-18") // first read: not gone
     ];
+    // 120 low offers seen before (Chase Freedom stays "no changes"), so a "zq" search has a Show more page.
+    for (let i = 0; i < 120; i++) WC_OFFERS.push(Object.assign(wo("Chase Freedom", "Zq Zfiller " + String(i).padStart(3, "0"), "2026-10-18", "active", "2026-10-31"), { bonus: "1% cash back" }));
     await page.route("**/data/offers.json", async route => {
       const d = await (await route.fetch()).json();
       await route.fulfill({ json: { categories: d.categories, batches: WC_BATCHES, offers: WC_OFFERS } });
@@ -874,6 +876,21 @@ const label = r => r.merchant + " | " + r.card + " | " + r.bonus;
     ok(!after.wc && after.q === before2.q && after.sort === before2.sort && JSON.stringify(after.chans) === JSON.stringify(before2.chans) && Math.abs(after.y - before2.y) <= 2,
       "what changed: the phone's back button leaves and puts the state back (" + JSON.stringify([before2, after]) + ")");
 
+    // Show more pages shown before entering come back on leaving. Typing in the mode keeps the New and Gone buttons in
+    // view (the after-typing scroll). A double tap on the back arrow leaves the mode but stays on the page.
+    await page.locator("#main > button.more").click();
+    const shown0 = await page.locator("#main li.offer").count();
+    await freshRowBtn("Chase Freedom Flex").scrollIntoViewIfNeeded();
+    await freshRowBtn("Chase Freedom Flex").click();
+    await page.fill("#q", "z");
+    await page.waitForTimeout(900);
+    const inView = await page.evaluate(() => ({ tabsTop: Math.round(document.getElementById("wctabs").getBoundingClientRect().top), barBottom: Math.round(document.querySelector(".searchbar").getBoundingClientRect().bottom) }));
+    ok(inView.tabsTop >= inView.barBottom, "what changed: after typing in the mode the New and Gone buttons stay below the search box (" + JSON.stringify(inView) + ")");
+    await page.dblclick("#wcback");
+    await page.waitForTimeout(300);
+    ok(page.url() === base && await page.evaluate(() => document.getElementById("wc").hidden) && (await page.locator("#main li.offer").count()) === shown0 && shown0 > 100,
+      "what changed: a double tap on the back arrow stays on the page, and the " + shown0 + " rows shown before entering (Show more) are back (" + page.url() + ")");
+
     // Day rollover in the mode: it stays, with its tab and filters.
     await freshRowBtn("Chase Freedom Flex").click();
     await page.locator("#wctabs button", { hasText: /^Gone/ }).click();
@@ -890,6 +907,9 @@ const label = r => r.merchant + " | " + r.card + " | " + r.bonus;
     await page.reload();
     await page.waitForFunction(() => window.__renders >= 1); // Online is remembered, so it opens with results
     ok(await page.evaluate(() => document.getElementById("wc").hidden && !document.querySelector(".wrap").classList.contains("wcon")), "what changed: a reload starts outside the mode");
+    await page.waitForTimeout(200);
+    await page.goBack();
+    ok(page.url() !== base, "what changed: after a reload in the mode, one press of the phone's back button leaves the page (" + page.url() + ")");
     ok(!errs.length, "what changed: no page errors (" + errs.join("; ") + ")");
     await wcCtx.close();
     page = mainPage;

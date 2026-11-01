@@ -2202,8 +2202,11 @@
   // filter, so the buttons show the row's numbers. One history entry, so the phone's back button leaves.
   function enterWc(c, tab) {
     if (!wc) {
+      var ex = main.querySelector("details.expired");
+      // The view as it was (pages shown, rows kept in place, Recently unavailable open or closed) comes back too.
       wc = { saved: { q: input.value, category: category, card: card, cuisine: cuisine, chan: chanMode, act: actMode,
-        sort: sortMode, used: usedMode, y: window.scrollY }, token: String(Date.now()) + Math.random() };
+        sort: sortMode, used: usedMode, y: window.scrollY, view: viewSig, shown: shownBefore, keep: keep, exOpen: ex ? ex.open : null },
+        token: String(Date.now()) + Math.random() };
       try { history.pushState({ cardselectorWc: wc.token }, ""); } catch (e) {}
     }
     wc.tab = tab;
@@ -2226,22 +2229,30 @@
     sortMode = s.sort;
     sortEl.value = sortMode;
     showSortHelp();
+    viewSig = s.view; shownBefore = s.shown; keep = s.keep; // the same view again: its pages and in-place rows stay
     renderChans(); renderCats(); renderCards(); renderCuisines(); render();
+    var ex = main.querySelector("details.expired");
+    if (ex && s.exOpen !== null) ex.open = s.exOpen;
     var row = Array.prototype.filter.call(flist.querySelectorAll(".fhead"), function (b) { return b.dataset.card === from; })[0];
     if (row) row.focus({ preventScroll: true });
     window.scrollTo(0, s.y);
   }
   // The entry pushed on entering carries this visit's token; any other entry (the one before, or an old forward one) leaves.
   function onWcEntry(st) { return !!wc && !!st && st.cardselectorWc === wc.token; }
+  // The back arrow leaves at once, then steps back over the pushed entry (that popstate finds the mode off, and a
+  // second tap finds nothing to do, so a quick double tap can't leave the site).
   document.getElementById("wcback").addEventListener("click", function () {
-    if (onWcEntry(history.state)) history.back(); // popstate leaves
-    else leaveWc();
+    if (!wc) return;
+    var back = onWcEntry(history.state);
+    leaveWc();
+    if (back) history.back();
   });
   window.addEventListener("popstate", function (e) {
     if (wc && !onWcEntry(e.state)) leaveWc();
   });
-  // A reload starts outside the mode: drop a leftover entry's marker so the back arrow logic stays right.
-  try { if (history.state && history.state.cardselectorWc) history.replaceState(null, ""); } catch (e) {}
+  // A reload starts outside the mode. Reloaded on the entry pushed on entering, step back over it (the same page, so
+  // nothing loads again), so the phone's back button needs one press, not two, to leave.
+  try { if (history.state && history.state.cardselectorWc) history.back(); } catch (e) {}
 
   function render() {
     // Best offer totals stay cached until something behind a card rate changes (date, activation, focus, choice).
@@ -2653,7 +2664,7 @@
     if (!q || q === settledQuery || document.activeElement !== input) return;
     settledQuery = q;
     var bar = document.querySelector(".searchbar");
-    var target = useEl.hidden ? countEl : useEl;
+    var target = wc ? wcEl : useEl.hidden ? countEl : useEl; // in What changed, its panel (New / Gone stay in view)
     var y = window.scrollY + target.getBoundingClientRect().top - bar.getBoundingClientRect().height - 4;
     if (Math.abs(window.scrollY - y) > 2) window.scrollTo({ top: Math.max(0, y), behavior: "smooth" });
   }
