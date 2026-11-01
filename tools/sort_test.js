@@ -674,6 +674,264 @@ const label = r => r.merchant + " | " + r.card + " | " + r.bonus;
     ok(op.open && !op.cav && op.notes.length && op.notes.every(Boolean), name + ": open hides the line and shows all " + op.notes.length + " notes in full");
   }
 
+  // What changed and the New tag, on test-only offers and batches that replace the real ones (so real data moving
+  // can't turn these red), with the clock fixed at noon on Nov 1, 2026. Cards and reads:
+  //   Chase Freedom Flex 10-18, 10-31 (twice): 2 new, 4 gone (2 pulled early, 2 ended); Chase Freedom 10-18, 10-31:
+  //   no changes; Capital One 10-18, 10-27: 1 new, 1 gone (no end date); Bank of America 10-18, 10-23: gone only;
+  //   U.S. Bank 10-18, 10-23: new only; Citi Double Cash 10-18 only: first read (adds nothing).
+  {
+    const wcCtx = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: "block" });
+    page = await wcCtx.newPage();
+    const errs = [];
+    page.on("pageerror", e => errs.push(e.message));
+    await page.clock.install({ time: new Date(2026, 10, 1, 12, 0, 0) });
+    const WC_BATCHES = [["Chase Freedom Flex", "2026-10-18"], ["Chase Freedom Flex", "2026-10-31"], ["Chase Freedom Flex", "2026-10-31"],
+      ["Chase Freedom", "2026-10-18"], ["Chase Freedom", "2026-10-31"], ["Capital One", "2026-10-18"], ["Capital One", "2026-10-27"],
+      ["Bank of America", "2026-10-18"], ["Bank of America", "2026-10-23"], ["U.S. Bank", "2026-10-18"], ["U.S. Bank", "2026-10-23"],
+      ["Citi Double Cash", "2026-10-18"]].map(([card, read_date]) => ({ card, read_date, offers_found: 10 }));
+    let wcN = 0;
+    const wo = (card, merchant, first_seen, status, status_since, expires, category) => ({
+      id: "test/wc-" + (wcN++), card, merchant, category: category || "Clothing & Jewelry", bonus: (5 + wcN) + "% cash back",
+      expires: expires || null, expires_text: null, activation: "needs_activation", channel: "online", spend_cap: null,
+      minimum_spend: null, fine_print: null, other_details: [], last_read: status_since, first_seen, status, status_since });
+    const FX = "Chase Freedom Flex";
+    const WC_OFFERS = [
+      wo(FX, "Zq Alpha Coffee", "2026-10-31", "active", "2026-10-31", null, "Dining"), // new
+      wo(FX, "Zq Bravo Books", "2026-10-31", "active", "2026-10-31", "2026-11-20"), // new
+      wo(FX, "Zq Charlie Used", "2026-10-31", "used", "2026-10-31"), // used: not new
+      wo(FX, "Zq Delta Ended", "2026-10-31", "active", "2026-10-31", "2026-10-30"), // past its end date: not new
+      wo(FX, "Zq Echo Old", "2026-10-18", "active", "2026-10-31"), // seen before: not new
+      wo(FX, "Zq Foxtrot Pulled", "2026-10-18", "missing", "2026-10-31", "2026-11-25"), // gone, pulled early
+      wo(FX, "Zq Juliet Cafe", "2026-10-18", "missing", "2026-10-31", "2026-11-09", "Dining"), // gone, pulled early
+      wo(FX, "Zq Golf Ended", "2026-10-18", "missing", "2026-10-31", "2026-10-31"), // gone, ended on the read date
+      wo(FX, "Zq Hotel Expired", "2026-10-18", "expired", "2026-10-31", "2026-10-29"), // gone, ended
+      wo(FX, "Zq India Older", "2026-10-18", "missing", "2026-10-18"), // gone at an earlier read: not gone now
+      wo("Chase Freedom", "Zq Oscar Steady", "2026-10-18", "active", "2026-10-31"),
+      wo("Capital One", "Zq Kilo Kites", "2026-10-27", "active", "2026-10-27"), // new
+      wo("Capital One", "Zq Lima Lamps", "2026-10-18", "missing", "2026-10-27"), // gone, no end date
+      wo("Capital One", "zq-foxtrot pulled", "2026-10-18", "active", "2026-10-27"), // Foxtrot is still on Capital One
+      wo("Capital One", "Zq Alpha Coffee", "2026-10-18", "active", "2026-10-27", null, "Dining"), // same name, not new here
+      wo("Bank of America", "ZQ Foxtrôt Pulled", "2026-10-18", "active", "2026-10-23"), // and on Bank of America
+      wo("Bank of America", "Zq Mike Mugs", "2026-10-18", "missing", "2026-10-23"), // gone, no end date
+      wo("U.S. Bank", "Zq November Nails", "2026-10-23", "active", "2026-10-23"), // new
+      wo("U.S. Bank", "Zq Foxtrot Pulled", "2026-10-18", "missing", "2026-10-18"), // not live: not "still on" (gone at an earlier read)
+      wo("Citi Double Cash", "Zq Papa Pens", "2026-10-18", "active", "2026-10-18"), // first read: not new
+      wo("Citi Double Cash", "Zq Quebec Quills", "2026-10-18", "missing", "2026-10-18") // first read: not gone
+    ];
+    // 120 low offers seen before (Chase Freedom stays "no changes"), so a "zq" search has a Show more page.
+    for (let i = 0; i < 120; i++) WC_OFFERS.push(Object.assign(wo("Chase Freedom", "Zq Zfiller " + String(i).padStart(3, "0"), "2026-10-18", "active", "2026-10-31"), { bonus: "1% cash back" }));
+    await page.route("**/data/offers.json", async route => {
+      const d = await (await route.fetch()).json();
+      await route.fulfill({ json: { categories: d.categories, batches: WC_BATCHES, offers: WC_OFFERS } });
+    });
+    await page.route("**/data/phone-edits.json", route => route.fulfill({ json: {} }));
+    const wcLoad = async () => {
+      await page.goto(base);
+      await page.waitForFunction(() => /active offers loaded/.test(document.body.innerText));
+      await page.evaluate(() => { document.getElementById("fresh").open = true; });
+    };
+    const fresh = () => page.$$eval("#flist .fhead", bs => bs.map(b => ({ card: b.dataset.card, age: b.querySelector(".fage").textContent,
+      chev: !!b.querySelector(".fchev"), green: b.querySelector(".fnew") ? getComputedStyle(b.querySelector(".fnew")).color : null })));
+    const freshRowBtn = c => page.locator("#flist .fhead[data-card='" + c + "']");
+    const wcState = () => page.evaluate(() => {
+      const wc = document.getElementById("wc"), tabs = [...document.querySelectorAll("#wctabs button")];
+      const groups = [...document.querySelectorAll("#main h3.wcgroup")].map(h => h.textContent);
+      return {
+        on: !wc.hidden, name: document.getElementById("wcname").textContent, dot: (document.querySelector("#wcname .idot") || {}).className || null,
+        sub: document.getElementById("wcsub").textContent, tabs: tabs.map(b => b.textContent), picked: tabs.filter(b => b.getAttribute("aria-pressed") === "true").map(b => b.textContent.split(" ")[0]),
+        groups, rows: [...document.querySelectorAll("#main li.offer")].map(li => li.querySelector(".merchant").textContent + " | " + li.querySelector(".mcard").textContent +
+          (li.querySelector(".dropped") ? " | " + li.querySelector(".dropped").textContent : "")),
+        headline: !document.getElementById("use").hidden, strip: document.getElementById("bstrip").checkVisibility(),
+        bonusRows: document.querySelectorAll("#main .bonusrows").length, expired: document.querySelectorAll("#main details.expired").length
+      };
+    });
+    await wcLoad();
+
+    // Freshness rows: the change on the age line (zero parts left out, "no changes", "first read"), the chevron only
+    // on rows with changes, "+N new" in the bonus green.
+    const fr = await fresh(), byCard = Object.fromEntries(fr.map(r => [r.card, r]));
+    const bonusGreen = await page.evaluate(() => { const s = document.createElement("span"); s.style.color = "var(--bonus)"; document.body.appendChild(s); const c = getComputedStyle(s).color; s.remove(); return c; });
+    const WANT = { "Chase Freedom Flex": ["Yesterday · +2 new · 4 gone", true], "Chase Freedom": ["Yesterday · no changes", false],
+      "Capital One": ["5 days ago · +1 new · 1 gone", true], "Bank of America": ["9 days ago · 1 gone", true],
+      "U.S. Bank": ["9 days ago · +1 new", true], "Citi Double Cash": ["14 days ago · first read", false] };
+    for (const [c, [age, chev]] of Object.entries(WANT)) {
+      const r = byCard[c];
+      ok(r && r.age === age && r.chev === chev && (!/\+\d+ new/.test(age) || r.green === bonusGreen),
+        "what changed, freshness row " + c + ": \"" + age + "\"" + (chev ? " with a chevron" : ", no chevron") + " (" + JSON.stringify(r) + ")");
+    }
+    ok(/what that read changed/.test(await page.$eval("#fresh .fnote", e => e.textContent)), "what changed: freshness note mentions what the read changed");
+    // A first-read row and a no-changes row keep the tap: it shows the date and doesn't open the mode.
+    for (const c of ["Citi Double Cash", "Chase Freedom"]) {
+      await freshRowBtn(c).click();
+      const st = await page.evaluate(c => { const b = document.querySelector("#flist .fhead[data-card='" + c + "']"); return { exp: b.getAttribute("aria-expanded"), det: document.getElementById(b.getAttribute("aria-controls")).textContent, wc: !document.getElementById("wc").hidden }; }, c);
+      ok(st.exp === "true" && /^Last full read: October (18|31), 2026$/.test(st.det) && !st.wc, "what changed: tapping " + c + " shows the last full read, no mode (" + JSON.stringify(st) + ")");
+    }
+
+    // New tag (outside the mode): right after the card name on New offers only: not on a first-read card, an older
+    // offer, or the same merchant on another card where it isn't new.
+    await page.fill("#q", "zq");
+    await page.waitForTimeout(100);
+    const tags = await page.$$eval("#main li.offer", ls => ls.map(li => {
+      const t = li.querySelector(".newtag"), s = t && getComputedStyle(t);
+      return { row: li.querySelector(".merchant").textContent + " | " + li.querySelector(".mcard").textContent, tag: !!t,
+        after: !!t && t.previousElementSibling && t.previousElementSibling.classList.contains("mcard"), gone: li.classList.contains("gone"),
+        style: s ? [s.fontSize, s.fontWeight, s.paddingTop + " " + s.paddingRight, s.borderTopLeftRadius].join(" ") : null };
+    }));
+    const tagged = tags.filter(t => t.tag).map(t => t.row).sort();
+    ok(JSON.stringify(tagged) === JSON.stringify(["Zq Alpha Coffee | Chase Freedom Flex", "Zq Bravo Books | Chase Freedom Flex", "Zq Kilo Kites | Quicksilver / Discover it", "Zq November Nails | Smartly / Cash+"]),
+      "New tag: on the four new offers only (" + tagged.join("; ") + ")");
+    ok(tags.filter(t => t.tag).every(t => t.after && !t.gone && t.style === "13px 650 1px 7px 6px"), "New tag: right after the card name, 13px, 650, 1px 7px, 6px radius (" + JSON.stringify(tags.filter(t => t.tag)[0]) + ")");
+    ok(tags.some(t => /Zq Papa Pens/.test(t.row) && !t.tag) && tags.some(t => /Zq Alpha Coffee \| Quicksilver/.test(t.row) && !t.tag),
+      "New tag: none on the first-read Citi offer or the Capital One Zq Alpha Coffee (seen before)");
+    for (const scheme of ["light", "dark"]) {
+      await page.emulateMedia({ colorScheme: scheme });
+      const cr = await page.$eval("#main .newtag", t => {
+        const rgb = c => c.match(/\d+(\.\d+)?/g).slice(0, 3).map(Number), lum = c => { const v = rgb(c).map(x => { x /= 255; return x <= 0.03928 ? x / 12.92 : Math.pow((x + 0.055) / 1.055, 2.4); }); return 0.2126 * v[0] + 0.7152 * v[1] + 0.0722 * v[2]; };
+        const s = getComputedStyle(t), a = lum(s.color), b = lum(s.backgroundColor);
+        return Math.round((Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05) * 100) / 100;
+      });
+      ok(cr >= 4.5, "New tag contrast, " + scheme + ": " + cr + ":1");
+    }
+    await page.emulateMedia({ colorScheme: "light" });
+
+    // Entering from a row: state before it (search, Online, A to Z, scrolled to the footer) is put back on leaving.
+    await page.click("#ftoggle");
+    await page.selectOption("#sort", "az");
+    await page.locator("#chans button", { hasText: /^Online/ }).click();
+    await page.click("#ftoggle"); // closed again
+    const stored = () => page.evaluate(() => ["cardselector.sort", "cardselector.channel", "cardselector.activation"].map(k => localStorage.getItem(k)));
+    const st0 = await stored();
+    await freshRowBtn("Chase Freedom Flex").scrollIntoViewIfNeeded();
+    const outside = () => page.evaluate(() => ({ q: document.getElementById("q").value, sort: document.getElementById("sort").value, y: Math.round(window.scrollY),
+      chans: [...document.querySelectorAll("#chans button[aria-pressed=true]")].map(b => b.textContent), cards: [...document.querySelectorAll("#cards button[aria-pressed=true]")].map(b => b.textContent),
+      cats: [...document.querySelectorAll("#cats button[aria-pressed=true]")].map(b => b.textContent), wc: !document.getElementById("wc").hidden }));
+    const before = await outside();
+    const hist0 = await page.evaluate(() => history.length);
+    await freshRowBtn("Chase Freedom Flex").click();
+    let s = await wcState();
+    ok(s.on && s.name === "Chase Freedom Flex" && /i-chase/.test(s.dot) && s.sub === "Read Oct 31 · compared with Oct 18" && s.picked[0] === "New" &&
+      JSON.stringify(s.tabs) === JSON.stringify(["New 2", "Gone 4"]) && !s.headline && !s.strip && !s.bonusRows && !s.expired,
+      "what changed: Freedom Flex row opens New, header and counts, no headline, strip, bonus rows or Recently unavailable (" + JSON.stringify(s) + ")");
+    ok(JSON.stringify(s.rows.map(r => r.split(" | ")[0]).sort()) === JSON.stringify(["Zq Alpha Coffee", "Zq Bravo Books"]), "what changed: New lists Zq Alpha Coffee and Zq Bravo Books (" + s.rows.join("; ") + ")");
+    ok(await page.evaluate(() => history.length) === hist0 + 1, "what changed: entering pushes one history entry");
+    const geo = await page.evaluate(() => {
+      const r = e => e.getBoundingClientRect(), back = document.getElementById("wcback"), tabs = [...document.querySelectorAll("#wctabs button")];
+      const panel = document.getElementById("wc"), ft = document.getElementById("ftoggle"), sel = getComputedStyle(tabs[0]), card = document.querySelector("#cards button[aria-pressed=true]");
+      return { back: [r(back).width, r(back).height], tabs: tabs.map(t => [Math.round(r(t).width), r(t).height]), sub: getComputedStyle(document.getElementById("wcsub")).fontSize,
+        joined: Math.abs(r(panel).bottom - r(ft).top) < 1.5, selBg: sel.backgroundColor === getComputedStyle(card).backgroundColor };
+    });
+    ok(geo.back[0] >= 44 && geo.back[1] >= 44 && geo.tabs.every(t => t[1] >= 44) && geo.tabs[0][0] === geo.tabs[1][0] && geo.sub === "13px" && geo.joined && geo.selBg,
+      "what changed: 44px back arrow, two equal 44px buttons in the card button's selected colors, 13px read line, Filters joined below (" + JSON.stringify(geo) + ")");
+
+    // Counts follow the category, the search and the card; the other filters reset on entering.
+    if ((await page.getAttribute("#ftoggle", "aria-expanded")) !== "true") await page.click("#ftoggle");
+    await page.locator("#cats button", { hasText: /^Dining/ }).click();
+    s = await wcState();
+    ok(JSON.stringify(s.tabs) === JSON.stringify(["New 1", "Gone 1"]) && JSON.stringify(s.rows) === JSON.stringify(["Zq Alpha Coffee | Chase Freedom Flex"]), "what changed: Dining gives New 1, Gone 1 (" + JSON.stringify(s.tabs) + ")");
+    await page.locator("#wctabs button", { hasText: /^Gone/ }).click();
+    s = await wcState();
+    ok(s.picked[0] === "Gone" && JSON.stringify(s.groups) === JSON.stringify(["Pulled early 1", "Ended 0"]) && JSON.stringify(s.rows) === JSON.stringify(["Zq Juliet Cafe | Chase Freedom Flex | Was to end Nov 9"]),
+      "what changed: Dining, Gone: Pulled early 1, Ended 0, Zq Juliet Cafe \"Was to end Nov 9\" (" + JSON.stringify(s) + ")");
+    await page.locator("#cats button", { hasText: /^All$/ }).click();
+    s = await wcState();
+    ok(JSON.stringify(s.groups) === JSON.stringify(["Pulled early 2", "Ended 2"]) &&
+      JSON.stringify(s.rows) === JSON.stringify(["Zq Foxtrot Pulled | Chase Freedom Flex | Was to end Nov 25", "Zq Juliet Cafe | Chase Freedom Flex | Was to end Nov 9",
+        "Zq Golf Ended | Chase Freedom Flex | Ended Oct 31", "Zq Hotel Expired | Chase Freedom Flex | Ended Oct 29"]),
+      "what changed: Gone in groups, the sort (A to Z) inside each, Pulled early and Ended labels (" + s.groups.join(", ") + ": " + s.rows.join("; ") + ")");
+    const still = await page.$$eval("#main li.offer", ls => ls.map(li => {
+      const so = li.querySelector(".stillon");
+      return { m: li.querySelector(".merchant").textContent, text: so ? so.textContent : null, dots: so ? [...so.querySelectorAll(".idot")].map(d => d.className.replace("idot ", "")) : [] };
+    }));
+    const fox = still.find(x => x.m === "Zq Foxtrot Pulled");
+    ok(fox && fox.text === "Still on Bank of America and Capital One" && JSON.stringify(fox.dots) === JSON.stringify(["i-boa", "i-cap1"]),
+      "what changed: Still on Bank of America and Capital One, each with its dot (names compared ignoring case, accents and punctuation; a missing U.S. Bank offer left out) (" + JSON.stringify(fox) + ")");
+    ok(still.filter(x => x.m !== "Zq Foxtrot Pulled").every(x => x.text === null), "what changed: no Still on line where no other card has the merchant live");
+    await page.fill("#q", "zq foxtrot");
+    await page.waitForTimeout(100);
+    s = await wcState();
+    ok(JSON.stringify(s.tabs) === JSON.stringify(["New 0", "Gone 1"]) && s.rows.length === 1, "what changed: a search narrows both counts (" + JSON.stringify(s.tabs) + ")");
+    await page.fill("#q", "");
+    await page.locator("#cards button", { hasText: /^Capital One/ }).click();
+    s = await wcState();
+    ok(s.name === "Capital One" && /i-cap1/.test(s.dot) && s.sub === "Read Oct 27 · compared with Oct 18" && JSON.stringify(s.tabs) === JSON.stringify(["New 1", "Gone 1"]) &&
+      !s.groups.length && JSON.stringify(s.rows) === JSON.stringify(["Zq Lima Lamps | Quicksilver / Discover it | Dropped Oct 27"]),
+      "what changed: picking Capital One switches the header; a gone offer with no end date reads \"Dropped Oct 27\", no headings (" + JSON.stringify(s) + ")");
+    await page.locator("#cards button", { hasText: /^All cards/ }).click();
+    s = await wcState();
+    ok(s.name === "All cards" && s.dot === null && s.sub === "Each card's latest read" && JSON.stringify(s.tabs) === JSON.stringify(["New 4", "Gone 6"]) &&
+      JSON.stringify(s.groups) === JSON.stringify(["Pulled early 2", "Ended 2", "Dropped 2"]) && s.rows.some(r => r === "Zq Mike Mugs | Customized Cash / Unlimited Cash | Dropped Oct 23") &&
+      !s.rows.some(r => /Quebec|India/.test(r)), "what changed: All cards, each card against its own latest read, first read adds nothing (" + JSON.stringify(s) + ")");
+    await page.locator("#wctabs button", { hasText: /^New/ }).click();
+    s = await wcState();
+    ok(JSON.stringify(s.rows.map(r => r.split(" | ")[0]).sort()) === JSON.stringify(["Zq Alpha Coffee", "Zq Bravo Books", "Zq Kilo Kites", "Zq November Nails"]) &&
+      (await page.locator("#main .newtag").count()) === 0, "what changed: All cards New lists the four new offers, no New tags inside the mode (" + s.rows.join("; ") + ")");
+
+    // In the mode: In store, Newest added and a search; none of it is saved. The back arrow puts the old state back.
+    await page.selectOption("#sort", "newest");
+    await page.locator("#chans button", { hasText: /^In store/ }).click();
+    await page.fill("#q", "kilo");
+    const stIn = await stored();
+    await page.click("#wcback");
+    await page.waitForFunction(() => document.getElementById("wc").hidden);
+    let after = await outside();
+    ok(JSON.stringify(stIn) === JSON.stringify(st0) && JSON.stringify(await stored()) === JSON.stringify(st0), "what changed: nothing picked in the mode is saved (" + JSON.stringify(stIn) + ")");
+    ok(!after.wc && after.q === before.q && after.sort === before.sort && JSON.stringify(after.chans) === JSON.stringify(before.chans) && JSON.stringify(after.cards) === JSON.stringify(before.cards) &&
+      JSON.stringify(after.cats) === JSON.stringify(before.cats) && Math.abs(after.y - before.y) <= 2 && (await page.locator("#main .newtag").count()) > 0,
+      "what changed: the back arrow leaves and puts back the search, filters, sort and scroll (" + JSON.stringify([before, after]) + ")");
+    ok(await page.evaluate(() => history.length) === hist0 + 1 && await page.evaluate(() => !(history.state && history.state.cardselectorWc)), "what changed: the back arrow went back through the pushed entry");
+
+    // The phone's back button leaves the same way; Bank of America (gone only) opens on Gone.
+    await freshRowBtn("Bank of America").scrollIntoViewIfNeeded();
+    const before2 = await outside();
+    await freshRowBtn("Bank of America").click();
+    s = await wcState();
+    ok(s.on && s.picked[0] === "Gone" && JSON.stringify(s.tabs) === JSON.stringify(["New 0", "Gone 1"]), "what changed: a row with nothing new opens on Gone (" + JSON.stringify(s.tabs) + ")");
+    await page.fill("#q", "mike");
+    await page.goBack();
+    await page.waitForFunction(() => document.getElementById("wc").hidden);
+    after = await outside();
+    ok(!after.wc && after.q === before2.q && after.sort === before2.sort && JSON.stringify(after.chans) === JSON.stringify(before2.chans) && Math.abs(after.y - before2.y) <= 2,
+      "what changed: the phone's back button leaves and puts the state back (" + JSON.stringify([before2, after]) + ")");
+
+    // Show more pages shown before entering come back on leaving. Typing in the mode keeps the New and Gone buttons in
+    // view (the after-typing scroll). A double tap on the back arrow leaves the mode but stays on the page.
+    await page.locator("#main > button.more").click();
+    const shown0 = await page.locator("#main li.offer").count();
+    await freshRowBtn("Chase Freedom Flex").scrollIntoViewIfNeeded();
+    await freshRowBtn("Chase Freedom Flex").click();
+    await page.fill("#q", "z");
+    await page.waitForTimeout(900);
+    const inView = await page.evaluate(() => ({ tabsTop: Math.round(document.getElementById("wctabs").getBoundingClientRect().top), barBottom: Math.round(document.querySelector(".searchbar").getBoundingClientRect().bottom) }));
+    ok(inView.tabsTop >= inView.barBottom, "what changed: after typing in the mode the New and Gone buttons stay below the search box (" + JSON.stringify(inView) + ")");
+    await page.dblclick("#wcback");
+    await page.waitForTimeout(300);
+    ok(page.url() === base && await page.evaluate(() => document.getElementById("wc").hidden) && (await page.locator("#main li.offer").count()) === shown0 && shown0 > 100,
+      "what changed: a double tap on the back arrow stays on the page, and the " + shown0 + " rows shown before entering (Show more) are back (" + page.url() + ")");
+
+    // Day rollover in the mode: it stays, with its tab and filters.
+    await freshRowBtn("Chase Freedom Flex").click();
+    await page.locator("#wctabs button", { hasText: /^Gone/ }).click();
+    if ((await page.getAttribute("#ftoggle", "aria-expanded")) !== "true") await page.click("#ftoggle");
+    await page.locator("#cats button", { hasText: /^Dining/ }).click();
+    await page.waitForTimeout(800); // past the tap hold
+    const r0 = await page.evaluate(() => window.__renders);
+    await page.clock.setSystemTime(new Date(2026, 10, 2, 0, 0, 5));
+    await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+    s = await wcState();
+    ok((await page.evaluate(() => window.__renders)) === r0 + 1 && s.on && s.picked[0] === "Gone" && s.name === "Chase Freedom Flex" &&
+      JSON.stringify(s.rows) === JSON.stringify(["Zq Juliet Cafe | Chase Freedom Flex | Was to end Nov 9"]), "what changed: the day redraw keeps the mode, its tab and filters (" + JSON.stringify(s) + ")");
+    // A reload starts outside the mode.
+    await page.reload();
+    await page.waitForFunction(() => window.__renders >= 1); // Online is remembered, so it opens with results
+    ok(await page.evaluate(() => document.getElementById("wc").hidden && !document.querySelector(".wrap").classList.contains("wcon")), "what changed: a reload starts outside the mode");
+    await page.waitForTimeout(200);
+    await page.goBack();
+    ok(page.url() !== base, "what changed: after a reload in the mode, one press of the phone's back button leaves the page (" + page.url() + ")");
+    ok(!errs.length, "what changed: no page errors (" + errs.join("; ") + ")");
+    await wcCtx.close();
+    page = mainPage;
+  }
+
   // Search box shadow: off at the top, on once scrolled, off again back at the top.
   await setup("pizza");
   await page.evaluate(() => document.activeElement && document.activeElement.blur());

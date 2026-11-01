@@ -82,6 +82,10 @@
   // so a redraw after a save doesn't fold the list back to its first page.
   var usedMode = false, keep = {}, viewSig = "", shownBefore = 0;
   function kept(o) { return editing() && Object.prototype.hasOwnProperty.call(keep, o.id); }
+  // What changed: a mode of the main page listing what each card's latest full read added (New) or took away
+  // (Gone). null when off; else { tab: "new" | "gone", from: the freshness row's card (focus goes back to it),
+  // saved: the search, filters, sort and scroll from before entering, put back on leaving }.
+  var wc = null;
 
   function actIn(mode, o) { return mode === "any" || ACT_OK[mode].indexOf(actOf(o)) !== -1; }
   function actOk(o) { return actIn(actMode, o); }
@@ -280,6 +284,74 @@
   function isGone(o, today) {
     return o.status === "missing" || o.status === "expired" ||
            (o.status === "active" && !!o.expires && o.expires < today);
+  }
+
+  // ---- What changed rules (one place, so every count matches the rows it opens) ----
+  // Each card's latest read (its newest batches entry) and previous read (its newest entry with an earlier
+  // read_date; null on a card's first read). Worked out once per offers file.
+  var readsOf = null, readsBy = {};
+  function reads() {
+    if (readsOf === data) return readsBy;
+    var dates = Object.create(null);
+    (data.batches || []).forEach(function (b) {
+      if (parseDay(b.read_date) === null) return;
+      var d = dates[b.card] || (dates[b.card] = []);
+      if (d.indexOf(b.read_date) === -1) d.push(b.read_date);
+    });
+    readsBy = Object.create(null);
+    Object.keys(dates).forEach(function (c) {
+      var d = dates[c].sort();
+      readsBy[c] = { latest: d[d.length - 1], prev: d.length > 1 ? d[d.length - 2] : null };
+    });
+    readsOf = data;
+    return readsBy;
+  }
+  function readOf(c) { return reads()[c] || null; }
+  // Added by the latest read (not on a first read), whatever its status now.
+  function addedByRead(o) { var r = readOf(o.card); return !!r && !!r.prev && o.first_seen === r.latest; }
+  // New: added by the latest read and live by the page's rule (active, not used, not past its end date).
+  function isNew(o, today) { return addedByRead(o) && isLive(o, today); }
+  // Gone: missing or expired since the latest read (a first read takes nothing away).
+  function isDropped(o) {
+    var r = readOf(o.card);
+    return !!r && !!r.prev && (o.status === "missing" || o.status === "expired") && o.status_since === r.latest;
+  }
+  // Which group a gone offer is in: "pulled" (was to end after the read), "ended" (ended by it) or "dropped" (no end date).
+  function droppedKind(o) {
+    if (!o.expires) return "dropped";
+    return o.expires > readOf(o.card).latest ? "pulled" : "ended";
+  }
+  function droppedLabel(o) {
+    var k = droppedKind(o);
+    return k === "pulled" ? "Was to end " + fmtDate(o.expires) : k === "ended" ? "Ended " + fmtDate(o.expires) :
+      "Dropped " + fmtDate(readOf(o.card).latest);
+  }
+  // New and gone counts per card: { card: { n, g } }.
+  function changeCounts(today) {
+    var out = Object.create(null);
+    data.offers.forEach(function (o) {
+      var c = out[o.card] || (out[o.card] = { n: 0, g: 0 });
+      if (isNew(o, today)) c.n++;
+      else if (isDropped(o)) c.g++;
+    });
+    return out;
+  }
+  // Same-merchant key across cards, as tools/validate.py compares names (case, accents, spaces and punctuation
+  // ignored), with its one named exception: Alibaba and Ali Baba are two businesses, so that spelling must match exactly.
+  function sameNameKey(name) { var k = compact(name); return k === "alibaba" ? k + "|" + name : k; }
+  // The other cards with a live offer at a gone offer's merchant, A to Z. The index is rebuilt on each render.
+  var liveNames = null;
+  function stillOn(o) {
+    if (!liveNames) {
+      var today = todayISO();
+      liveNames = Object.create(null);
+      data.offers.forEach(function (x) {
+        if (!isLive(x, today)) return;
+        var l = liveNames[sameNameKey(x.merchant)] || (liveNames[sameNameKey(x.merchant)] = []);
+        if (l.indexOf(x.card) === -1) l.push(x.card);
+      });
+    }
+    return (liveNames[sameNameKey(o.merchant)] || []).filter(function (c) { return c !== o.card; }).sort(collator.compare);
   }
 
   // The merchant name first, then its aliases (earlier or alternate names); each normalised once and kept on the offer.
@@ -643,7 +715,8 @@
     return n === 0 ? "Ends " + about + "today" : n === 1 ? "Ends " + about + "tomorrow" : "Ends in " + about + n + " days";
   }
 
-  function renderOffer(o, id, gone) {
+  // goneLabel: on the What changed Gone list, the label shown in place of "Dropped off ..." ("Was to end Nov 25").
+  function renderOffer(o, id, gone, goneLabel) {
     var li = el("li", gone ? "offer gone" : "offer");
     li.setAttribute("data-oid", o.id); // the day redraw finds the row again by it (focus)
     var row = el("div", "row");
@@ -687,8 +760,10 @@
 
     var meta = el("div", "meta");
     meta.appendChild(withDot(el("span", "mcard", rowCard(o.card)), o.card));
+    // Outside What changed, an offer its card's latest read added gets a "New" pill after the card name.
+    if (!gone && !wc && isNew(o, todayISO())) meta.appendChild(el("span", "newtag", "New"));
     if (gone) {
-      meta.appendChild(el("span", "dropped", droppedText(o)));
+      meta.appendChild(el("span", "dropped", goneLabel || droppedText(o)));
       // Signed in, a used row (kept in place, or under the Used filter) is restored from the row itself.
       if (o.status === "used" && editing()) meta.appendChild(editBtn("Restore offer", { type: "offer.status", id: o.id, from: "used", to: "active" }, "edlink"));
     } else {
@@ -719,6 +794,16 @@
     var cu = cuisineOf(o);
     if (cu && cu.cuisine !== "Unclassified") meta.appendChild(el("span", "badge cuis", cu.detail || cu.cuisine));
     row.appendChild(meta);
+    // Gone list: the other cards that still have a live offer at this merchant ("Still on ● Bank of America and ● Capital One").
+    var still = goneLabel ? stillOn(o) : [];
+    if (still.length) {
+      var so = el("div", "stillon", "Still on ");
+      still.forEach(function (c, i) {
+        if (i) so.appendChild(document.createTextNode(i === still.length - 1 ? " and " : ", "));
+        so.appendChild(withDot(el("span", "socard", c), c));
+      });
+      row.appendChild(so);
+    }
 
     // The details panel is built on the first tap, so long lists stay cheap to draw.
     var det = null;
@@ -802,8 +887,10 @@
     cuisFilter.hidden = !(category === "Dining" && cuisines);
     if (cuisFilter.hidden) return;
     var today = todayISO(), counts = {}, base = {};
+    // In What changed the chips count the New or Gone list instead of every live offer.
+    var listed = !wc ? function (o) { return isLive(o, today); } : wc.tab === "new" ? function (o) { return isNew(o, today); } : isDropped;
     var keep = function (o) {
-      return o.category === "Dining" && (card === null || o.card === card) && chanOk(o) && actOk(o) && isLive(o, today);
+      return o.category === "Dining" && (card === null || o.card === card) && chanOk(o) && actOk(o) && listed(o);
     };
     var tally = function (into) { return function (o) { var l = cuisineLabel(o); into[l] = (into[l] || 0) + 1; }; };
     data.offers.forEach(function (o) { if (keep(o)) tally(base)(o); });
@@ -832,7 +919,7 @@
       b.setAttribute("aria-pressed", String(c[0] === chanMode));
       b.addEventListener("click", function () {
         chanMode = c[0];
-        try { localStorage.setItem(CHANNEL_KEY, chanMode); } catch (e) {}
+        if (!wc) try { localStorage.setItem(CHANNEL_KEY, chanMode); } catch (e) {} // nothing picked in What changed is kept
         renderChans();
         renderCuisines();
         render();
@@ -851,10 +938,10 @@
       if (counts) b.appendChild(el("span", "n", " " + counts[a[0]]));
       b.type = "button";
       b.setAttribute("aria-pressed", String(a[0] === actMode));
-      b.disabled = usedMode && editing(); // the Used list ignores Activation
+      b.disabled = usedMode && editing() && !wc; // the Used list ignores Activation
       b.addEventListener("click", function () {
         actMode = a[0];
-        try { localStorage.setItem(ACT_KEY, actMode); } catch (e) {}
+        if (!wc) try { localStorage.setItem(ACT_KEY, actMode); } catch (e) {}
         renderCuisines();
         render();
       });
@@ -898,7 +985,7 @@
     var on = [];
     if (category !== null) on.push(category + (category === "Dining" && cuisine !== null ? ": " + cuisine : ""));
     if (card !== null) on.push(card);
-    var usedOn = usedMode && editing(); // the Used list ignores In store / Online and Activation
+    var usedOn = usedMode && editing() && !wc; // the Used list ignores In store / Online and Activation (What changed ignores Used)
     if (chanMode !== "any" && !usedOn) on.push(chanMode === "store" ? "In store" : "Online");
     if (actMode !== "any" && !usedOn) on.push(actMode === "ready" ? "Ready now" : "Needs activation");
     if (usedOn) on.push("Used");
@@ -1983,20 +2070,31 @@
   }
 
   // Results in pages ("Show N more"). A redraw in the same view (after a save) shows as many rows as before.
-  // setCount(n), when given, is told how many live offers the shown rows hold.
-  function pagedList(list, pageSize, today, prefix, setCount) {
-    var ul = el("ul", "results");
-    main.appendChild(ul);
-    var next = 0, liveShown = 0;
+  // setCount(n), when given, is told how many live offers the shown rows hold. opts (What changed Gone list):
+  // label(o) = the row's gone label; groups = [{ at: index of the group's first row, node: its heading }], each
+  // heading put in as the rows reach it (an empty group's heading still shows).
+  function pagedList(list, pageSize, today, prefix, setCount, opts) {
+    opts = opts || {};
+    var groups = opts.groups || [], gi = 0, ul = null;
     var more = el("button", "more");
     more.type = "button";
+    main.appendChild(more);
+    var newUl = function () { ul = el("ul", "results"); main.insertBefore(ul, more); };
+    var headings = function (upTo) {
+      for (; gi < groups.length && groups[gi].at <= upTo; gi++) { main.insertBefore(groups[gi].node, more); ul = null; }
+    };
+    if (!groups.length) newUl();
+    var next = 0, liveShown = 0;
     var showMore = function (n) {
       var end = Math.min(next + n, list.length);
       for (; next < end; next++) {
         var live = isLive(list[next], today);
         if (live) liveShown++;
-        ul.appendChild(renderOffer(list[next], prefix + next, !live));
+        headings(next);
+        if (!ul) newUl();
+        ul.appendChild(renderOffer(list[next], prefix + next, !live, opts.label ? opts.label(list[next]) : null));
       }
+      if (next >= list.length) headings(list.length);
       shownBefore = next;
       more.hidden = next >= list.length;
       more.textContent = "Show " + Math.min(pageSize, list.length - next) + " more (" + (list.length - next) + " left)";
@@ -2004,7 +2102,6 @@
     };
     more.addEventListener("click", function () { showMore(pageSize); });
     showMore(Math.max(pageSize, shownBefore));
-    main.appendChild(more);
   }
 
   // The Used filter (signed in): every used offer matching the search, card and category, newest used first
@@ -2027,6 +2124,136 @@
     main.appendChild(p);
   }
 
+  // ---- What changed (a mode of the main page) ----
+  // The New or Gone list of the picked card (All cards: each card against its own latest read), through the same
+  // search, filters, sort and Show more as the main list. No headline, bonus rows or Recently unavailable.
+  function renderWcList(query, today, inScope, scope, narrowed) {
+    renderHeadline([], today, false);
+    // New keeps an offer marked used in this view in its place (dimmed) until the search or a filter changes, as
+    // the main list does; the counts are the New rule's.
+    var newAll = search(query, function (o) { return inScope(o) && (isNew(o, today) || (o.status === "used" && kept(o) && addedByRead(o))); });
+    var goneAll = search(query, function (o) { return inScope(o) && isDropped(o); });
+    var nNew = newAll.filter(function (o) { return actOk(o) && isNew(o, today); }).length;
+    var nGone = goneAll.filter(actOk).length;
+    renderWcTabs(nNew, nGone);
+    var isNewTab = wc.tab === "new", all = isNewTab ? newAll : goneAll;
+    renderActs(actCounts(isNewTab ? all.filter(function (o) { return isNew(o, today); }) : all));
+    var list = actMode === "any" ? all : all.filter(actOk);
+    var n = isNewTab ? nNew : nGone;
+    countEl.textContent = n ? n + (isNewTab ? " new" : " gone") + (n === 1 ? " offer" : " offers") + scope : "";
+    if (!list.length) {
+      var p = el("p", "empty", "No " + (isNewTab ? "new" : "gone") + " offers" + scope.replace(/^,/, ""));
+      if (compact(query) !== "") {
+        p.appendChild(document.createTextNode(" match "));
+        p.appendChild(el("strong", null, "“" + query.trim() + "”"));
+      }
+      p.appendChild(document.createTextNode("."));
+      main.appendChild(p);
+      return;
+    }
+    var cmp = comparator(sortMode, query, all);
+    if (isNewTab) return pagedList(list.sort(cmp), narrowed ? PAGE : MAX_SHOWN, today, "w", null);
+    // Gone: "Pulled early N" then "Ended N" when any gone offer has an end date (offers with none, on All cards,
+    // follow under "Dropped N"); the sort applies inside each group. No end dates at all: no headings.
+    var by = { pulled: [], ended: [], dropped: [] };
+    list.forEach(function (o) { by[droppedKind(o)].push(o); });
+    var keys = by.pulled.length || by.ended.length ? ["pulled", "ended"].concat(by.dropped.length ? ["dropped"] : []) : [];
+    var NAMES = { pulled: "Pulled early", ended: "Ended", dropped: "Dropped" }, groups = [], ordered = [];
+    keys.forEach(function (k) {
+      var h = el("h3", "wcgroup", NAMES[k] + " ");
+      h.appendChild(el("span", "n", String(by[k].length)));
+      groups.push({ at: ordered.length, node: h });
+      ordered = ordered.concat(by[k].sort(cmp));
+    });
+    if (!keys.length) ordered = list.sort(cmp);
+    pagedList(ordered, narrowed ? PAGE : MAX_SHOWN, today, "w", null, { label: droppedLabel, groups: groups });
+  }
+
+  // The panel under the search box: back arrow, the card ("All cards"), the reads compared, then New and Gone.
+  var wcEl = document.getElementById("wc"), wcName = document.getElementById("wcname"), wcSub = document.getElementById("wcsub");
+  var wcTabs = document.getElementById("wctabs");
+  function renderWcPanel() {
+    wcEl.hidden = !wc;
+    wrapEl.classList.toggle("wcon", !!wc);
+    if (!wc) return;
+    wcName.textContent = "";
+    wcName.appendChild(withDot(el("span", null, card || "All cards"), card));
+    var r = card === null ? null : readOf(card);
+    wcSub.textContent = card === null ? "Each card's latest read" : !r ? "No full read yet" :
+      "Read " + fmtDate(r.latest) + (r.prev ? " · compared with " + fmtDate(r.prev) : " · first read");
+  }
+  function renderWcTabs(nNew, nGone) {
+    wcTabs.textContent = "";
+    [["new", "New", nNew], ["gone", "Gone", nGone]].forEach(function (t) {
+      var b = el("button", "cat cardbtn wctab", t[1]);
+      b.appendChild(el("span", "n", " " + t[2]));
+      b.type = "button";
+      b.setAttribute("aria-pressed", String(wc.tab === t[0]));
+      b.addEventListener("click", function () {
+        if (wc.tab === t[0]) return;
+        wc.tab = t[0];
+        renderCuisines();
+        render();
+      });
+      wcTabs.appendChild(b);
+    });
+  }
+  // Entering from a freshness row: that card, its New list (Gone when it added nothing), no search or other
+  // filter, so the buttons show the row's numbers. One history entry, so the phone's back button leaves.
+  function enterWc(c, tab) {
+    if (!wc) {
+      var ex = main.querySelector("details.expired");
+      // The view as it was (pages shown, rows kept in place, Recently unavailable open or closed) comes back too.
+      wc = { saved: { q: input.value, category: category, card: card, cuisine: cuisine, chan: chanMode, act: actMode,
+        sort: sortMode, used: usedMode, y: window.scrollY, view: viewSig, shown: shownBefore, keep: keep, exOpen: ex ? ex.open : null },
+        token: String(Date.now()) + Math.random() };
+      try { history.pushState({ cardselectorWc: wc.token }, ""); } catch (e) {}
+    }
+    wc.tab = tab;
+    wc.from = c;
+    input.value = "";
+    category = null; cuisine = null; chanMode = "any"; actMode = "any"; card = c;
+    renderChans(); renderCats(); renderCards(); renderCuisines(); render();
+    window.scrollTo(0, 0);
+    document.getElementById("wcback").focus({ preventScroll: true });
+  }
+  // Leaving puts back the search, filters, sort and scroll from before entering.
+  function leaveWc() {
+    if (!wc) return;
+    var s = wc.saved, from = wc.from;
+    wc = null;
+    input.value = s.q;
+    category = s.category; card = s.card; cuisine = s.cuisine; chanMode = s.chan; actMode = s.act; usedMode = s.used;
+    if (card !== null && !data.offers.some(function (o) { return o.card === card; })) card = null; // gone with new data
+    if (category !== null && (data.categories || []).indexOf(category) === -1) category = null;
+    sortMode = s.sort;
+    sortEl.value = sortMode;
+    showSortHelp();
+    viewSig = s.view; shownBefore = s.shown; keep = s.keep; // the same view again: its pages and in-place rows stay
+    renderChans(); renderCats(); renderCards(); renderCuisines(); render();
+    var ex = main.querySelector("details.expired");
+    if (ex && s.exOpen !== null) ex.open = s.exOpen;
+    var row = Array.prototype.filter.call(flist.querySelectorAll(".fhead"), function (b) { return b.dataset.card === from; })[0];
+    if (row) row.focus({ preventScroll: true });
+    window.scrollTo(0, s.y);
+  }
+  // The entry pushed on entering carries this visit's token; any other entry (the one before, or an old forward one) leaves.
+  function onWcEntry(st) { return !!wc && !!st && st.cardselectorWc === wc.token; }
+  // The back arrow leaves at once, then steps back over the pushed entry (that popstate finds the mode off, and a
+  // second tap finds nothing to do, so a quick double tap can't leave the site).
+  document.getElementById("wcback").addEventListener("click", function () {
+    if (!wc) return;
+    var back = onWcEntry(history.state);
+    leaveWc();
+    if (back) history.back();
+  });
+  window.addEventListener("popstate", function (e) {
+    if (wc && !onWcEntry(e.state)) leaveWc();
+  });
+  // A reload starts outside the mode. Reloaded on the entry pushed on entering, step back over it (the same page, so
+  // nothing loads again), so the phone's back button needs one press, not two, to leave.
+  try { if (history.state && history.state.cardselectorWc) history.back(); } catch (e) {}
+
   function render() {
     // Best offer totals stay cached until something behind a card rate changes (date, activation, focus, choice).
     var sig = todayISO() + (cardsCfg ? 1 : 0) + JSON.stringify(bonus ? bonus.entries.map(function (e) {
@@ -2038,12 +2265,13 @@
     lastDay = today; // the date this render used (the day redraw compares it)
     window.__renders = (window.__renders || 0) + 1; // for the tests
     main.textContent = "";
+    liveNames = null; // the Still on index follows the offers as they are now
     if (lineFit) lineFit.disconnect(); // the old bonus rows are gone
     var hasQuery = compact(query) !== "";
     var filtered = category !== null || card !== null;
-    var usedOn = usedMode && editing();
+    var usedOn = usedMode && editing() && !wc; // What changed ignores the Used filter
     // A new search or filter ends the in-place rows and the extra pages of the last view.
-    var view = JSON.stringify([query, category, card, cuisine, chanMode, actMode, sortMode, usedOn]);
+    var view = JSON.stringify([query, category, card, cuisine, chanMode, actMode, sortMode, usedOn, wc && wc.tab]);
     if (view !== viewSig) { keep = {}; viewSig = view; shownBefore = 0; }
     // Any filter picked (In store / Online, Activation too) lists the offers it keeps, in pages.
     var narrowed = filtered || chanMode !== "any" || actMode !== "any";
@@ -2063,12 +2291,15 @@
       (card !== null ? " on " + card : "") + (chanMode !== "any" ? (chanMode === "store" ? ", in store" : ", online") : "") +
       (actMode !== "any" ? (actMode === "ready" ? ", ready now" : ", needs activation") : "");
     renderFilterSummary();
-    renderUsed(editing() ? search(query, function (o) { return o.status === "used" && inUsedScope(o); }).length : null);
+    renderUsed(editing() && !wc ? search(query, function (o) { return o.status === "used" && inUsedScope(o); }).length : null);
     // The Used list ignores In store / Online and Activation: their rows are greyed out and can't be changed.
     [chansEl, actsEl].forEach(function (g) {
       g.parentNode.classList.toggle("off", usedOn);
       Array.prototype.forEach.call(g.querySelectorAll("button"), function (b) { b.disabled = usedOn; });
     });
+    renderWcPanel();
+    renderFreshness(); // its New and Gone counts follow saves and new data
+    if (wc) return renderWcList(query, today, inScope, scope, narrowed);
     if (usedOn) return renderUsedList(query, today, inUsedScope,
       (category !== null ? " in " + category + (cuis !== null ? ": " + cuis : "") : "") + (card !== null ? " on " + card : ""));
     var gone = search(query, function (o) { return inCat(o) && isGone(o, today); });
@@ -2210,22 +2441,42 @@
   function keyboardFocused(btn) {
     try { return btn.matches(":focus-visible"); } catch (e) { return true; }
   }
-  // The date shows while the mouse is over the row, a keyboard has focus in it, or a click/tap opened it.
-  function freshRow(r) {
+  // The age line adds what the latest read changed: "Yesterday · +32 new · 21 gone" (a zero part left out, "no
+  // changes" when both are, "first read" on a card's first read). A row with changes opens What changed for that
+  // card (chevron); the others show the date while the mouse is over the row, a keyboard has focus in it, or a
+  // click/tap opened it.
+  function freshRow(r, ch) {
     var li = el("li", "frow"), btn = el("button", "fhead"), det = el("p", "fdetail");
-    var id = "fdet-" + compact(r.card);
+    var id = "fdet-" + compact(r.card), rd = readOf(r.card);
+    var changed = !!rd && !!rd.prev && !!ch && (ch.n > 0 || ch.g > 0);
     btn.type = "button";
-    btn.setAttribute("aria-controls", id);
     btn.dataset.card = r.card;
     btn.appendChild(withDot(el("span", "fname", r.card), r.card));
     btn.appendChild(document.createTextNode(" "));
     btn.appendChild(el("span", "fstatus s-" + r.band.key, r.band.label));
     btn.appendChild(document.createTextNode(" "));
-    btn.appendChild(el("span", "fage", r.age === null ? "Unknown" : ageText(r.age)));
+    var age = el("span", "fage", r.age === null ? "Unknown" : ageText(r.age));
+    if (rd && !rd.prev) age.appendChild(document.createTextNode(" · first read"));
+    else if (rd && !changed) age.appendChild(document.createTextNode(" · no changes"));
+    else if (changed) {
+      if (ch.n) { age.appendChild(document.createTextNode(" · ")); age.appendChild(el("span", "fnew", "+" + ch.n + " new")); }
+      if (ch.g) age.appendChild(document.createTextNode(" · " + ch.g + " gone"));
+    }
+    btn.appendChild(age);
+    li.appendChild(btn);
+    if (changed) {
+      btn.className = "fhead fgo";
+      var chev = el("span", "fchev");
+      chev.setAttribute("aria-hidden", "true");
+      btn.appendChild(chev);
+      btn.appendChild(el("span", "sr-only", ", what changed"));
+      btn.addEventListener("click", function () { enterWc(r.card, ch.n ? "new" : "gone"); });
+      return li;
+    }
+    btn.setAttribute("aria-controls", id);
     det.id = id;
     det.textContent = "Last full read: " + (r.age === null
       ? (r.future ? "Unknown (date is in the future)" : "Unknown") : fmtLong(r.iso));
-    li.appendChild(btn);
     li.appendChild(det);
     var hover = false, focus = false;
     var sync = function () {
@@ -2245,8 +2496,8 @@
 
   function renderFreshness(force) {
     if (!data) return;
-    var today = localToday(), rows = freshRows(today);
-    var sig = today + "|" + rows.map(function (r) { return r.card + "=" + r.iso; }).join(",");
+    var today = localToday(), rows = freshRows(today), ch = changeCounts(todayISO());
+    var sig = today + "|" + rows.map(function (r) { var c = ch[r.card]; return r.card + "=" + r.iso + (c ? "+" + c.n + "-" + c.g : ""); }).join(",");
     if (!force && sig === freshSig) return;
     freshSig = sig;
     var focused = document.activeElement && document.activeElement.classList &&
@@ -2270,7 +2521,7 @@
     fsum.appendChild(chip);
 
     flist.textContent = "";
-    rows.forEach(function (r) { flist.appendChild(freshRow(r)); });
+    rows.forEach(function (r) { flist.appendChild(freshRow(r, ch[r.card])); });
     foot.hidden = !rows.length;
     if (focused) {
       var again = flist.querySelectorAll(".fhead");
@@ -2413,7 +2664,7 @@
     if (!q || q === settledQuery || document.activeElement !== input) return;
     settledQuery = q;
     var bar = document.querySelector(".searchbar");
-    var target = useEl.hidden ? countEl : useEl;
+    var target = wc ? wcEl : useEl.hidden ? countEl : useEl; // in What changed, its panel (New / Gone stay in view)
     var y = window.scrollY + target.getBoundingClientRect().top - bar.getBoundingClientRect().height - 4;
     if (Math.abs(window.scrollY - y) > 2) window.scrollTo({ top: Math.max(0, y), behavior: "smooth" });
   }
@@ -2452,7 +2703,7 @@
   sortEl.addEventListener("change", function () {
     sortMode = sortEl.value;
     showSortHelp();
-    try { localStorage.setItem(SORT_KEY, sortMode); } catch (e) {}
+    if (!wc) try { localStorage.setItem(SORT_KEY, sortMode); } catch (e) {}
     render();
   });
 
@@ -2991,12 +3242,12 @@
     });
   }
   // Nothing the owner picked would be lost by a reload: an empty search box (any typed character counts, not
-  // only letters and digits), no save running or save bar showing (the "Live" pill aside), no category, card,
+  // only letters and digits), no save running or save bar showing (the "Live" pill aside), not in What changed, no category, card,
   // cuisine or Used filter, no open details, Filters panel, bonus strip or Edit mode panel, and no form field in
   // use other than the empty search box.
   function idle() {
     var f = document.activeElement;
-    return !saving && input.value.trim() === "" && category === null && card === null && cuisine === null && !usedMode &&
+    return !saving && !wc && input.value.trim() === "" && category === null && card === null && cuisine === null && !usedMode &&
       // a save bar still showing (Deploying with Undo, an error with Retry); the small "Live" pill doesn't block
       (savebar.hidden || savebar.classList.contains("live")) &&
       !main.querySelector("button.toggle[aria-expanded=true]") && !filtersEl.classList.contains("open") &&
