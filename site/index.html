@@ -39,6 +39,8 @@
     --f-unknown: #5a6270;
     --tint: #eaf6ef;
     --cuis-line: #c7b0e0;
+    --new-bg: #e3eefc;
+    --new-text: #0a58c2;
     --box-shadow: 0 1px 2px rgba(16, 24, 40, .05), 0 2px 6px rgba(16, 24, 40, .04);
   }
   @media (prefers-color-scheme: dark) {
@@ -71,6 +73,8 @@
       --f-unknown: #a2a9b5;
       --tint: #13281c;
       --cuis-line: #6d5a86;
+      --new-bg: #1a2d4d;
+      --new-text: #7ab2ff;
       --box-shadow: inset 0 1px 0 rgba(255, 255, 255, .06);
     }
   }
@@ -300,6 +304,15 @@
   .badge.soon .bico { width: 12px; height: 12px; }
   .badge.cuis { gap: 5px; color: var(--cuis); font-weight: 500; }
   .badge.cuis::before { content: ""; width: 8px; height: 8px; border-radius: 2px; background: currentColor; flex: none; }
+  /* "New": the card's latest read added this offer (light blue fill, accent text; 5.6:1 light, 6.3:1 dark). */
+  .newtag {
+    display: inline-block; padding: 1px 7px; border-radius: 6px; line-height: 1.3;
+    font-size: 13px; font-weight: 650; color: var(--new-text); background: var(--new-bg);
+  }
+  /* What changed, Gone list: the other cards still offering this merchant. */
+  .stillon { margin-top: 4px; font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
+  .stillon .socard { font-weight: 600; color: var(--text); }
+  .stillon .idot { width: 7px; height: 7px; margin-right: 4px; }
 
   .details { padding: 10px 14px 12px; border-top: 1px solid var(--line); font-size: 14px; }
   .details[hidden] { display: none; }
@@ -350,6 +363,32 @@
   /* In store / Online and Activation while the Used list is on: they don't apply. */
   .filter.off .cats, .filter.off .flabel, .filter.off .sorthelp { opacity: .4; }
   .filter.off .cat { cursor: default; }
+
+  /* What changed: a panel under the search box (back arrow, card, reads compared, New / Gone). On phones the Filters
+     button joins its bottom, as it joins the bonus strip. The strip itself is hidden while the mode is on. */
+  .wcpanel { margin: 8px 0 0; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; }
+  .wcpanel[hidden] { display: none; }
+  .wctop { display: flex; align-items: center; gap: 2px; padding: 4px 14px 0 4px; }
+  .wcback {
+    display: inline-flex; align-items: center; justify-content: center; flex: none; width: 44px; height: 44px;
+    padding: 0; color: var(--text); background: none; border: 0; border-radius: 10px; cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .wcback svg { width: 22px; height: 22px; }
+  .wcback:focus-visible { outline: 3px solid var(--accent); outline-offset: -3px; }
+  .wctitle { min-width: 0; }
+  .wcname { font-size: 16px; font-weight: 700; overflow-wrap: anywhere; }
+  .wcsub { font-size: 13px; color: var(--muted); }
+  .wctabs { display: flex; gap: 8px; padding: 8px 14px 12px; }
+  .wctabs .cat.wctab { flex: 1 1 0; min-width: 0; min-height: 44px; font-size: 15px; }
+  .wrap.wcon details.bstrip { display: none; }
+  h3.wcgroup { margin: 18px 2px 0; font-size: 13px; font-weight: 700; letter-spacing: .03em; color: var(--muted); }
+  h3.wcgroup .n { font-weight: 600; }
+  @media (max-width: 699px) {
+    .wcpanel { border-radius: 12px 12px 0 0; }
+    .wrap.wcon details.bstrip + .ftoggle { margin-top: 0; border-top: 0; border-radius: 0 0 12px 12px; }
+    .wrap.wcon details.bstrip + .ftoggle[aria-expanded="true"] { border-bottom: 0; border-radius: 0; }
+  }
 
   /* Bonus categories strip (under the search box): one summary line, tap to expand. On phones it is the top
      of one panel with the Filters button under it. */
@@ -492,6 +531,13 @@
   .fname { font-weight: 650; overflow-wrap: anywhere; }
   .fstatus { font-size: 13px; font-weight: 650; text-align: right; }
   .fage { grid-column: 1; color: var(--muted); font-size: 13px; }
+  .fage .fnew { font-weight: 650; color: var(--bonus); }
+  /* A row with changes opens What changed: a right chevron in its own column. */
+  .fhead.fgo { grid-template-columns: minmax(0, 1fr) auto 16px; }
+  .fhead .fchev {
+    grid-column: 3; grid-row: 1 / span 2; align-self: center; justify-self: end; width: 7px; height: 7px; margin-right: 3px;
+    border-right: 1.5px solid var(--muted); border-bottom: 1.5px solid var(--muted); transform: rotate(-45deg);
+  }
   .fdetail { margin: 0; padding: 0 0 10px; font-size: 14px; color: var(--text); overflow-wrap: anywhere; }
   .fdetail[hidden] { display: none; }
   .s-fresh { color: var(--f-fresh); }
@@ -600,6 +646,16 @@
            enterkeyhint="search" inputmode="search" autofocus>
   </div>
   <div class="use" id="use" aria-live="polite" hidden></div>
+  <!-- What changed (a mode of this page): opened from an Offer freshness row with changes. -->
+  <section class="wcpanel" id="wc" aria-label="What changed" hidden>
+    <div class="wctop">
+      <button class="wcback" id="wcback" type="button" aria-label="Back">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M19 12H5M11 6l-6 6 6 6"/></svg>
+      </button>
+      <div class="wctitle"><div class="wcname" id="wcname"></div><div class="wcsub" id="wcsub"></div></div>
+    </div>
+    <div class="wctabs" id="wctabs" role="group" aria-label="New or gone"></div>
+  </section>
   <details class="bstrip" id="bstrip" hidden>
     <summary id="bsum"></summary>
     <ul id="blist"></ul>
@@ -645,7 +701,7 @@
     <details class="fresh" id="fresh">
       <summary id="fsum"></summary>
       <div class="fbody">
-        <p class="fnote">Age since the last full offer read. Individual offers may have changed.</p>
+        <p class="fnote">Age since the last full offer read, and what that read changed.</p>
         <ul class="flist" id="flist"></ul>
       </div>
     </details>
