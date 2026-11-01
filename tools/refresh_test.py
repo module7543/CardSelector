@@ -1228,5 +1228,120 @@ class RefreshTest(unittest.TestCase):
         self.assertIn("WARNING (size): File is 17% of the last full read (6 offers).", out)
 
 
+    # --- 2026-10-31 Chase refreshes: rename wording and the sibling card check ---------------------------------
+
+    def rename_line(self, out, sid):
+        return next((l.strip() for l in out.splitlines() if l.strip().startswith(sid + ":")
+                     and " -> " in l and "<- file" not in l), None)
+
+    def test_rename_report_says_when_the_old_name_was_saved(self):
+        def fn(rows):
+            for r in rows:
+                if r["merchant"] == "eBay":
+                    r["merchant"] = "eBay Marketplace"
+            return rows
+        code, out, rep = self.t.run("report", "Capital One", [self.t.csv("Capital One", fn)])
+        self.assertEqual([(m["alias"], m["alias_added"]) for m in rep["renames"]], [("added", True)], out)
+        self.assertEqual(self.rename_line(out, "capital-one/ebay"),
+                         "capital-one/ebay: 'eBay' -> 'eBay Marketplace' (old name added to aliases)", out)
+
+    def test_rename_report_when_the_old_name_is_the_new_one_ignoring_punctuation(self):
+        # 'Darn Tough Vermont' -> 'Darn Tough & Vermont': '&' reads as 'and' for matching, so it is a pair (here
+        # automatic, through the 'Darn Tough' alias), but
+        # ignoring case, accents and punctuation it is the same name, so set_aliases drops the old name. The offer
+        # already has another alias ('Darn Tough'), which must not make the report say one was added.
+        def fn(rows):
+            for r in rows:
+                if r["merchant"] == "Darn Tough Vermont":
+                    r["merchant"] = "Darn Tough & Vermont"
+            return rows
+        p = self.t.csv("Capital One", fn)
+        code, out, rep = self.t.run("report", "Capital One", [p])
+        self.assertEqual([(m["id"], m["alias"], m["alias_added"]) for m in rep["renames"]],
+                         [("capital-one/darn-tough", "same_name", False)], out)
+        self.assertEqual(self.rename_line(out, "capital-one/darn-tough"),
+                         "capital-one/darn-tough: 'Darn Tough Vermont' -> 'Darn Tough & Vermont' "
+                         "(no alias needed: same name once punctuation is ignored)", out)
+        self.apply_ok("Capital One", [p])
+        o = self.t.offers()["capital-one/darn-tough"]
+        self.assertEqual((o["merchant"], o["aliases"]), ("Darn Tough & Vermont", ["Darn Tough"]))  # aliases as before
+
+    def test_rename_report_without_an_alias(self):
+        # A paired truncated name takes the full name and never adds an alias.
+        self.t.change_offers(lambda by, d: by["us-bank/two-hands-corn-dogs"].update(merchant="Two Hands Corn Dogs - Lit..."))
+        code, out, rep = self.t.run("report", "U.S. Bank", [self.t.csv("U.S. Bank")])
+        self.assertEqual([(m["alias"], m["alias_added"]) for m in rep["renames"]], [("none", False)], out)
+        self.assertEqual(self.rename_line(out, "us-bank/two-hands-corn-dogs"),
+                         "us-bank/two-hands-corn-dogs: 'Two Hands Corn Dogs - Lit...' -> 'Two Hands Corn Dogs - Little Tokyo' (no alias)", out)
+
+    NEW_CITI = ("Fixture New Shop A", "Fixture New Shop B", "Fixture New Shop C")
+
+    def citi_file(self, card, label, keep=None, new=True, name=None):
+        """A copy of `card`'s Citi fixture, card column = label; keep(row) filters rows; new adds three made-up offers."""
+        def fn(rows):
+            rows = [dict(r, card=label) for r in rows if keep is None or keep(r)]
+            if new:
+                tpl = next(r for r in rows if r["source_tab"] != "Redeemed")
+                rows += [dict(tpl, offer_id=f"FIX-NEW-{k}", merchant=m, bonus="7% Back", expiration="20d left",
+                              source_tab="All", promo_tag="", section="Shopping") for k, m in enumerate(self.NEW_CITI)]
+            return rows
+        return self.t.csv(card, fn, name=name or f"{label.replace(' ', '_')}_{card.replace(' ', '_')}.csv")
+
+    def refresh_double_cash_with_new_offers(self):
+        p = self.citi_file("Citi Double Cash", "Citi Double Cash")
+        self.apply_ok("Citi Double Cash", [p], decisions={"categories": {m: "Marketplaces & Department Stores" for m in self.NEW_CITI},
+                                                             "owner_approved": ["new_share"]})  # 3 of 10: a tiny fixture
+        self.assertEqual({o["first_seen"] for o in self.t.offers().values() if o["merchant"] in self.NEW_CITI}, {READ})
+
+    def test_card_check_ignores_offers_the_sibling_gained_after_this_cards_last_read(self):
+        # Double Cash is refreshed on READ with three new offers; the Custom Cash page shows them too. Its correct
+        # read (its own fixture plus the three) must not warn: the three were not on Double Cash when Custom Cash
+        # was last read (2026-10-18). (The old rule counted them: 3 Double-Cash-only hits against 2 of its own.)
+        self.refresh_double_cash_with_new_offers()
+        code, out, rep = self.t.run("report", "Citi Custom Cash", [self.citi_file("Citi Custom Cash", "Citi Custom Cash")])
+        self.assertEqual(code, 0, out)
+        self.assertIsNone(rep["card_warning"], out)
+        self.assertNotIn("WARNING (card check)", out)
+
+    def test_card_check_still_warns_on_the_sibling_file_after_its_refresh(self):
+        # The same Double Cash file with its card column changed to Custom Cash: all 5 of Double Cash's own older
+        # offers are in it and neither of Custom Cash's 2, so it warns (and stays a warning, not a stop).
+        self.refresh_double_cash_with_new_offers()
+        p = self.citi_file("Citi Double Cash", "Citi Custom Cash")
+        code, out, rep = self.t.run("report", "Citi Custom Cash", [p])
+        self.assertEqual(code, 0, out)
+        self.assertNotIn("card_check", [x["key"] for x in rep["stops"]], out)
+        self.assertEqual(rep["card_warning"],
+                         "the list has 5 of the 5 offers only Citi Double Cash had when Citi Custom Cash was last read "
+                         "(2026-10-18), and 0 of the 2 only Citi Custom Cash had when Citi Double Cash was last read "
+                         "(2026-10-25); check that Citi Custom Cash was the card picked on the page", out)
+
+    def test_card_check_share_test(self):
+        # Double Cash's own offers: BestBuy, Lyft, Splash, Kickin KAsian, Subway; Custom Cash's: Avis, Quik Stop.
+        dc_only = ("BestBuy", "Lyft", "Splash")  # 3 of the 5 (Splash is saved as Splash Wines, alias Splash)
+        cc_rows = lambda r: r["source_tab"] == "Redeemed" or r["merchant"] not in ("Avis", "Quik Stop")
+        def dc_rows(r):
+            return r["merchant"] in dc_only
+        extra = self.t.csv("Citi Double Cash", lambda rows: [dict(r, card="Citi Custom Cash") for r in rows if dc_rows(r)], name="dc_part.csv")
+        with open(extra, newline="", encoding="utf-8") as f:
+            dc_extra = [r for r in csv.DictReader(f)]
+        def cc_file(keep_own):
+            def fn(rows):
+                rows = [r for r in rows if keep_own or cc_rows(r)]
+                return rows + [{k: r.get(k, "") for k in rows[0]} for r in dc_extra]
+            return self.t.csv("Citi Custom Cash", fn, name=f"cc_{keep_own}.csv")
+        # 3 of 5 Double-Cash-only offers, but also both of Custom Cash's own: a card picking up some of its
+        # sibling's offers, no warning (the old rule warned: 3 against 2).
+        code, out, rep = self.t.run("report", "Citi Custom Cash", [cc_file(True)])
+        self.assertIsNone(rep["card_warning"], out)
+        # The same 3 of 5 with neither of Custom Cash's own: most of the sibling's offers and none of its own.
+        code, out, rep = self.t.run("report", "Citi Custom Cash", [cc_file(False)])
+        self.assertIn("the list has 3 of the 5 offers only Citi Double Cash had", rep["card_warning"] or "", out)
+        # 2 of 5 is not most of them: no warning, even with none of its own.
+        dc_extra[:] = [r for r in dc_extra if r["merchant"] != "Lyft"]
+        code, out, rep = self.t.run("report", "Citi Custom Cash", [cc_file(False)])
+        self.assertIsNone(rep["card_warning"], out)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
