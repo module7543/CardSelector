@@ -5,3 +5,5 @@ screenshots/
 !tools/fixtures/*.csv
 # Written by the deploy workflows only (tools/write_version.py); never committed.
 site/version.json
+# Python bytecode caches.
+__pycache__/
