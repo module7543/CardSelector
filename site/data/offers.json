@@ -89,6 +89,11 @@
       "card": "Chase Freedom Flex",
       "read_date": "2026-10-31",
       "offers_found": 137
+    },
+    {
+      "card": "Chase Freedom",
+      "read_date": "2026-10-31",
+      "offers_found": 116
     }
   ],
   "offers": [
@@ -3303,7 +3308,7 @@
       "minimum_spend": "499.99",
       "fine_print": "Earn 10% cash back on your Whisker purchase when you spend $499.99 or more, including taxes and after any discount, with a $50 cash back maximum. The Litter-Robot® solves the litter box problem for cats and cat parents: featuring automatic, self-cleaning technology that removes the chore of scooping, traps unpleasant odors and reduces litter tracking, making being a cat person easier than ever before. With over 20+ years of experience in the pet industry, a 550+ U.S. based team, 60+ engineers and 65+ patents, Whisker has successfully sold over 1.5 million Litter-Robots to happy pet owners (with over 60 thousand 5-star reviews). Offer expires 11/23/2026. Offer valid one time only. Offer only valid on purchase made directly with the merchant. Offer valid online only at Whisker.com. Offer not valid on gift card purchase. Offer not valid on purchase made using third party services, delivery services, or a third-party payment account (e.g., buy now pay later). Offer only valid on U.S. purchase. It is possible that the merchant may split your purchase into multiple transactions. Offer redemption awarded as statement credit on the first qualifying transaction amount. Payment must be made on or before 11/23/2026.",
       "other_details": [],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-31",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -3322,7 +3327,7 @@
       "minimum_spend": null,
       "fine_print": "Earn 20% cash back on your Sony Electronics purchases including taxes and after any discounts, with a $50 cash back maximum. Limit of 2 statement credits (up to $100 cash back total). Shop the Sony Store for all your favorite electronics. From our award-winning Alpha Interchangeable Lens Cameras to our Noise Cancelling Wireless Headphones to our state-of-the-art 4KTVs. Enjoy free shipping, easy returns, special access to our experts and up to 5% back in My Sony Points through our free membership. Offer expires 11/6/2026. Offer valid on first two payments only. Offer only valid on purchases made directly with the merchant. Offer valid online only. Offer not valid on gift card purchases. Offer not valid on purchases made using third-party services, delivery services, or a third-party payment account (e.g., buy now pay later). It is possible that the merchant may split your purchase into multiple transactions. Offer redemption awarded as statement credit on the first qualifying transaction amount. Payment must be made on or before 11/6/2026.",
       "other_details": [],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-31",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -3333,15 +3338,17 @@
       "merchant": "TicketSmarter",
       "category": "Streaming & Entertainment",
       "bonus": "12% cash back",
-      "expires": "2026-10-31",
-      "expires_text": "Offer expires 10/31/2026",
+      "expires": "2026-11-30",
+      "expires_text": "Offer expires 11/30/2026",
       "activation": "needs_activation",
       "channel": "online",
       "spend_cap": null,
       "minimum_spend": null,
       "fine_print": "Earn 12% cash back on your TicketSmarter purchase, including taxes and after any discounts, with a $50 cash back maximum. We are TicketSmarter, a ticket resale marketplace with seats to over 125,000 live events and over 48 million tickets for your favorite sporting events, concerts, and theatre productions. We’re an official partner of over 35 college conferences and 200+ universities, as well as hundreds of events, venues, and charitable organizations. TicketSmarter is the smart way to buy tickets with an easy, no-hassle buying experience through TicketSmarter.com or the TicketSmarter app! Offer expires 10/31/2026. Offer valid on up to five redemptions. Offer only valid on purchases made directly with the merchant. Offer valid online only. Offer not valid on purchases made using third-party services, delivery services, or a third-party payment account (e.g., buy now pay later). Payment must be made on or before 10/31/2026.",
-      "other_details": [],
-      "last_read": "2026-10-18",
+      "other_details": [
+        "Tagged New"
+      ],
+      "last_read": "2026-10-31",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -3360,7 +3367,7 @@
       "minimum_spend": null,
       "fine_print": "Earn 10% cash back on your Hydro Flask purchase, including taxes and after any discounts, with a $10 cash back maximum. At Hydro Flask, we meticulously design every tumbler for the perfect fit. We rigorously test our leakproof technology, so you never have to think twice. We obsess over keeping your cold, cold, and your hot, hot. We do it because our planet and the people we love deserve less plastic. We do it because we believe reusable, refillable and reliable products are key to reducing single-use waste. We do it to keep people hydrated, ready and equipped for whatever they’re into. We’re Hydro Flask—everything we do is for everything you do. We Make It. You Own It Offer expires 11/15/2026. Offer valid one time only. Offer only valid on purchase made directly with the merchant. Offer valid online only. Offer not valid on gift card purchase. Offer not valid on purchase made using third-party services, delivery services, or a third-party payment account (e.g., buy now pay later). Offer only valid on U.S. purchase. It is possible that the merchant may split your purchase into multiple transactions. Offer redemption awarded as statement credit on the first qualifying transaction amount. Payment must be made on or before 11/15/2026.",
       "other_details": [],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-31",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -3379,7 +3386,7 @@
       "minimum_spend": null,
       "fine_print": "Earn 10% cash back on your OXO purchase, including taxes and after any discounts, with a $23 cash back maximum. At OXO, our products make everyday life easier, in every room of your home. From cooking and baking to brewing and entertaining to cleaning and organizing, to everyday adventures with little ones. We design tools that fit comfortably in your hand and in your life. Everything we make is built to last—our products are engineered for functionality and durability—it’s why we guarantee them for life. Offer expires 11/15/2026. Offer valid one time only. Offer only valid on purchase made directly with the merchant. Offer valid online only. Offer not valid on gift card purchase. Offer not valid on purchase made using third-party services, delivery services, or a third-party payment account (e.g., buy now pay later). Offer only valid on U.S. purchase. It is possible that the merchant may split your purchase into multiple transactions. Offer redemption awarded as statement credit on the first qualifying transaction amount. Payment must be made on or before 11/15/2026.",
       "other_details": [],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-31",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -3390,15 +3397,17 @@
       "merchant": "AARP",
       "category": "Services & Utilities",
       "bonus": "$8 cash back",
-      "expires": "2026-10-31",
-      "expires_text": "Offer expires 10/31/2026",
+      "expires": "2026-11-30",
+      "expires_text": "Offer expires 11/30/2026",
       "activation": "needs_activation",
       "channel": "online",
       "spend_cap": null,
       "minimum_spend": "15",
       "fine_print": "Earn $8 cash back on your first payment of a new AARP membership when you spend $15 or more, including taxes and after any discounts. AARP Members enjoy hundreds of everyday discounts on groceries, dining out, travel, nationwide advocacy, financial tools, health tips, and AARP The Magazine! Join AARP for 25% off - only $15 for your first year with automatic renewal. Join online now. Become part of AARP's loyalty program that celebrates your life well-played. Earn 50% more points on activities and access to members-only offers as an AARP member. Offer expires 10/31/2026. Offer valid on first payment only. Payment must be made directly with the merchant. Offer valid online only. Offer not valid on AARP Foundation donations or contributions. Offer not valid on third-party services. Payment must be made on or before 10/31/2026. For membership cost and to cancel membership, please visit merchant website for details.",
-      "other_details": [],
-      "last_read": "2026-10-18",
+      "other_details": [
+        "Tagged New"
+      ],
+      "last_read": "2026-10-31",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -3417,7 +3426,7 @@
       "minimum_spend": "60",
       "fine_print": "Earn 10% cash back on your first five purchases at Zenni Optical when you spend $60 or more, including taxes and after any discount, with a $50 cash back maximum. Limit of five statement credits (up to $250). A pioneer in the online eyewear industry, Zenni is on a mission to make eyewear affordable and accessible to everyone. With over 51 million frames sold worldwide and prescription pairs starting at under $10, Zenni offers a large, curated collection of stylish and high-quality prescription glasses, sunglasses, protective eyewear and nonprescription glasses. Zenni is proud to be the Official Eyewear of the San Francisco 49ers, Boston Celtics, Chicago Bulls, Monster Jam, WWE, and more. Offer expires 11/15/2026. Offer valid on first five payments only. Offer only valid on purchases made directly with the merchant. Offer valid online only. Offer not valid on gift card purchases. Offer not valid on purchases made using third-party services, delivery services, or a third-party payment account (e.g., buy now pay later). It is possible that the merchant may split your purchase into multiple transactions. Offer redemption awarded as statement credit on the first five qualifying transaction amounts. Payment must be made on or before 11/15/2026.",
       "other_details": [],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-31",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -3438,8 +3447,8 @@
       "other_details": [],
       "last_read": "2026-10-18",
       "first_seen": "2026-10-18",
-      "status": "active",
-      "status_since": "2026-10-18"
+      "status": "missing",
+      "status_since": "2026-10-31"
     },
     {
       "id": "chase-freedom/mattress-firm",
@@ -3447,15 +3456,17 @@
       "merchant": "Mattress Firm",
       "category": "Home & Garden",
       "bonus": "3% cash back",
-      "expires": "2026-10-31",
-      "expires_text": "Offer expires 10/31/2026",
+      "expires": "2026-11-30",
+      "expires_text": "Offer expires 11/30/2026",
       "activation": "needs_activation",
       "channel": "none_shown",
       "spend_cap": null,
       "minimum_spend": null,
       "fine_print": "Earn 3% cash back on your Mattress Firm purchase, including taxes and after any discounts, with a $50 cash back maximum. For almost 40 years, Mattress Firm has been helping people get the sleep they deserve. With more than 2,300 locations in 49 states, they’re America’s largest specialty mattress store, offering a wide selection of quality beds from top brands at every price. Their friendly and knowledgeable Sleep Experts® make it easy to get better zzz’s—they train 200+ hours annually to help you find the perfect mattress, pillow and more. Plus, you can shop confidently with their Low Price Guarantee and 120 Night Sleep Trial®. They also offer Free & Fast Delivery and Special Financing so you can score great sleep quickly—and within your budget. Offer expires 10/31/2026. Offer valid one time only. Offer only valid on purchase made directly with the merchant. Offer valid in-store or online. Offer not valid on gift card purchase. Offer not valid on purchase made using third-party services, delivery services, or a third-party payment account (e.g., buy now pay later). Offer only valid on U.S. purchase. It is possible that the merchant may split your purchase into multiple transactions. Offer redemption awarded as statement credit on the first qualifying transaction amount. Payment must be made on or before 10/31/2026.",
-      "other_details": [],
-      "last_read": "2026-10-18",
+      "other_details": [
+        "Tagged New"
+      ],
+      "last_read": "2026-10-31",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -3466,15 +3477,17 @@
       "merchant": "Ford Accessories",
       "category": "Auto & Gas",
       "bonus": "8% cash back",
-      "expires": "2026-10-31",
-      "expires_text": "Offer expires 10/31/2026",
+      "expires": "2026-11-30",
+      "expires_text": "Offer expires 11/30/2026",
       "activation": "needs_activation",
       "channel": "online",
       "spend_cap": null,
       "minimum_spend": null,
       "fine_print": "Earn 8% cash back on your Ford Accessories purchase, including taxes and after any discounts, with a $50 cash back maximum. Make your vehicle mesh with life as you live it by adding Ford Accessories. Take more along. Equip yourself for pets and carpools. Protect the interior. Get ready to tow, camp, bike, and more. You’ll find must-haves to enhance a journey to the mountains or across town. And every accessory is made to fit your specific Ford model. Visit www.ford.com/accessories. Always consult the Owner’s Manual before off-road driving, know your terrain and trail difficulty, and use appropriate safety gear. Offer expires 10/31/2026. Offer valid one time only. Offer only valid on purchase made directly with the merchant. Offer valid online only. Offer not valid on purchase made using third-party services, delivery services, or a third-party payment account (e.g., buy now pay later). Offer only valid on U.S. purchase. It is possible that the merchant may split your purchase into multiple transactions. Offer redemption awarded as statement credit on the first qualifying transaction amount. Payment must be made on or before 10/31/2026.",
-      "other_details": [],
-      "last_read": "2026-10-18",
+      "other_details": [
+        "Tagged New"
+      ],
+      "last_read": "2026-10-31",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -3495,8 +3508,8 @@
       "other_details": [],
       "last_read": "2026-10-18",
       "first_seen": "2026-10-18",
-      "status": "active",
-      "status_since": "2026-10-18"
+      "status": "missing",
+      "status_since": "2026-10-31"
     },
     {
       "id": "chase-freedom/rent-the-runway",
@@ -3505,14 +3518,14 @@
       "category": "Clothing & Jewelry",
       "bonus": "10% cash back",
       "expires": "2026-11-15",
-      "expires_text": null,
+      "expires_text": "Offer expires 11/15/2026",
       "activation": "needs_activation",
       "channel": "online",
       "spend_cap": null,
       "minimum_spend": null,
       "fine_print": "Earn 10% cash back on your Rent the Runway purchase or subscription, with a $11.75 cash back maximum.",
       "other_details": [],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-31",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -3523,15 +3536,17 @@
       "merchant": "Dropbox",
       "category": "Electronics & Software",
       "bonus": "30% cash back",
-      "expires": "2026-10-31",
-      "expires_text": "Offer expires 10/31/2026",
+      "expires": "2026-12-31",
+      "expires_text": "Offer expires 12/31/2026",
       "activation": "needs_activation",
       "channel": "online",
       "spend_cap": null,
       "minimum_spend": null,
       "fine_print": "Earn 30% cashback, up to $30 as a statement credit when you spend at Dropbox, including taxes and after any discounts. Please note that this offer is for a subscription purchase. Sync Files Across All Your Devices With Dropbox, it’s easy to access your files from multiple devices—computers, tablets and phones (iOS and Android). Secure and Protect Your Important Files From photos and videos to presentations and tax paperwork, Dropbox keeps all your most important—and irreplaceable—files safe. Share with Family and Friends Copying files over to a USB stick and “file too big to attach” errors are a thing of the past. With Dropbox you can securely send large files to anyone. Offer expires 10/31/2026. Must make first recurring payment by 11/30/2026. Offer valid on first payment only. Offer only valid on purchase made directly with the merchant. Offer not valid on purchase of Dropbox Dash. Offer not valid on purchase made using third-party services or a third-party payment account (e.g., buy now pay later). Offer only valid on U.S. purchase. Offer valid one time only. Offer valid online only. It is possible that the merchant may split your purchase into multiple transactions. Offer redemption awarded as statement credit on the first qualifying transaction amount. Recurring subscription payments begin after trial. For subscription cost and to cancel subscription, please visit merchant website for details.",
-      "other_details": [],
-      "last_read": "2026-10-18",
+      "other_details": [
+        "Tagged New"
+      ],
+      "last_read": "2026-10-31",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -3543,14 +3558,14 @@
       "category": "Groceries & Food Delivery",
       "bonus": "$10 cash back",
       "expires": "2026-11-22",
-      "expires_text": null,
+      "expires_text": "Offer expires 11/22/2026",
       "activation": "needs_activation",
       "channel": "online",
       "spend_cap": null,
       "minimum_spend": "99",
       "fine_print": "Earn $10 cash back on your first payment of a Hungryroot subscription, when you spend $99 or more.",
       "other_details": [],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-31",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -3571,8 +3586,8 @@
       "other_details": [],
       "last_read": "2026-10-18",
       "first_seen": "2026-10-18",
-      "status": "active",
-      "status_since": "2026-10-18"
+      "status": "missing",
+      "status_since": "2026-10-31"
     },
     {
       "id": "chase-freedom/visible-by-verizon",
@@ -3588,7 +3603,7 @@
       "minimum_spend": null,
       "fine_print": "Earn 25% cash back on your Visible by Verizon subscription, including taxes and after any discounts, with a $15 cash back maximum. Please note that this offer is for a subscription purchase. Visible is a wireless carrier offering fully unlimited plans for less. Plans include unlimited talk, text, data and hotspot with monthly and annual plans available. Visible operates on the award-winning Verizon 5G networks and covers 99% of the population. There are no contracts, hidden fees, or taxes - what you see is what you pay! The service is fully online and sign up is easy. Visible, a simpler way to wireless. Offer expires 11/14/2026. Offer valid on first payment only. Must make first recurring payment by 11/14/2026. Offer only valid on purchase made directly with the merchant. Offer valid one time only. Offer valid online only. Offer valid to new customers only. Offer not valid for renewals. Offer not valid on gift card purchase. Offer not valid on purchase made using third-party services or a third-party payment account (e.g., buy now pay later). Offer only valid on U.S. purchase. It is possible that the merchant may split your purchase into multiple transactions. Offer redemption awarded as statement credit on the first qualifying transaction amount. For subscription cost and to cancel subscription, please visit merchant website for details.",
       "other_details": [],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-31",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -3609,8 +3624,8 @@
       "other_details": [],
       "last_read": "2026-10-18",
       "first_seen": "2026-10-18",
-      "status": "active",
-      "status_since": "2026-10-18"
+      "status": "missing",
+      "status_since": "2026-10-31"
     },
     {
       "id": "chase-freedom/lensdirect",
@@ -3618,15 +3633,17 @@
       "merchant": "LensDirect",
       "category": "Health, Fitness & Vision",
       "bonus": "$20 cash back",
-      "expires": "2026-10-31",
-      "expires_text": "Offer expires 10/31/2026",
+      "expires": "2026-11-30",
+      "expires_text": "Offer expires 11/30/2026",
       "activation": "needs_activation",
       "channel": "online",
       "spend_cap": null,
       "minimum_spend": "130",
       "fine_print": "Earn $20 cash back on your LensDirect purchase when you spend $130 or more, including taxes and after any discounts. See clearly with LensDirect.com - your premier destination for vision care! As your ultimate one-stop shop for everything optical, we offer contact lenses, glasses, sunglasses, and our award-winning lens replacement service (your frames, new lenses) - all at unbeatable prices with exceptional service. Now featuring Ray-Ban! Skip the hassle of store visits and shop worry-free with our unbeatable return policy and commitment to personalized care. Experience convenience, savings, and outstanding service with LensDirect.com! Offer expires 10/31/2026. Offer valid one time only. Offer only valid on purchase made directly with the merchant. Offer valid online only. Offer not valid on purchase made using third-party services, delivery services, or a third-party payment account (e.g., buy now pay later). Offer only valid on U.S. purchase. It is possible that the merchant may split your purchase into multiple transactions. Offer redemption awarded as statement credit on the first qualifying transaction amount. Payment must be made on or before 10/31/2026.",
-      "other_details": [],
-      "last_read": "2026-10-18",
+      "other_details": [
+        "Tagged New"
+      ],
+      "last_read": "2026-10-31",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -3637,15 +3654,17 @@
       "merchant": "Airalo",
       "category": "Travel",
       "bonus": "15% cash back",
-      "expires": "2026-10-31",
-      "expires_text": "Offer expires 10/31/2026",
+      "expires": "2026-11-30",
+      "expires_text": "Offer expires 11/30/2026",
       "activation": "needs_activation",
       "channel": "online",
       "spend_cap": null,
       "minimum_spend": "15",
       "fine_print": "Earn 15% cash back on your Airalo purchase when you spend $15 or more, including taxes and after any discounts, with a $25 cash back maximum. Stop paying high roaming fees when traveling abroad. Get an Airalo eSIM and stay connected worldwide for a fraction of the cost. With data-roaming coverage in over 200 countries and regions, and data, text, calling available in select regions, you won't have to worry about connectivity on your trip. Offer expires 10/31/2026. Offer valid one time only. Offer only valid on purchase made directly with the merchant. Offer valid online only. Offer not valid on purchase made using third-party services, delivery services, or a third-party payment account (e.g., buy now pay later). It is possible that the merchant may split your purchase into multiple transactions. Offer redemption awarded as statement credit on the first qualifying transaction amount. Payment must be made on or before 10/31/2026.",
-      "other_details": [],
-      "last_read": "2026-10-18",
+      "other_details": [
+        "Tagged New"
+      ],
+      "last_read": "2026-10-31",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -3656,15 +3675,17 @@
       "merchant": "Arlo",
       "category": "Electronics & Software",
       "bonus": "15% cash back",
-      "expires": "2026-10-31",
-      "expires_text": "Offer expires 10/31/2026",
+      "expires": "2026-11-30",
+      "expires_text": "Offer expires 11/30/2026",
       "activation": "needs_activation",
       "channel": "online",
       "spend_cap": null,
       "minimum_spend": "50",
       "fine_print": "Earn 15% cash back on your Arlo purchase when you spend $50 or more, including taxes and after any discounts, with a $50 cash back maximum. Arlo, the leader in smart home security, brings peace of mind by connecting and protecting what you care about most. Safeguard your home and family with innovative, AI-powered smart security solutions in an award-winning design. Offer can only be applied to hardware purchases made on us.arlo.com and not security plans. Offer expires 10/31/2026. Offer valid one time only. Offer only valid on purchase made directly with the merchant. Offer valid online only. Offer not valid on purchase made using third-party services, delivery services, or a third-party payment account (e.g., buy now pay later). Offer only valid on U.S. purchase. It is possible that the merchant may split your purchase into multiple transactions. Offer redemption awarded as statement credit on the first qualifying transaction amount. Payment must be made on or before 10/31/2026.",
-      "other_details": [],
-      "last_read": "2026-10-18",
+      "other_details": [
+        "Tagged New"
+      ],
+      "last_read": "2026-10-31",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -3675,17 +3696,18 @@
       "merchant": "Amazon Business",
       "category": "Marketplaces & Department Stores",
       "bonus": "10% cash back",
-      "expires": "2026-10-18",
-      "expires_text": null,
+      "expires": "2026-11-22",
+      "expires_text": "Offer expires 11/22/2026",
       "activation": "needs_activation",
       "channel": "none_shown",
       "spend_cap": null,
       "minimum_spend": null,
       "fine_print": "Earn 10% cash back on your Amazon Business purchase or subscription, with a $16.00 cash back maximum.",
       "other_details": [
-        "Tagged Expiring soon"
+        "Tagged Expiring soon",
+        "Tagged New"
       ],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-31",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -3696,15 +3718,17 @@
       "merchant": "NOBULL Footwear, Apparel & Nutrition",
       "category": "Clothing & Jewelry",
       "bonus": "$20 cash back",
-      "expires": "2026-10-31",
-      "expires_text": "Offer expires 10/31/2026",
+      "expires": "2026-11-30",
+      "expires_text": "Offer expires 11/30/2026",
       "activation": "needs_activation",
       "channel": "online",
       "spend_cap": null,
       "minimum_spend": "150",
       "fine_print": "Earn $20 cash back on your NOBULL Footwear, Apparel & Nutrition purchase when you spend $150 or more, including taxes and after any discounts. NOBULL is a brand for training and daily life. Built to support you in your pursuit of physical, mental, and emotional strength. Known for our best-in-class, award-winning footwear. With options across training and lifestyle, NOBULL has options for everyone. Shop training shoes, apparel, and nutrition today. Offer expires 10/31/2026. Offer valid one time only. Offer only valid on purchase made directly with the merchant. Offer valid online only. Offer not valid on purchase made using third-party services, delivery services, or a third-party payment account (e.g., buy now pay later). Offer only valid on U.S. purchase. It is possible that the merchant may split your purchase into multiple transactions. Offer redemption awarded as statement credit on the first qualifying transaction amount. Payment must be made on or before 10/31/2026.",
-      "other_details": [],
-      "last_read": "2026-10-18",
+      "other_details": [
+        "Tagged New"
+      ],
+      "last_read": "2026-10-31",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -3723,7 +3747,7 @@
       "minimum_spend": null,
       "fine_print": "Earn 15% cash back on your QVC purchases, including taxes and after any discounts, with a $50 cash back total. Shop QVC® Offer expires 11/15/2026. Cash back may be earned over multiple purchases until the $50 maximum is reached. Offer only valid on purchases made directly with the merchant. Offer valid online only. Offer not valid on gift-card purchase. Offer not valid on purchases made using third-party services, delivery services, or a third-party payment account (e.g., buy now pay later). Offer only valid on U.S. purchases. It is possible that the merchant may split your purchase into multiple transactions. Offer redemption awarded as statement credit on the first qualifying transaction amount. Payment must be made on or before 11/15/2026.",
       "other_details": [],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-31",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -3744,8 +3768,8 @@
       "other_details": [],
       "last_read": "2026-10-18",
       "first_seen": "2026-10-18",
-      "status": "active",
-      "status_since": "2026-10-18"
+      "status": "missing",
+      "status_since": "2026-10-31"
     },
     {
       "id": "chase-freedom/the-farmer-s-dog",
@@ -3763,8 +3787,8 @@
       "other_details": [],
       "last_read": "2026-10-18",
       "first_seen": "2026-10-18",
-      "status": "active",
-      "status_since": "2026-10-18"
+      "status": "missing",
+      "status_since": "2026-10-31"
     },
     {
       "id": "chase-freedom/warby-parker",
@@ -3780,7 +3804,7 @@
       "minimum_spend": "95",
       "fine_print": "Earn a one-time $20 statement credit when you spend a minimum of $95 in one or more qualifying transactions at Warby Parker, including taxes and after any discounts. Shop prescription glasses (starting at $95!), sunglasses, contacts, and eye exams—all in one easy place. Plus, for every pair sold, a pair of glasses is distributed to someone in need. Offer expires 11/10/2026. Offer valid one time only. Offer only valid on purchases made directly with the merchant. Offer valid in-store or online. Offer not valid on gift-card purchases. Offer not valid on eye exams. Offer not valid on purchases made using third-party services, delivery services, or a third-party payment account (e.g., buy now pay later). Offer only valid on U.S. purchases. It is possible that the merchant may split your purchases into multiple transactions. Offer redemption awarded as statement credit on the first qualifying transaction amount. Offer redemption awarded as a statement credit when your transactions total to $95 or more. Payment must be made on or before 11/10/2026.",
       "other_details": [],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-31",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -3801,8 +3825,8 @@
       "other_details": [],
       "last_read": "2026-10-18",
       "first_seen": "2026-10-18",
-      "status": "active",
-      "status_since": "2026-10-18"
+      "status": "missing",
+      "status_since": "2026-10-31"
     },
     {
       "id": "chase-freedom/trust-will",
@@ -3818,7 +3842,7 @@
       "minimum_spend": "150",
       "fine_print": "Earn $50 cash back on your Trust & Will purchase when you spend $150 or more, including taxes and after any discounts. Trust & Will is a leading digital estate planning platform providing individuals the opportunity to create their estate planning documents with an easy, guided online process. Since 2017, we've helped hundreds of thousands of Trust & Will members leave their legacy with an affordable way to create an estate plan or settle the estate of a loved one. Our platform uses bank-level encryption that protects customer data and complies with the highest security standards, including SOC 2 and HIPAA. Offer expires 11/1/2026. Offer valid one time only. Offer only valid on purchase made directly with the merchant. Offer valid online only. Offer not valid on gift card purchase. Offer not valid on purchase made using third-party services, delivery services, or a third-party payment account (e.g., buy now pay later). It is possible that the merchant may split your purchase into multiple transactions. Offer redemption awarded as statement credit on the first qualifying transaction amount. Payment must be made on or before 11/1/2026.",
       "other_details": [],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-31",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -3829,15 +3853,17 @@
       "merchant": "Terminix",
       "category": "Services & Utilities",
       "bonus": "15% cash back",
-      "expires": "2026-10-31",
-      "expires_text": "Offer expires 10/31/2026",
+      "expires": "2026-11-30",
+      "expires_text": "Offer expires 11/30/2026",
       "activation": "needs_activation",
       "channel": "none_shown",
       "spend_cap": null,
       "minimum_spend": null,
       "fine_print": "Earn 15% cash back on your Terminix purchase, including taxes and after any discounts, with a $25 cash back maximum. Tired of dealing with pests, termites, rodents, or wildlife? Terminix It! With our guaranteed plans, if pests come back, so do we – to give you peace of mind that they are gone and stay gone. We've been helping home and business owners protect their properties for more than 95 years, and our local experts are ready to help you. Offer expires 10/31/2026. Offer valid one time only. Offer only valid on purchase made directly with the merchant. Offer valid in-store or online. Offer not valid on purchase made using third-party services, delivery services, or a third-party payment account (e.g., buy now pay later). Offer only valid on U.S. purchase. It is possible that the merchant may split your purchase into multiple transactions. Offer redemption awarded as statement credit on the first qualifying transaction amount. Payment must be made on or before 10/31/2026.",
-      "other_details": [],
-      "last_read": "2026-10-18",
+      "other_details": [
+        "Tagged New"
+      ],
+      "last_read": "2026-10-31",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -3858,8 +3884,8 @@
       "other_details": [],
       "last_read": "2026-10-18",
       "first_seen": "2026-10-18",
-      "status": "active",
-      "status_since": "2026-10-18"
+      "status": "missing",
+      "status_since": "2026-10-31"
     },
     {
       "id": "chase-freedom/oribe-hair-care",
@@ -3877,8 +3903,8 @@
       "other_details": [],
       "last_read": "2026-10-18",
       "first_seen": "2026-10-18",
-      "status": "active",
-      "status_since": "2026-10-18"
+      "status": "missing",
+      "status_since": "2026-10-31"
     },
     {
       "id": "chase-freedom/chandon",
@@ -3886,8 +3912,8 @@
       "merchant": "Chandon",
       "category": "Groceries & Food Delivery",
       "bonus": "$25 cash back",
-      "expires": "2026-10-31",
-      "expires_text": "Offer expires 10/31/2026",
+      "expires": "2026-11-30",
+      "expires_text": "Offer expires 11/30/2026",
       "activation": "needs_activation",
       "channel": "online",
       "spend_cap": null,
@@ -3896,7 +3922,7 @@
       "other_details": [
         "Tagged New"
       ],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-31",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -3917,7 +3943,7 @@
       "other_details": [
         "Tagged New"
       ],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-31",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -3938,7 +3964,7 @@
       "other_details": [
         "Tagged New"
       ],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-31",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -3949,8 +3975,8 @@
       "merchant": "Rue La La",
       "category": "Marketplaces & Department Stores",
       "bonus": "10% cash back",
-      "expires": "2026-10-31",
-      "expires_text": "Offer expires 10/31/2026",
+      "expires": "2026-11-30",
+      "expires_text": "Offer expires 11/30/2026",
       "activation": "needs_activation",
       "channel": "online",
       "spend_cap": null,
@@ -3959,7 +3985,7 @@
       "other_details": [
         "Tagged New"
       ],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-31",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -3983,8 +4009,8 @@
       ],
       "last_read": "2026-10-18",
       "first_seen": "2026-10-18",
-      "status": "active",
-      "status_since": "2026-10-18"
+      "status": "missing",
+      "status_since": "2026-10-31"
     },
     {
       "id": "chase-freedom/wild-alaskan-company",
@@ -4002,7 +4028,7 @@
       "other_details": [
         "Tagged New"
       ],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-31",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -4025,8 +4051,8 @@
       ],
       "last_read": "2026-10-18",
       "first_seen": "2026-10-18",
-      "status": "active",
-      "status_since": "2026-10-18"
+      "status": "missing",
+      "status_since": "2026-10-31"
     },
     {
       "id": "chase-freedom/gilt",
@@ -4034,8 +4060,8 @@
       "merchant": "Gilt",
       "category": "Marketplaces & Department Stores",
       "bonus": "10% cash back",
-      "expires": "2026-10-31",
-      "expires_text": "Offer expires 10/31/2026",
+      "expires": "2026-11-30",
+      "expires_text": "Offer expires 11/30/2026",
       "activation": "needs_activation",
       "channel": "online",
       "spend_cap": null,
@@ -4044,7 +4070,7 @@
       "other_details": [
         "Tagged New"
       ],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-31",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -4055,8 +4081,8 @@
       "merchant": "Musely",
       "category": "Beauty & Personal Care",
       "bonus": "$50 cash back",
-      "expires": "2026-10-24",
-      "expires_text": "Offer expires 10/24/2026",
+      "expires": "2026-11-24",
+      "expires_text": "Offer expires 11/24/2026",
       "activation": "needs_activation",
       "channel": "online",
       "spend_cap": null,
@@ -4065,7 +4091,7 @@
       "other_details": [
         "Tagged New"
       ],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-31",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -4086,7 +4112,7 @@
       "other_details": [
         "Tagged New"
       ],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-31",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -4107,7 +4133,7 @@
       "other_details": [
         "Tagged New"
       ],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-31",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -4118,8 +4144,8 @@
       "merchant": "Cozy Earth",
       "category": "Home & Garden",
       "bonus": "15% cash back",
-      "expires": "2026-10-31",
-      "expires_text": "Offer expires 10/31/2026",
+      "expires": "2026-11-30",
+      "expires_text": "Offer expires 11/30/2026",
       "activation": "needs_activation",
       "channel": "none_shown",
       "spend_cap": null,
@@ -4128,7 +4154,7 @@
       "other_details": [
         "Tagged New"
       ],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-31",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -4139,8 +4165,8 @@
       "merchant": "Coterie - Diapers, Wipes & Baby Care",
       "category": "Pets & Baby",
       "bonus": "$20 cash back",
-      "expires": "2026-10-31",
-      "expires_text": "Offer expires 10/31/2026",
+      "expires": "2026-11-30",
+      "expires_text": "Offer expires 11/30/2026",
       "activation": "needs_activation",
       "channel": "online",
       "spend_cap": null,
@@ -4149,7 +4175,7 @@
       "other_details": [
         "Tagged New"
       ],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-31",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -4170,7 +4196,7 @@
       "other_details": [
         "Tagged New"
       ],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-31",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -4191,7 +4217,7 @@
       "other_details": [
         "Tagged New"
       ],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-31",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -4214,8 +4240,8 @@
       ],
       "last_read": "2026-10-18",
       "first_seen": "2026-10-18",
-      "status": "active",
-      "status_since": "2026-10-18"
+      "status": "missing",
+      "status_since": "2026-10-31"
     },
     {
       "id": "chase-freedom/regus",
@@ -4223,8 +4249,8 @@
       "merchant": "Regus",
       "category": "Services & Utilities",
       "bonus": "10% cash back",
-      "expires": "2026-10-31",
-      "expires_text": "Offer expires 10/31/2026",
+      "expires": "2026-11-30",
+      "expires_text": "Offer expires 11/30/2026",
       "activation": "needs_activation",
       "channel": "online",
       "spend_cap": null,
@@ -4233,7 +4259,7 @@
       "other_details": [
         "Tagged New"
       ],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-31",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -4244,8 +4270,8 @@
       "merchant": "Western Exterminator Company",
       "category": "Services & Utilities",
       "bonus": "$15 cash back",
-      "expires": "2026-10-31",
-      "expires_text": "Offer expires 10/31/2026",
+      "expires": "2026-11-30",
+      "expires_text": "Offer expires 11/30/2026",
       "activation": "needs_activation",
       "channel": "online",
       "spend_cap": null,
@@ -4254,7 +4280,7 @@
       "other_details": [
         "Tagged New"
       ],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-31",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -4277,8 +4303,8 @@
       ],
       "last_read": "2026-10-18",
       "first_seen": "2026-10-18",
-      "status": "active",
-      "status_since": "2026-10-18"
+      "status": "missing",
+      "status_since": "2026-10-31"
     },
     {
       "id": "chase-freedom/sleep-number",
@@ -4294,7 +4320,7 @@
       "minimum_spend": null,
       "fine_print": "Earn 15% back on your Sleep Number purchases, including taxes and after any discounts, with a $250 cash back total. Life changes, your body changes, and your sleep needs change, too. Sleep Number mattresses provide effortless comfort that can adapt to what your body needs right now. While ordinary mattresses become reflections of what you once needed, Sleep Number intelligently evolves with what you need in today’s moment. Offer expires 11/15/2026. Cash back may be earned over multiple purchases until the $250 maximum is reached. Offer only valid on purchases made directly with the merchant. Offer valid in-store or online. Offer not valid on gift card purchases. Offer not valid on purchases made using third-party services, delivery services, or a third-party payment account (e.g., buy now pay later). Offer only valid on U.S. purchases. It is possible that the merchant may split your purchase into multiple transactions. Offer redemption awarded as statement credit on the first qualifying transaction amount. Payment must be made on or before 11/15/2026.",
       "other_details": [],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-31",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -4306,14 +4332,14 @@
       "category": "Services & Utilities",
       "bonus": "15% cash back",
       "expires": "2026-11-09",
-      "expires_text": null,
+      "expires_text": "Offer expires 11/9/2026",
       "activation": "needs_activation",
       "channel": "none_shown",
       "spend_cap": null,
       "minimum_spend": "60",
       "fine_print": "Earn 15% cash back on your Optimum purchase, with a $27.00 cash back maximum, when you spend $60 or more.",
       "other_details": [],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-31",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -4324,15 +4350,17 @@
       "merchant": "Misfits Market",
       "category": "Groceries & Food Delivery",
       "bonus": "10% cash back",
-      "expires": "2026-10-31",
-      "expires_text": "Offer expires 10/31/2026",
+      "expires": "2026-11-30",
+      "expires_text": "Offer expires 11/30/2026",
       "activation": "needs_activation",
       "channel": "online",
       "spend_cap": null,
       "minimum_spend": null,
       "fine_print": "Earn 10% cash back on your Misfits Market subscription, including taxes and after any discounts, with a $20 cash back maximum. Please note that this is for a subscription purchase. Misfits Market is an online grocery store that reduces food waste and makes shopping for high-quality groceries more convenient, affordable, and sustainable. We work with trusted farmers and emerging producers who are building a better, less wasteful food system, which allows us to offer (and you to discover) a curated assortment of seasonal produce, high-quality meat and dairy, best-in-class pantry staples, and delicious limited-time snacks and refreshments. Offer expires 10/31/2026. Offer valid one time only. Must make first recurring payment by 10/31/2026. Offer valid on first payment only. Offer valid for new customers only. Offer not valid on subscription renewals. Offer only valid on purchases made directly with the merchant. Offer not valid on purchase made using third-party services, delivery services, or a third-party payment account (e.g., buy now pay later). Offer valid online only at misfitsmarket.com. Offer only valid on U.S. purchases. It is possible that the merchant may split your purchase into multiple transactions. Offer redemption awarded as statement credit on the first qualifying transaction amount. For subscription cost and to cancel subscription, please visit merchant website for details.",
-      "other_details": [],
-      "last_read": "2026-10-18",
+      "other_details": [
+        "Tagged New"
+      ],
+      "last_read": "2026-10-31",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -4344,7 +4372,7 @@
       "category": "Dining",
       "bonus": "10% cash back",
       "expires": "2026-11-16",
-      "expires_text": null,
+      "expires_text": "Offer expires 11/16/2026",
       "activation": "needs_activation",
       "channel": "online",
       "spend_cap": null,
@@ -4353,7 +4381,7 @@
       "other_details": [
         "Logo shows 'Online Only'"
       ],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-31",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -4372,7 +4400,7 @@
       "minimum_spend": "1500",
       "fine_print": "Earn a one- time $50 statement credit when you spend a minimum of $1500 in one or more qualifying transactions at Johnson Fitness & Wellness, including taxes and after any discounts. Johnson Fitness & Wellness helps you reach your fitness goals with the best brands in treadmills, bikes, home gyms, weights, and even massage chairs for recovery. With 100+ stores and online shopping, we offer expert support, delivery & financing! Offer expires 11/15/2026. Offer valid one time only. Offer only valid on purchase made directly with the merchant. Offer valid in-store or online. Offer not valid on gift card purchase. Offer not valid on purchases made using third-party services, delivery services, or a third-party payment account (e.g., buy now pay later). Offer only valid on U.S. purchases. It is possible that the merchant may split your purchase into multiple transactions. Offer redemption awarded as a statement credit when your transactions total to $1500 or more. Payment must be made on or before 11/15/2026.",
       "other_details": [],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-31",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -4383,15 +4411,15 @@
       "merchant": "PAKA Apparel",
       "category": "Clothing & Jewelry",
       "bonus": "15% cash back",
-      "expires": "2026-10-31",
-      "expires_text": null,
+      "expires": "2026-11-04",
+      "expires_text": "Offer expires 11/4/2026",
       "activation": "needs_activation",
       "channel": "online",
       "spend_cap": null,
       "minimum_spend": null,
       "fine_print": "Earn 15% cash back on your PAKA Apparel purchase, with a $45.00 cash back maximum. Offer valid online only.",
       "other_details": [],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-31",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -4412,7 +4440,7 @@
       "other_details": [
         "Tagged New"
       ],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-31",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -4433,7 +4461,7 @@
       "other_details": [
         "Tagged New"
       ],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-31",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -4454,7 +4482,7 @@
       "other_details": [
         "Tagged New"
       ],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-31",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -4473,7 +4501,7 @@
       "minimum_spend": "500",
       "fine_print": "Earn 8% cash back on your HP purchase when you spend $500 or more, including taxes and after any discounts, with a $50 cash back maximum. HP Inc. is a global technology company that innovates personal systems, printers, and related services. With a focus on performance, security, and sustainability, HP empowers individuals and businesses to create, connect, and work more efficiently worldwide. Offer expires 11/1/2026. Offer valid one time only. Offer only valid on purchase made directly with the merchant. Offer valid online only. Offer not valid on purchase made using third-party services, delivery services, or a third-party payment account (e.g., buy now pay later). Offer only valid on U.S. purchase. It is possible that the merchant may split your purchase into multiple transactions. Offer redemption awarded as statement credit on the first qualifying transaction amount. Payment must be made on or before 11/1/2026.",
       "other_details": [],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-31",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -4484,15 +4512,17 @@
       "merchant": "Chase Travel",
       "category": "Travel",
       "bonus": "$100 back",
-      "expires": "2026-10-31",
+      "expires": "2026-12-31",
       "expires_text": null,
       "activation": "needs_activation",
       "channel": "online",
       "spend_cap": null,
       "minimum_spend": "600",
       "fine_print": "Get $100 back when you spend $600+ through Chase Travel in a single transaction. Go further and earn more with Chase Travel. Effortlessly plan and book your entire trip – including flights, hotels, rental cars, cruises, activities, and more – all in one place. Plus, you’ll continue to earn on all purchases made with your eligible card. Qualifying transaction must be made during the offer period of 07/01/2026 to 10/31/2026. A minimum spend of $600 must be met in a single transaction, including taxes and after discounts, on your eligible card; multiple transactions totaling $600 do not qualify. Offer valid one time only. Offer only valid on purchase made directly with Chase Travel. Offer not valid on purchase made using third-party services, delivery services, gift cards, or third-party payment accounts (e.g. buy now pay later). If purchase is made using a combination of cash and Ultimate Rewards points, at least $600 of the purchase must be transacted with an eligible card to qualify. Travel can occur beyond offer expiration, so long as qualifying transaction is made prior to 10/31/2026 11:59PM PST. Abuse of offers may result in exclusion from future offers.",
-      "other_details": [],
-      "last_read": "2026-10-18",
+      "other_details": [
+        "Tagged New"
+      ],
+      "last_read": "2026-10-31",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -4500,7 +4530,7 @@
     {
       "id": "chase-freedom/fubo-live-tv-sports",
       "card": "Chase Freedom",
-      "merchant": "Fubo - Live TV & Sports",
+      "merchant": "Fubo: Live TV + Sports",
       "category": "Streaming & Entertainment",
       "bonus": "40% cash back",
       "expires": "2026-11-30",
@@ -4511,7 +4541,7 @@
       "minimum_spend": "9.99",
       "fine_print": "Earn 40% cash back on your first two payments of your fuboTV subscription when you spend $9.99 or more, including taxes and after any discounts, with a $30 cash back maximum. Limit of $30 per statement credit (up to $60 total cashback). Please note that this is for a subscription purchase. Stream live TV with Fubo. No cable, no contract. Catch the biggest games, top shows, and breaking news anywhere. Watch ABC, CBS, FOX, ESPN, NFL Network, and more on all your devices. Plus, get local stations and regional sports networks for in-market MLB, NBA, and NHL action. Unlimited Cloud DVR included, so you never miss a play. Offer expires 11/30/2026. In order to receive both statement credits, both payments must be made by 12/05/2026. Offer valid on first two payments only. Offer only valid on purchases made directly with the merchant. Offer not valid on gift card purchases. Offer not valid on purchases made using third-party services, delivery services, or a third-party payment account (e.g., buy now pay later). Offer valid online only at www.fubo.tv. Offer only valid on U.S. purchases. It is possible that the merchant may split your purchase into multiple transactions. Offer redemption awarded as statement credit on the first qualifying transaction amount. Recurring subscription payments begin after trial. For subscription cost and to cancel subscription, please visit merchant website for details.",
       "other_details": [],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-31",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -4529,10 +4559,8 @@
       "spend_cap": null,
       "minimum_spend": "9.99",
       "fine_print": "Earn 15% cash back on your Disney+ subscription when you spend $9.99 or more, including taxes and after any discounts, with a $28.50 cash back maximum. Please note that this is for a subscription purchase. Unlock the best in streaming with a bundle. Discover the latest stories and hit Originals from the creators at Disney, Pixar, Marvel, Star Wars, National Geographic, FX, ABC, Searchlight, and more with Disney+ and Hulu. Add ESPN to access all of ESPN's networks and services, top sports, and thousands of live events. Choose the plan that's right for you, and find something for everyone to stream. Offer expires 11/30/2026. Offer valid one time only. Must make first recurring payment by 11/30/2026. Offer valid on first payment only. Offer only valid on purchase made directly with the merchant. Offer not valid on gift card purchase. Offer not valid on purchase made using third-party services, delivery services, or a third-party payment account (e.g., buy now pay later). Offer valid online only at www.disneyplus.com. Offer only valid on U.S. purchase. It is possible that the merchant may split your purchase into multiple transactions. Offer redemption awarded as statement credit on the first qualifying transaction amount. For subscription cost and to cancel subscription, please visit merchant website for details.",
-      "other_details": [
-        "Tagged New"
-      ],
-      "last_read": "2026-10-18",
+      "other_details": [],
+      "last_read": "2026-10-31",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -4551,7 +4579,7 @@
       "minimum_spend": "20",
       "fine_print": "Earn 5% cash back on your eBay purchase when you spend $20 or more, including taxes and after any discounts, with a $2 cash back maximum. eBay is a global marketplace that connects millions of buyers and sellers around the world. From everyday essentials to rare and collectible finds, eBay offers a wide selection across new and pre-loved items. With trusted tools, competitive pricing, and flexible ways to shop, eBay makes discovering what you love easy. Offer expires 11/15/2026. Offer valid on up to three redemptions. Offer only valid on purchase made directly with the merchant. Offer valid online only. Offer not valid on eBay seller transactions or fees. Offer not valid on purchase made using third-party services, delivery services, or a third-party payment account (e.g., buy now pay later). Offer only valid on U.S. purchase. It is possible that the merchant may split your purchase into multiple transactions. Offer redemption awarded as statement credit on the first qualifying transaction amount. Payment must be made on or before 11/15/2026.",
       "other_details": [],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-31",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -4563,14 +4591,14 @@
       "category": "Auto & Gas",
       "bonus": "2% cash back",
       "expires": "2026-11-14",
-      "expires_text": null,
+      "expires_text": "Offer expires 11/14/2026",
       "activation": "needs_activation",
       "channel": "pay_at_pump",
       "spend_cap": null,
       "minimum_spend": null,
       "fine_print": "Earn 2% cash back on your Chevron purchase, with a $2.00 cash back maximum. Offer only valid on purchases made at the pump.",
       "other_details": [],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-31",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -4589,7 +4617,7 @@
       "minimum_spend": null,
       "fine_print": "Earn 40% cash back on your Sam's Club membership, including taxes and after any discounts, with a $20 cash back maximum. Enjoy this special membership offer. Sam's Club members get access to everyday low prices on your go-tos, time-saving perks like Scan & Go™ checkout, members-only gas prices at select locations and an additional household membership. Join today. Offer expires 11/27/2026. Offer valid for new customers only. Offer valid one time only. Offer only valid on purchase made directly with the merchant. Offer valid online only. Offer not valid on purchase made using third-party services, delivery services, or a third-party payment account (e.g., buy now pay later). Offer only valid on U.S. purchase. It is possible that the merchant may split your purchase into multiple transactions. Offer redemption awarded as statement credit on the first qualifying transaction amount. Payment must be made on or before 11/27/2026.",
       "other_details": [],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-31",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -4600,15 +4628,17 @@
       "merchant": "El Pollo Loco",
       "category": "Dining",
       "bonus": "10% cash back",
-      "expires": "2026-10-31",
-      "expires_text": null,
+      "expires": "2026-11-30",
+      "expires_text": "Offer expires 11/30/2026",
       "activation": "needs_activation",
       "channel": "none_shown",
       "spend_cap": null,
       "minimum_spend": null,
       "fine_print": "Earn 10% cash back on your El Pollo Loco purchase, with a $3.00 cash back maximum.",
-      "other_details": [],
-      "last_read": "2026-10-18",
+      "other_details": [
+        "Tagged New"
+      ],
+      "last_read": "2026-10-31",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -4619,15 +4649,17 @@
       "merchant": "Little Caesars",
       "category": "Dining",
       "bonus": "5% cash back",
-      "expires": "2026-10-31",
-      "expires_text": "Offer expires 10/31/2026",
+      "expires": "2026-11-30",
+      "expires_text": "Offer expires 11/30/2026",
       "activation": "needs_activation",
       "channel": "none_shown",
       "spend_cap": null,
       "minimum_spend": null,
       "fine_print": "Earn 5% cash back on your Little Caesars purchases, including taxes and after any discounts, with a $10 cash back total. Little Caesars® is a family-owned pizza company that has been serving quality and value since 1959. From Hot-N-Ready® pizzas and Crazy Bread® to Caesars Wings® and a whole lot more, Little Caesars believes everyone has the right to pizza night. Ready to dig in? Stop by your local Little Caesars today! Find a store near you or order online! Offer expires 10/31/2026. Cash back may be earned over multiple purchases until the $10 maximum is reached. Offer only valid on purchases made directly with the merchant. Offer valid in-store or online. Offer not valid on gift card purchase. Offer not valid on purchases made using third-party services, delivery services, or a third-party payment account (e.g., buy now pay later). Offer only valid on U.S. purchases. It is possible that the merchant may split your purchase into multiple transactions. Offer redemption awarded as statement credit on the first qualifying transaction amount. Payment must be made on or before 10/31/2026.",
-      "other_details": [],
-      "last_read": "2026-10-18",
+      "other_details": [
+        "Tagged New"
+      ],
+      "last_read": "2026-10-31",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -4638,15 +4670,17 @@
       "merchant": "YouTube TV",
       "category": "Streaming & Entertainment",
       "bonus": "$20 cash back",
-      "expires": "2026-10-29",
-      "expires_text": "Offer expires 10/29/2026",
+      "expires": "2026-11-28",
+      "expires_text": "Offer expires 11/28/2026",
       "activation": "needs_activation",
       "channel": "online",
       "spend_cap": null,
       "minimum_spend": "44.99",
       "fine_print": "Earn $20 cash back on your YouTube TV subscription when you spend $44.99 or more, including taxes and after any discounts. This offer is for a recurring subscription purchase, cancel anytime. YouTube TV has live TV channels, unlimited DVR space included, personalized recommendations, and comes with 6 accounts per household, so everyone can watch and record what they want. Enjoy live sports, breaking news, and all the must-see shows and movies, including local channels, popular cable networks, and premium options. Plus, it's super easy to set up – no cable box or complicated installations. You can also cancel whenever you want, without any fees or long-term contracts. Offer expires 10/29/2026. Must make first recurring payment by 10/31/2026. Offer valid online only at tv.youtube.com. Offer only valid on purchase made directly with the merchant. Only new Youtube TV subscribers are eligible for this offer. Offer not valid on purchase made using third-party services or a third-party payment account (e.g., buy now pay later). Offer valid on first payment only. Offer only valid on U.S. purchase. Offer valid one time only. It is possible that the merchant may split your purchase into multiple transactions. Offer redemption awarded as statement credit on the first qualifying transaction amount. Recurring subscription payments begin after trial. For subscription cost and to cancel subscription, please visit merchant website for details.",
-      "other_details": [],
-      "last_read": "2026-10-18",
+      "other_details": [
+        "Tagged New"
+      ],
+      "last_read": "2026-10-31",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -4667,8 +4701,8 @@
       "other_details": [],
       "last_read": "2026-10-18",
       "first_seen": "2026-10-18",
-      "status": "active",
-      "status_since": "2026-10-18"
+      "status": "missing",
+      "status_since": "2026-10-31"
     },
     {
       "id": "chase-freedom/paramount",
@@ -4684,7 +4718,7 @@
       "minimum_spend": "4",
       "fine_print": "Earn $4 cash back on your Paramount+ subscription when you spend $4 or more, including taxes and after any discounts. Please note that this is for a subscription purchase. With a Paramount+ subscription, catch live sports like UFC and UEFA Champions League along with over 40,000 episodes and movies. Stream hits from CBS, BET, Comedy Central, MTV, Nickelodeon and more, as well as exclusive Paramount+ Originals like The Madison and Dutton Ranch. With the Premium plan, watch ad-free (except for live TV), plus all of SHOWTIME®, including hit series like Dexter®: Resurrection Offer expires 11/11/2026. Offer valid one time only. Must make first recurring payment by 11/11/2026. Offer valid on first payment only. Offer only valid on purchase made directly with the merchant. Offer not valid on gift card purchase. Offer not valid on purchase made using third-party services, delivery services, or a third-party payment account (e.g., buy now pay later). Offer valid online only at paramountplus.com. Offer only valid on U.S. purchase. It is possible that the merchant may split your purchase into multiple transactions. Offer redemption awarded as statement credit on the first qualifying transaction amount. For subscription cost and to cancel subscription, please visit merchant website for details.",
       "other_details": [],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-31",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -4703,7 +4737,7 @@
       "minimum_spend": null,
       "fine_print": "Earn 15% cash back on your At Home purchases, including taxes and after any discounts, up to $50 cash back total. Shop Halloween favorites at scary-good prices! Offer expires 11/15/2026. Offer only valid on purchases made directly with the merchant. Offer valid in-store or online. Offer not valid on purchases made using third-party services, delivery services, or a third-party payment account (e.g., buy now pay later). Offer only valid on U.S. purchases. It is possible that the merchant may split your purchase into multiple transactions. Offer redemption awarded as statement credit on the first qualifying transaction amount. Payment must be made on or before 11/15/2026.",
       "other_details": [],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-31",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -4715,7 +4749,7 @@
       "category": "Streaming & Entertainment",
       "bonus": "50% cash back",
       "expires": "2026-12-31",
-      "expires_text": "Offer expires 12/31/2026 (last day to start subscription under this offer)",
+      "expires_text": null,
       "activation": "needs_activation",
       "channel": "online",
       "spend_cap": null,
@@ -4726,7 +4760,7 @@
         "Headline: All Play, No Pause with Premium",
         "Also shown under All offers on the main page"
       ],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-31",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -4738,14 +4772,14 @@
       "category": "Auto & Gas",
       "bonus": "20% cash back",
       "expires": "2026-11-20",
-      "expires_text": null,
+      "expires_text": "Offer expires 11/20/2026",
       "activation": "needs_activation",
       "channel": "in_store",
       "spend_cap": null,
       "minimum_spend": null,
       "fine_print": "Earn 20% back when you charge your EV at Mercedes-Benz High-Power Charging, with a $20.00 cash back maximum.",
       "other_details": [],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-31",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -4764,7 +4798,7 @@
       "minimum_spend": "12.99",
       "fine_print": "Earn 15% cash back on your ESPN subscription when you spend $12.99 or more, including taxes and after any discounts, with a $15 cash back maximum. Please note that this is for a subscription purchase. ESPN offers its full suite of networks and services directly to fans on the ESPN App, providing more choice, flexibility, and access to all of ESPN, including more than 47,000 live events per year, on-demand replays, industry-leading studio shows and original programming, and more. Offer expires 11/30/2026. Offer valid one time only. Must make first recurring payment by 11/30/2026. Offer valid on first payment only. Offer only valid on purchase made directly with the merchant. Offer not valid on gift card purchase. Offer not valid on purchase made using third-party services, delivery services, or a third-party payment account (e.g., buy now pay later). Offer valid online only at espn.com. Offer only valid on U.S. purchase. It is possible that the merchant may split your purchase into multiple transactions. Offer redemption awarded as statement credit on the first qualifying transaction amount. For subscription cost and to cancel subscription, please visit merchant website for details.",
       "other_details": [],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-31",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -4783,7 +4817,7 @@
       "minimum_spend": null,
       "fine_print": "Earn 15% cash back on your MyEyeDr. purchase, including taxes and after any discounts, with a $50 cash back maximum. For 25 years, MyEyeDr. has redefined modern vision care by bringing together expert eye health, trusted local optometrists, and eyewear for every style. With more than 1,600 optometrists across the country, we’re one of the nation’s leading vision care providers, because vision is everything. As the year comes to a close, make the most of your remaining vision benefits and FSA funds. Many benefits may expire at year-end, so don’t let them go unused. Put them toward an eye exam, prescription glasses, sunglasses, contact lenses, and more. Offer expires 11/23/2026. Offer valid one time only. Offer only valid on purchase made directly with the merchant. Offer valid in-store only. Offer not valid on gift-card purchase, Offer not valid on purchase made using third-party services, delivery services, or a third-party payment account (e.g., buy now pay later). Offer only valid on U.S. purchase. It is possible that the merchant may split your purchase into multiple transactions. Offer redemption awarded as statement credit on the first qualifying transaction amount. Payment must be made on or before 11/23/2026.",
       "other_details": [],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-31",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -4802,7 +4836,7 @@
       "minimum_spend": "80",
       "fine_print": "Earn a one-time $40 statement credit when you spend a minimum of $80 in one or more qualifying transactions at Wine Access, including taxes and after any discounts. Wine Access is a premium online wine retailer built on expert curation. Our sommeliers seek out rare, allocated, and critically acclaimed bottles from celebrated producers around the world. Every wine arrives with tasting notes and the story behind it, making each bottle easy to understand and enjoy. Build your own case, shop with confidence through our satisfaction guarantee, and discover wines you won't find anywhere else. Offer expires 2/15/2027. Offer valid one time only. Offer only valid on purchases made directly with the merchant. Offer valid online only. Offer not valid on gift card purchases. Offer not valid on purchases made using third-party services, delivery services, or a third-party payment account (e.g., buy now pay later). Offer only valid on U.S. purchases. It is possible that the merchant may split your purchase into multiple transactions. Offer redemption awarded as a statement credit when your transactions total to $80 or more. Payment must be made on or before 2/15/2027.",
       "other_details": [],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-31",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -4823,8 +4857,8 @@
       "other_details": [],
       "last_read": "2026-10-18",
       "first_seen": "2026-10-18",
-      "status": "active",
-      "status_since": "2026-10-18"
+      "status": "missing",
+      "status_since": "2026-10-31"
     },
     {
       "id": "chase-freedom/meta-store",
@@ -4840,7 +4874,7 @@
       "minimum_spend": "170",
       "fine_print": "Earn a one- time $35 statement credit when you spend a minimum of $170 in one or more qualifying transactions at Meta Store, including taxes and after any discounts. From AI Glasses to VR Gaming, discover what Meta Products can do. Experience the next generation of Meta’s AI glasses: Ray-Ban Meta, Oakley Meta, and Meta Ray-Ban Display—blending iconic style with advanced AI technology. Then, dive into immersive virtual worlds with Meta Quest, Meta’s VR headset for gaming, entertainment, and more. Step into new realities and elevate your perspective with Meta. Offer expires 11/30/2026. Offer valid one time only. Offer only valid on purchases made directly with the merchant. Offer valid in-store or online. Offer not valid on gift card purchase. Offer not valid on purchases made using third-party services, delivery services, or a third-party payment account (e.g., buy now pay later). Offer only valid on U.S. purchases. It is possible that the merchant may split your purchase into multiple transactions. Offer redemption awarded as a statement credit when your transactions total to $170 or more. Payment must be made on or before 11/30/2026.",
       "other_details": [],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-31",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -4859,7 +4893,7 @@
       "minimum_spend": null,
       "fine_print": "Earn 10% cash back on your TaylorMade Golf purchase, including taxes and after any discounts, with a $50 cash back maximum. TaylorMade has built its reputation by continually rethinking how golf equipment can perform. From clubs and balls to accessories and technology, TaylorMade combines advanced engineering with insights from players at every level to create equipment that helps golfers get more from their game. Offer expires 11/15/2026. Offer valid one time only. Offer only valid on purchase made directly with the merchant. Offer valid in-store or online. Offer not valid on gift card purchase. Offer not valid on purchase made using third-party services, delivery services, or a third-party payment account (e.g., buy now pay later). Offer only valid on U.S. purchase. It is possible that the merchant may split your purchase into multiple transactions. Offer redemption awarded as statement credit on the first qualifying transaction amount. Payment must be made on or before 11/15/2026.",
       "other_details": [],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-31",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -4870,15 +4904,17 @@
       "merchant": "Calvin Klein",
       "category": "Clothing & Jewelry",
       "bonus": "15% cash back",
-      "expires": "2026-10-31",
-      "expires_text": "Offer expires 10/31/26",
+      "expires": "2026-11-30",
+      "expires_text": null,
       "activation": "needs_activation",
       "channel": "none_shown",
       "spend_cap": null,
       "minimum_spend": "75",
       "fine_print": "Earn 15% cash back on your Calvin Klein purchase when you spend $75 or more, including taxes and after any discounts, with a $15 cash back maximum. Calvin Klein is one of the world’s leading global fashion brands with a history of bold individuality that informs everything we do. Founded in New York in 1968, the brand’s minimalist design and confident sensuality drives our approach to creating a product and lifestyle that offers limitless self-expression. Offer expires 10/31/26. Offer valid one time only. Offer only valid on purchase made directly with the merchant. Offer valid in-store and online. Offer not valid on purchase made using third-party services, delivery services, or a third-party payment account (e.g., buy now pay later). Offer only valid on U.S. purchase. It is possible that the merchant may split your purchase into multiple transactions. Offer redemption awarded as statement credit on the first qualifying transaction amount. Payment must be made on or before 10/31/26.",
-      "other_details": [],
-      "last_read": "2026-10-18",
+      "other_details": [
+        "Tagged New"
+      ],
+      "last_read": "2026-10-31",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -4889,15 +4925,17 @@
       "merchant": "Cole Haan",
       "category": "Clothing & Jewelry",
       "bonus": "$20 cash back",
-      "expires": "2026-10-31",
-      "expires_text": "Offer expires 10/31/2026",
+      "expires": "2026-11-30",
+      "expires_text": "Offer expires 11/30/2026",
       "activation": "needs_activation",
       "channel": "none_shown",
       "spend_cap": null,
       "minimum_spend": "130",
       "fine_print": "Earn a one-time $20 statement credit when you spend a minimum of $130 in one or more qualifying transactions at Cole Haan, including taxes and after any discounts. Shop Cole Haan’s Fall Arrivals. New fall styles made for wherever the day takes you. Shop all-new pairs ready for every occasion.irs. Offer expires 10/31/2026. Offer valid one time only. Offer only valid on purchases made directly with the merchant. Offer valid in-store or online. Offer is not applicable at outlet locations. Offer not valid on gift-card purchases. Offer not valid on purchases made using third-party services, delivery services, or a third-party payment account (e.g., buy now pay later). Offer only valid on U.S. purchases. It is possible that the merchant may split your purchases into multiple transactions. Offer redemption awarded as statement credit on the first qualifying transaction amount. Offer redemption awarded as a statement credit when your transactions total to $130 or more. Payment must be made on or before 10/31/2026.",
-      "other_details": [],
-      "last_read": "2026-10-18",
+      "other_details": [
+        "Tagged New"
+      ],
+      "last_read": "2026-10-31",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -4908,15 +4946,17 @@
       "merchant": "Event Tickets Center",
       "category": "Streaming & Entertainment",
       "bonus": "15% cash back",
-      "expires": "2026-10-31",
-      "expires_text": "Offer expires 10/31/2026",
+      "expires": "2026-11-30",
+      "expires_text": "Offer expires 11/30/2026",
       "activation": "needs_activation",
       "channel": "online",
       "spend_cap": null,
       "minimum_spend": null,
       "fine_print": "Earn 15% cash back on your Event Tickets Center purchase, including taxes and after any discounts, with a $50 cash back maximum. Get tickets to unforgettable live entertainment and save! From sold-out concerts and thrilling sports to Broadway shows and comedy events. With secure checkout, transparent pricing, and access to premium seats and VIP packages, Event Tickets Center makes it easy to get closer to the action. Offer expires 10/31/2026. Offer valid one time only. Offer only valid on purchase made directly with the merchant. Offer valid online only. Offer not valid on purchase made using third-party services, delivery services, or a third-party payment account (e.g., buy now pay later). Offer only valid on U.S. purchase. It is possible that the merchant may split your purchase into multiple transactions. Offer redemption awarded as statement credit on the first qualifying transaction amount. Payment must be made on or before 10/31/2026.",
-      "other_details": [],
-      "last_read": "2026-10-18",
+      "other_details": [
+        "Tagged New"
+      ],
+      "last_read": "2026-10-31",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -4927,15 +4967,17 @@
       "merchant": "Viator",
       "category": "Travel",
       "bonus": "8% cash back",
-      "expires": "2026-10-31",
-      "expires_text": "Offer expires 10/31/2026",
+      "expires": "2026-11-30",
+      "expires_text": "Offer expires 11/30/2026",
       "activation": "needs_activation",
       "channel": "online",
       "spend_cap": null,
       "minimum_spend": null,
       "fine_print": "Earn 8% cash back on your first two payments at Viator or Trip Advisor Experiences, including taxes and after any discounts, up to $10 cash back total. From snorkeling tours to cooking classes and everything in between, explore over 300,000 tours and activities for every kind of traveler. And with millions of traveler reviews, flexible payment options, and free cancellation up to 24 hours in advance. Offer expires 10/31/2026. Offer valid on first two payments only. Offer only valid on purchases made directly with the merchant. Offer valid online only at viator.com and/or tripadvisor.com/Attractions Offer not valid on gift card purchases. Offer not valid on purchases made using third-party services, delivery services, or a third-party payment account (e.g., buy now pay later). It is possible that the merchant may split your purchase into multiple transactions. Offer redemption awarded as statement credit on the first qualifying transaction amount. Payment must be made on or before 10/31/2026.",
-      "other_details": [],
-      "last_read": "2026-10-18",
+      "other_details": [
+        "Tagged New"
+      ],
+      "last_read": "2026-10-31",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -4954,7 +4996,7 @@
       "minimum_spend": "150",
       "fine_print": "Earn $20 cash back on your Quest purchase when you spend $150 or more, including taxes and after any discounts. Whether you want to check on a symptom or keep up with routine screenings, or are curious about a specific health area, Quest offers lab tests you can purchase online across categories including heart health, hormones, autoimmune, STDs, and more. It’s easy to take charge of your wellness—buy a test at questhealth.com, schedule your appointment, and receive secure results online—no doctor visit or insurance required for purchase. Offer expires 11/11/2026. Offer valid one time only. Offer only valid on purchase made directly with the merchant. Offer valid online only. Offer not valid on gift card purchase. Offer not valid on purchase made using third-party services, delivery services, or a third-party payment account (e.g., buy now pay later). Offer only valid on U.S. purchase. Non-refundable physician service fees are collected on behalf of PWNHealth and its affiliated entities for independent physician oversight of lab testing including ordering testing if appropriate and providing physician follow-up services. It is possible that the merchant may split your purchase into multiple transactions. Offer redemption awarded as statement credit on the first qualifying transaction amount. Payment must be made on or before 11/11/2026. Lab tests are not currently available in Arizona, Hawaii, and Puerto Rico.",
       "other_details": [],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-31",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -4965,8 +5007,8 @@
       "merchant": "AG1 - Foundational Nutrition Supplement",
       "category": "Health, Fitness & Vision",
       "bonus": "25% cash back",
-      "expires": "2026-10-29",
-      "expires_text": "Offer expires 10/29/2026",
+      "expires": "2026-12-13",
+      "expires_text": "Offer expires 12/13/2026",
       "activation": "needs_activation",
       "channel": "online",
       "spend_cap": null,
@@ -4975,7 +5017,7 @@
       "other_details": [
         "Tagged New"
       ],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-31",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -4986,15 +5028,17 @@
       "merchant": "Fragrance.com",
       "category": "Beauty & Personal Care",
       "bonus": "6% cash back",
-      "expires": "2026-10-31",
-      "expires_text": "Offer expires 10/31/2026",
+      "expires": "2026-12-31",
+      "expires_text": "Offer expires 12/31/2026",
       "activation": "needs_activation",
       "channel": "online",
       "spend_cap": null,
       "minimum_spend": null,
       "fine_print": "Earn 6% cash back on your first two payments at Fragrance.com, including taxes and after any discounts. Limit of 2 statement credits (up to $50 total). Discover the beauty of savings at Fragrance.com. Save up to 80% on 40,000+ designer fragrances, premium skincare, and beauty favorites from brands you love. Offer expires 10/31/2026. Offer valid on first two payments only. Offer only valid on purchases made directly with the merchant. Offer valid online only. Offer not valid on gift card purchase. Offer not valid on purchases made using third-party services or a third-party payment account (e.g., buy now pay later). Offer only valid on U.S. purchases. It is possible that the merchant may split your purchase into multiple transactions. Offer redemption awarded as statement credit on the first two qualifying transaction amounts. Payment must be made on or before 10/31/2026.",
-      "other_details": [],
-      "last_read": "2026-10-18",
+      "other_details": [
+        "Tagged New"
+      ],
+      "last_read": "2026-10-31",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -5013,7 +5057,7 @@
       "minimum_spend": "295",
       "fine_print": "Earn $50 cash back on your Away purchase when you spend $295 or more, including taxes and after any discounts. Away is designed for the way you actually travel. Their durable, thoughtful suitcases are built for everything your journey requires, and nothing it doesn’t. Pick from the iconic Classic Hardside, the expandable Flex, and the innovative Topside, and pair it with a backpack, duffle or tote that’s designed to slide onto your suitcase for smarter, easier journeys. Offer expires 11/5/2026. Offer valid one time only. Offer only valid on purchase made directly with the merchant. Offer valid in-store or online. Offer not valid on gift card purchase. Offer not valid on purchase made using third-party services, delivery services, or a third-party payment account (e.g., buy now pay later). Offer only valid on U.S. purchase. It is possible that the merchant may split your purchase into multiple transactions. Offer redemption awarded as statement credit on the first qualifying transaction amount. Payment must be made on or before 11/5/2026.",
       "other_details": [],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-31",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -5024,15 +5068,17 @@
       "merchant": "Turo",
       "category": "Travel",
       "bonus": "$30 cash back",
-      "expires": "2026-10-31",
-      "expires_text": "Offer expires 10/31/2026",
+      "expires": "2026-11-30",
+      "expires_text": "Offer expires 11/30/2026",
       "activation": "needs_activation",
       "channel": "online",
       "spend_cap": null,
       "minimum_spend": "150",
       "fine_print": "Earn $30 cash back on your Turo purchase when you spend $150 or more, including taxes and after any discounts. Turo is the world’s largest car sharing marketplace, where you can book the perfect car for wherever you’re going. Flying in from afar or seeking a car down the street, you can choose from an incredible selection of nearby cars, from the everyday to the extraordinary. Offer expires 10/31/2026. Offer valid one time only. Offer only valid on purchase made directly with the merchant. Offer valid only on the Turo app or online at turo.com. Offer not valid on purchase made using third-party services, delivery services, or a third-party payment account (e.g., buy now pay later). Offer only valid on U.S. purchase. It is possible that the merchant may split your purchase into multiple transactions. Offer redemption awarded as statement credit on the first qualifying transaction amount. Payment must be made on or before 10/31/2026.",
-      "other_details": [],
-      "last_read": "2026-10-18",
+      "other_details": [
+        "Tagged New"
+      ],
+      "last_read": "2026-10-31",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -5043,15 +5089,17 @@
       "merchant": "Nuts.com - Premium Snacks",
       "category": "Groceries & Food Delivery",
       "bonus": "10% cash back",
-      "expires": "2026-10-31",
-      "expires_text": "Offer expires 10/31/2026",
+      "expires": "2026-12-31",
+      "expires_text": "Offer expires 12/31/2026",
       "activation": "needs_activation",
       "channel": "online",
       "spend_cap": null,
       "minimum_spend": null,
       "fine_print": "Earn 10% cash back on your Nuts.com purchase, including taxes and after any discounts, with a $10 cash back maximum. Nuts.com is a family-owned online retailer offering premium nuts, dried fruit, snacks, chocolates, pantry staples, and gifts since 1929. We’re known for freshness, unbeatable variety, and fast shipping. Delivering high-quality, delicious products that bring joy, convenience, and better snacking to homes & businesses is our commitment to you. Offer expires 10/31/2026. Offer valid one time only. Offer only valid on purchase made directly with the merchant. Offer valid online only. Offer not valid on gift card purchases. Offer not valid on purchase made using third-party services, delivery services, or a third-party payment account (e.g., buy now pay later). Offer only valid on U.S. purchase. It is possible that the merchant may split your purchase into multiple transactions. Offer redemption awarded as statement credit on the first qualifying transaction amount. Payment must be made on or before 10/31/2026.",
-      "other_details": [],
-      "last_read": "2026-10-18",
+      "other_details": [
+        "Tagged New"
+      ],
+      "last_read": "2026-10-31",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -5072,8 +5120,8 @@
       "other_details": [],
       "last_read": "2026-10-18",
       "first_seen": "2026-10-18",
-      "status": "active",
-      "status_since": "2026-10-18"
+      "status": "missing",
+      "status_since": "2026-10-31"
     },
     {
       "id": "chase-freedom/blue-apron",
@@ -5081,15 +5129,17 @@
       "merchant": "Blue Apron",
       "category": "Groceries & Food Delivery",
       "bonus": "15% cash back",
-      "expires": "2026-10-31",
-      "expires_text": "Offer expires 10/31/2026",
+      "expires": "2026-12-31",
+      "expires_text": "Offer expires 12/31/2026",
       "activation": "needs_activation",
       "channel": "online",
       "spend_cap": null,
       "minimum_spend": "50",
       "fine_print": "Earn 15% cash back on your Blue Apron subscription when you spend $50 or more, including taxes and after any discounts, with a $25 cash back maximum. Limit of 2 statement credits (up to $50 cashback total). Please note that this is for a subscription purchase. Blue Apron delivers chef-designed meal kits with pre-portioned ingredients and step-by-step recipes, making home cooking easy, fun, and delicious for everyone. Offer expires 10/31/2026. To receive both statement credits, both payments must occur before 10/31/2026. Offer valid on first two payments only. Offer not valid on gift card purchase. Offer only valid on purchases made directly with the merchant. Offer valid online only. Offer not valid on purchases made using third-party services, delivery services, or a third-party payment account (e.g., buy now pay later). Offer only valid on U.S. purchases. It is possible that the merchant may split your purchase into multiple transactions. Offer redemption awarded as statement credit on the first qualifying transaction amount. For subscription cost and to cancel subscription, please visit blueapron.com for details.",
-      "other_details": [],
-      "last_read": "2026-10-18",
+      "other_details": [
+        "Tagged New"
+      ],
+      "last_read": "2026-10-31",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -5100,15 +5150,17 @@
       "merchant": "LegalZoom - Personal & Business Legal Solutions",
       "category": "Services & Utilities",
       "bonus": "20% cash back",
-      "expires": "2026-10-31",
-      "expires_text": "Offer expires 10/31/2026",
+      "expires": "2026-12-31",
+      "expires_text": "Offer expires 12/31/2026",
       "activation": "needs_activation",
       "channel": "online",
       "spend_cap": null,
       "minimum_spend": null,
       "fine_print": "Earn 20% cash back on your LegalZoom purchase, including taxes and after any discounts, with a $100 cash back maximum. LegalZoom is a leading online platform for legal services, helping individuals and small businesses navigate the legal system with confidence. By combining intuitive technology with access to experienced attorneys, LegalZoom supports business formation, compliance, estate plans, and ongoing legal needs. With over two decades of experience and millions of customers served, LegalZoom helps individuals and small businesses navigate legal needs with confidence. Offer expires 10/31/2026. Offer valid one time only. Offer only valid on purchase made directly with the merchant. Offer valid online only. Offer not valid on gift card purchase. Offer not valid on purchase made using third-party services, delivery services, or a third-party payment account (e.g., buy now pay later). Offer only valid on U.S. purchase. It is possible that the merchant may split your purchase into multiple transactions. Offer redemption awarded as statement credit on the first qualifying transaction amount. Payment must be made on or before 10/31/2026. For subscription cost and to cancel subscription, please visit merchant website for details.",
-      "other_details": [],
-      "last_read": "2026-10-18",
+      "other_details": [
+        "Tagged New"
+      ],
+      "last_read": "2026-10-31",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -5119,15 +5171,17 @@
       "merchant": "Ooma",
       "category": "Services & Utilities",
       "bonus": "35% cash back",
-      "expires": "2026-10-31",
-      "expires_text": "Offer expires 10/31/2026",
+      "expires": "2026-12-31",
+      "expires_text": "Offer expires 12/31/2026",
       "activation": "needs_activation",
       "channel": "online",
       "spend_cap": null,
       "minimum_spend": "75",
       "fine_print": "Earn 35% cash back on your Ooma subscription when you spend $75 or more, including taxes and after any discounts, with a $50 cash back maximum. Please note that this is for a subscription purchase. Ooma provides cloud-based phone solutions for homes and businesses. Residential Phone Service: Crystal-clear calling at unbeatable rates. Nationwide service, protection from telemarketers and phone scammers, 911 alerts and more, for less than a traditional landline. Business Solutions: Communications solutions for businesses of all sizes. Get reliable phone service, texting, video conferencing and more, to help drive your business forward. Offer expires 10/31/2026. Offer valid one time only. Must make first recurring payment by 10/31/2026. Offer valid on first payment only. Offer only valid on purchase made directly with the merchant. Offer not valid on gift card purchase. Offer not valid on purchase made using third-party services, delivery services, or a third-party payment account (e.g., buy now pay later). Offer valid one time only. Offer valid online only at www.ooma.com. Offer only valid on U.S. purchases. It is possible that the merchant may split your purchase into multiple transactions. Offer redemption awarded as statement credit on the first qualifying transaction amount. Recurring subscription payments begin after trial. For subscription cost and to cancel subscription, please visit merchant website for details.",
-      "other_details": [],
-      "last_read": "2026-10-18",
+      "other_details": [
+        "Tagged New"
+      ],
+      "last_read": "2026-10-31",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -5138,15 +5192,17 @@
       "merchant": "NordicTrack",
       "category": "Health, Fitness & Vision",
       "bonus": "5% cash back",
-      "expires": "2026-10-31",
-      "expires_text": "Offer expires 10/31/2026",
+      "expires": "2026-12-31",
+      "expires_text": "Offer expires 12/31/2026",
       "activation": "needs_activation",
       "channel": "online",
       "spend_cap": null,
       "minimum_spend": "999",
       "fine_print": "Earn 5% cash back on your NordicTrack purchase when you spend $999 or more, including taxes and after any discounts, with a $150 cash back maximum. Experience personalized fitness with NordicTrack. Our 2025 lineup of smart fitness equipment features larger screens for more immersive workouts and higher-quality materials for machines designed to last. With an iFIT membership, unlock a world of over 10K+ trainer-led workouts, plus features like AI Coach, heart rate training tech, and Workout Creator that help you get real results. The more you work out, the better your machine can tailor your experience to keep you progressing. Offer expires 10/31/2026. Offer valid one time only. Offer only valid on purchase made directly with the merchant. Offer valid online only. Offer not valid on purchase made using third-party services, delivery services, or a third-party payment account (e.g., buy now pay later). Offer only valid on U.S. purchase. It is possible that the merchant may split your purchase into multiple transactions. Offer redemption awarded as statement credit on the first qualifying transaction amount. Payment must be made on or before 10/31/2026.",
-      "other_details": [],
-      "last_read": "2026-10-18",
+      "other_details": [
+        "Tagged New"
+      ],
+      "last_read": "2026-10-31",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -5167,8 +5223,8 @@
       "other_details": [],
       "last_read": "2026-10-18",
       "first_seen": "2026-10-18",
-      "status": "active",
-      "status_since": "2026-10-18"
+      "status": "expired",
+      "status_since": "2026-10-31"
     },
     {
       "id": "chase-freedom/merit-beauty",
@@ -5177,14 +5233,14 @@
       "category": "Beauty & Personal Care",
       "bonus": "10% cash back",
       "expires": "2026-11-16",
-      "expires_text": null,
+      "expires_text": "Offer expires 11/16/2026",
       "activation": "needs_activation",
       "channel": "online",
       "spend_cap": null,
       "minimum_spend": null,
       "fine_print": "Earn 10% cash back on your MERIT Beauty purchase, with a $15.00 cash back maximum. Offer valid online only.",
       "other_details": [],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-31",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -5196,14 +5252,14 @@
       "category": "Dining",
       "bonus": "10% cash back",
       "expires": "2026-11-13",
-      "expires_text": null,
+      "expires_text": "Offer expires 11/13/2026",
       "activation": "needs_activation",
       "channel": "none_shown",
       "spend_cap": null,
       "minimum_spend": null,
       "fine_print": "Earn 10% cash back on your Round Table Pizza purchase, with a $6.00 cash back maximum.",
       "other_details": [],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-31",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -5226,8 +5282,8 @@
       ],
       "last_read": "2026-10-18",
       "first_seen": "2026-10-18",
-      "status": "active",
-      "status_since": "2026-10-18"
+      "status": "missing",
+      "status_since": "2026-10-31"
     },
     {
       "id": "chase-freedom/moen",
@@ -5236,14 +5292,14 @@
       "category": "Home & Garden",
       "bonus": "10% cash back",
       "expires": "2026-11-23",
-      "expires_text": null,
+      "expires_text": "Offer expires 11/23/2026",
       "activation": "needs_activation",
       "channel": "online",
       "spend_cap": null,
       "minimum_spend": null,
       "fine_print": "Earn 10% cash back on all of your Moen purchases, until a $50.00 cash back maximum is reached.",
       "other_details": [],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-31",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -5262,7 +5318,7 @@
       "minimum_spend": null,
       "fine_print": "Earn 30% cash back on your Sling TV subscription including taxes and after any discounts, with a $20 cash back maximum. Please note that this is for a subscription purchase. Sling TV is the live TV you love, only better. With flexible, affordable plans and access to top channels for sports, news, and entertainment, Sling makes it easy to stream your favorite content anytime, anywhere. No long-term contracts or hidden fees, just the shows you want, on your terms! Offer expires 11/29/2026. Offer valid one time only. Must make first recurring payment by 11/29/2026. Offer valid on first payment only. Offer only valid on purchases made directly with the merchant. Offer not valid on purchases made using third-party services, delivery services, or a third-party payment account (e.g., buy now pay later). Offer valid one time only. Offer valid online only. Offer not valid on gift card purchase. Offer only valid on U.S. purchases. It is possible that the merchant may split your purchase into multiple transactions. Offer redemption awarded as statement credit on the first qualifying transaction amount. For subscription cost and to cancel subscription, please visit merchant website for details.",
       "other_details": [],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-31",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
@@ -5283,8 +5339,8 @@
       "other_details": [],
       "last_read": "2026-10-18",
       "first_seen": "2026-10-18",
-      "status": "active",
-      "status_since": "2026-10-18"
+      "status": "missing",
+      "status_since": "2026-10-31"
     },
     {
       "id": "chase-freedom/l-agence",
@@ -5300,10 +5356,682 @@
       "minimum_spend": null,
       "fine_print": "Earn 15% cash back on your L'AGENCE purchases, including taxes and after any discounts, with a $50 cash back total. L’AGENCE embodies the effortless feel of California with a Parisian sensibility. Vibrant colors, bold prints, and timeless silhouettes evoke a spirit of sultry glamour. Built to anticipate every need of a life on the go, the L’AGENCE wardrobe chameleons with her from airport to gala, beachside to boardroom. We design for her from day to night. Season after season, the collections meld a core foundation with an ever-evolving point of view. L’AGENCE is her craving and her cure. Offer expires 11/15/2026. Cash back may be earned over multiple purchases until the $50 maximum is reached.Offer only valid on purchases made directly with the merchant. Offer valid in-store or online. Offer not valid on gift card purchases. Offer not valid on purchases made using third-party services, delivery services, or a third-party payment account (e.g., buy now pay later). Offer only valid on U.S. purchases. It is possible that the merchant may split your purchases into multiple transactions. Offer redemption awarded as statement credit on the first qualifying transaction amount. Payment must be made on or before 11/15/2026.",
       "other_details": [],
-      "last_read": "2026-10-18",
+      "last_read": "2026-10-31",
       "first_seen": "2026-10-18",
       "status": "active",
       "status_since": "2026-10-18"
+    },
+    {
+      "id": "chase-freedom/la-colombe",
+      "card": "Chase Freedom",
+      "merchant": "La Colombe",
+      "category": "Dining",
+      "bonus": "15% cash back",
+      "expires": "2026-11-29",
+      "expires_text": "Offer expires 11/29/2026",
+      "activation": "needs_activation",
+      "channel": "online",
+      "spend_cap": null,
+      "minimum_spend": null,
+      "fine_print": "Earn 15% cash back on your La Colombe purchase, with a $15.00 cash back maximum. Offer valid online only.",
+      "other_details": [
+        "Tagged New"
+      ],
+      "last_read": "2026-10-31",
+      "first_seen": "2026-10-31",
+      "status": "active",
+      "status_since": "2026-10-31"
+    },
+    {
+      "id": "chase-freedom/hallmark",
+      "card": "Chase Freedom",
+      "merchant": "Hallmark",
+      "category": "Marketplaces & Department Stores",
+      "bonus": "10% cash back",
+      "expires": "2026-12-24",
+      "expires_text": "Offer expires 12/24/2026",
+      "activation": "needs_activation",
+      "channel": "in_store",
+      "spend_cap": null,
+      "minimum_spend": null,
+      "fine_print": "Earn 10% cash back on your Hallmark purchase, with an $8.00 cash back maximum. Offer valid in-store only.",
+      "other_details": [
+        "Tagged New"
+      ],
+      "last_read": "2026-10-31",
+      "first_seen": "2026-10-31",
+      "status": "active",
+      "status_since": "2026-10-31"
+    },
+    {
+      "id": "chase-freedom/on-inc",
+      "card": "Chase Freedom",
+      "merchant": "On Inc",
+      "category": "Clothing & Jewelry",
+      "bonus": "10% cash back",
+      "expires": "2026-11-20",
+      "expires_text": "Offer expires 11/20/2026",
+      "activation": "needs_activation",
+      "channel": "online",
+      "spend_cap": null,
+      "minimum_spend": null,
+      "fine_print": "Earn 10% cash back on your On purchase, including taxes and after any discounts, with a $32 cash back maximum. We believe amazing things happen when you move. Motion unlocks the subconscious, sparking inspiration and immersing you in the moment. Our high-performance shoes, apparel, and accessories help get you there. Whether you're a runner, studio-goer, or outdoor enthusiast – On helps you dream bigger. Offer expires 11/20/2026. Offer valid one time only. Offer only valid on purchase made directly with the merchant. Offer valid online only. Offer not valid on gift card purchase. Offer not valid on purchase made using third-party services, delivery services, or a third-party payment account (e.g., buy now pay later). Offer only valid on U.S. purchase. It is possible that the merchant may split your purchase into multiple transactions. Offer redemption awarded as statement credit on the first qualifying transaction amount. Payment must be made on or before 11/20/2026.",
+      "other_details": [
+        "Tagged New"
+      ],
+      "last_read": "2026-10-31",
+      "first_seen": "2026-10-31",
+      "status": "active",
+      "status_since": "2026-10-31"
+    },
+    {
+      "id": "chase-freedom/mr-porter",
+      "card": "Chase Freedom",
+      "merchant": "MR PORTER",
+      "category": "Clothing & Jewelry",
+      "bonus": "$100 cash back",
+      "expires": "2026-11-08",
+      "expires_text": "Offer expires 11/8/2026",
+      "activation": "needs_activation",
+      "channel": "online",
+      "spend_cap": null,
+      "minimum_spend": "500",
+      "fine_print": "Earn $100 cash back on your MR PORTER purchase when you spend $500 or more, including taxes and after any discounts. MR PORTER is the online luxury destination for men’s style – a place to find the best product, be inspired, and discover all aspects of a stylish life. With a selection of more than 500 of the world's most sought-after brands, MR PORTER is the global destination to provide men with everything they need to look and feel their best. Offer expires 11/8/2026. Offer valid one time only. Offer only valid on purchase made directly with the merchant. Offer valid online only. Offer not valid on purchase made using third-party services, delivery services, or a third-party payment account (e.g., buy now pay later). Offer not valid on gift card purchase. Offer only valid on U.S. purchase. It is possible that the merchant may split your purchase into multiple transactions. Offer redemption awarded as statement credit on the first qualifying transaction amount. Payment must be made on or before 11/8/2026.",
+      "other_details": [
+        "Tagged New"
+      ],
+      "last_read": "2026-10-31",
+      "first_seen": "2026-10-31",
+      "status": "active",
+      "status_since": "2026-10-31"
+    },
+    {
+      "id": "chase-freedom/dish-network",
+      "card": "Chase Freedom",
+      "merchant": "DISH Network",
+      "category": "Streaming & Entertainment",
+      "bonus": "$85 cash back",
+      "expires": "2026-11-30",
+      "expires_text": "Offer expires 11/30/2026",
+      "activation": "needs_activation",
+      "channel": "none_shown",
+      "spend_cap": null,
+      "minimum_spend": "85",
+      "fine_print": "Earn $85 cash back on your DISH Network subscription when you spend $85 or more, including taxes and after any discounts. Please note that this is for a subscription purchase. DISH is a leading satellite TV provider delivering reliable, nationwide service with a wide selection of channels, including live sports, news, movies, and family entertainment. With flexible programming options and dependable coverage, DISH provides a high-quality television experience designed to meet the needs of households across the country. Offer expires 11/30/2026. Offer valid one time only. Offer valid for new customers only. Must make first recurring payment by 11/30/2026. Offer valid on first payment only. Offer only valid on purchase made directly with the merchant. Offer not valid on purchase made using third-party services, delivery services, or a third-party payment account (e.g., buy now pay later). Offer valid online only at www.dish.com. Offer only valid on U.S. purchase. It is possible that the merchant may split your purchase into multiple transactions. Offer redemption awarded as statement credit on the first qualifying transaction amount. For subscription cost and to cancel subscription, please visit merchant website for details.",
+      "other_details": [
+        "Tagged New"
+      ],
+      "last_read": "2026-10-31",
+      "first_seen": "2026-10-31",
+      "status": "active",
+      "status_since": "2026-10-31"
+    },
+    {
+      "id": "chase-freedom/emirates",
+      "card": "Chase Freedom",
+      "merchant": "Emirates",
+      "category": "Travel",
+      "bonus": "5% cash back",
+      "expires": "2026-11-08",
+      "expires_text": "Offer expires 11/8/2026",
+      "activation": "needs_activation",
+      "channel": "none_shown",
+      "spend_cap": null,
+      "minimum_spend": "500",
+      "fine_print": "Earn 5% cash back on your Emirates purchase, with a $100.00 cash back maximum, when you spend $500 or more.",
+      "other_details": [
+        "Tagged New"
+      ],
+      "last_read": "2026-10-31",
+      "first_seen": "2026-10-31",
+      "status": "active",
+      "status_since": "2026-10-31"
+    },
+    {
+      "id": "chase-freedom/lectric-ebikes",
+      "card": "Chase Freedom",
+      "merchant": "Lectric eBikes",
+      "category": "Auto & Gas",
+      "bonus": "$100 cash back",
+      "expires": "2026-12-08",
+      "expires_text": "Offer expires 12/8/2026",
+      "activation": "needs_activation",
+      "channel": "none_shown",
+      "spend_cap": null,
+      "minimum_spend": "500",
+      "fine_print": "Earn $100 cash back on your Lectric eBikes purchase, when you spend $500 or more.",
+      "other_details": [
+        "Tagged New"
+      ],
+      "last_read": "2026-10-31",
+      "first_seen": "2026-10-31",
+      "status": "active",
+      "status_since": "2026-10-31"
+    },
+    {
+      "id": "chase-freedom/salt-stone",
+      "card": "Chase Freedom",
+      "merchant": "Salt & Stone",
+      "category": "Beauty & Personal Care",
+      "bonus": "10% cash back",
+      "expires": "2026-11-30",
+      "expires_text": "Offer expires 11/30/2026",
+      "activation": "needs_activation",
+      "channel": "online",
+      "spend_cap": null,
+      "minimum_spend": null,
+      "fine_print": "Earn 10% cash back on your Salt & Stone purchase, with a $12.00 cash back maximum. Offer valid online only.",
+      "other_details": [
+        "Tagged New"
+      ],
+      "last_read": "2026-10-31",
+      "first_seen": "2026-10-31",
+      "status": "active",
+      "status_since": "2026-10-31"
+    },
+    {
+      "id": "chase-freedom/club-pilates",
+      "card": "Chase Freedom",
+      "merchant": "Club Pilates",
+      "category": "Health, Fitness & Vision",
+      "bonus": "$12 cash back",
+      "expires": "2026-11-22",
+      "expires_text": "Offer expires 11/22/2026",
+      "activation": "needs_activation",
+      "channel": "none_shown",
+      "spend_cap": null,
+      "minimum_spend": "50",
+      "fine_print": "Earn $12 cash back on your first payment of a Club Pilates subscription, when you spend $50 or more.",
+      "other_details": [
+        "Tagged New"
+      ],
+      "last_read": "2026-10-31",
+      "first_seen": "2026-10-31",
+      "status": "active",
+      "status_since": "2026-10-31"
+    },
+    {
+      "id": "chase-freedom/michael-kors",
+      "card": "Chase Freedom",
+      "merchant": "Michael Kors",
+      "category": "Clothing & Jewelry",
+      "bonus": "10% cash back",
+      "expires": "2026-11-25",
+      "expires_text": "Offer expires 11/25/2026",
+      "activation": "needs_activation",
+      "channel": "none_shown",
+      "spend_cap": null,
+      "minimum_spend": "150",
+      "fine_print": "Earn 10% cash back on your Michael Kors purchase, with a $26.25 cash back maximum, when you spend $150 or more.",
+      "other_details": [
+        "Tagged New"
+      ],
+      "last_read": "2026-10-31",
+      "first_seen": "2026-10-31",
+      "status": "active",
+      "status_since": "2026-10-31"
+    },
+    {
+      "id": "chase-freedom/la-roche-posay",
+      "card": "Chase Freedom",
+      "merchant": "La Roche-Posay",
+      "category": "Beauty & Personal Care",
+      "bonus": "15% cash back",
+      "expires": "2026-11-19",
+      "expires_text": "Offer expires 11/19/2026",
+      "activation": "needs_activation",
+      "channel": "online",
+      "spend_cap": null,
+      "minimum_spend": null,
+      "fine_print": "Earn 15% cash back on your La Roche-Posay purchase, including taxes and after any discounts, with a $50 cash back maximum. Shop Dermatologist Tested Skincare For All Skin Types. Discover Expert Skincare Tips And Build Your Routine Today with La Roche-Posay. Offer expires 11/19/2026. Offer valid one time only. Offer only valid on purchase made directly with the merchant. Offer valid online only. Offer not valid on gift card purchase. Offer not valid on purchase made using third-party services, delivery services, or a third-party payment account (e.g., buy now pay later). Offer only valid on U.S. purchase. It is possible that the merchant may split your purchase into multiple transactions. Offer redemption awarded as statement credit on the first qualifying transaction amount. Payment must be made on or before 11/19/2026.",
+      "other_details": [
+        "Tagged New"
+      ],
+      "last_read": "2026-10-31",
+      "first_seen": "2026-10-31",
+      "status": "active",
+      "status_since": "2026-10-31"
+    },
+    {
+      "id": "chase-freedom/youtube-channel-memberships",
+      "card": "Chase Freedom",
+      "merchant": "YouTube Channel Memberships",
+      "category": "Streaming & Entertainment",
+      "bonus": "100% cash back",
+      "expires": "2026-11-20",
+      "expires_text": "Offer expires 11/20/2026",
+      "activation": "needs_activation",
+      "channel": "online",
+      "spend_cap": null,
+      "minimum_spend": null,
+      "fine_print": "Earn 100% cash back on your Youtube Channel Memberships subscription, including taxes and after any discounts, with a $6 cash back maximum. This offer is for a recurring subscription purchase, cancel anytime. YouTube Channel Memberships: Get closer to your favorite YouTube creators and unlock more of what you love. Join now and get exclusive access to members-only content, loyalty badges, custom emojis and so much more. Offer expires 11/20/2026. Offer valid one time only. Must make first recurring payment by 11/20/2026. Offer valid on first payment only. Offer only valid on purchase made directly with the merchant. Offer valid online only at youtube.com/channel_memberships. Offer not valid on purchase made using third-party services or a third-party payment account (e.g., buy now pay later). Offer not valid on gift card purchase. It is possible that the merchant may split your purchase into multiple transactions. Offer redemption awarded as statement credit on the first qualifying transaction amount. For subscription cost and to cancel subscription, please visit merchant website for details.",
+      "other_details": [
+        "Tagged New"
+      ],
+      "last_read": "2026-10-31",
+      "first_seen": "2026-10-31",
+      "status": "active",
+      "status_since": "2026-10-31"
+    },
+    {
+      "id": "chase-freedom/dermstore",
+      "card": "Chase Freedom",
+      "merchant": "Dermstore",
+      "category": "Beauty & Personal Care",
+      "bonus": "14% cash back",
+      "expires": "2026-12-15",
+      "expires_text": "Offer expires 12/15/2026",
+      "activation": "needs_activation",
+      "channel": "online",
+      "spend_cap": null,
+      "minimum_spend": null,
+      "fine_print": "Earn 14% cash back on your Dermstore purchase, including taxes and after any discounts, with a $50 cash back maximum. Discover Dermstore’s curated selection of skincare, haircare, makeup and wellness essentials from trusted, dermatologist-recommended brands. Shop bestselling products loved by beauty experts and enthusiasts, and find effective solutions to elevate every step of your beauty routine. Offer expires 12/15/2026. Offer valid one time only. Offer only valid on purchase made directly with the merchant. Offer valid online only. Offer not valid on gift card purchase. Offer not valid on purchase made using third-party services, delivery services, or a third-party payment account (e.g., buy now pay later). Offer only valid on U.S. purchase. It is possible that the merchant may split your purchase into multiple transactions. Offer redemption awarded as statement credit on the first qualifying transaction amount. Payment must be made on or before 12/15/2026.",
+      "other_details": [
+        "Tagged New"
+      ],
+      "last_read": "2026-10-31",
+      "first_seen": "2026-10-31",
+      "status": "active",
+      "status_since": "2026-10-31"
+    },
+    {
+      "id": "chase-freedom/nurture-life",
+      "card": "Chase Freedom",
+      "merchant": "Nurture Life",
+      "category": "Groceries & Food Delivery",
+      "bonus": "$20 cash back",
+      "expires": "2026-12-31",
+      "expires_text": "Offer expires 12/31/2026",
+      "activation": "needs_activation",
+      "channel": "online",
+      "spend_cap": null,
+      "minimum_spend": "40",
+      "fine_print": "Earn $20 cash back on your first payment of a Nurture Life subscription, when you spend $40 or more.",
+      "other_details": [
+        "Tagged New"
+      ],
+      "last_read": "2026-10-31",
+      "first_seen": "2026-10-31",
+      "status": "active",
+      "status_since": "2026-10-31"
+    },
+    {
+      "id": "chase-freedom/coffee-bean-tea-leaf",
+      "card": "Chase Freedom",
+      "merchant": "Coffee Bean & Tea Leaf",
+      "category": "Dining",
+      "bonus": "10% cash back",
+      "expires": "2026-12-15",
+      "expires_text": "Offer expires 12/15/2026",
+      "activation": "needs_activation",
+      "channel": "none_shown",
+      "spend_cap": null,
+      "minimum_spend": null,
+      "fine_print": "Earn 10% cash back on your Coffee Bean & Tea Leaf purchase, with a $2.00 cash back maximum.",
+      "other_details": [
+        "Tagged New"
+      ],
+      "last_read": "2026-10-31",
+      "first_seen": "2026-10-31",
+      "status": "active",
+      "status_since": "2026-10-31"
+    },
+    {
+      "id": "chase-freedom/express",
+      "card": "Chase Freedom",
+      "merchant": "Express",
+      "category": "Clothing & Jewelry",
+      "bonus": "10% cash back",
+      "expires": "2026-11-30",
+      "expires_text": "Offer expires 11/30/2026",
+      "activation": "needs_activation",
+      "channel": "none_shown",
+      "spend_cap": null,
+      "minimum_spend": null,
+      "fine_print": "Earn 10% cash back on all of your Express purchases, until a $14.00 cash back maximum is reached.",
+      "other_details": [
+        "Tagged New"
+      ],
+      "last_read": "2026-10-31",
+      "first_seen": "2026-10-31",
+      "status": "active",
+      "status_since": "2026-10-31"
+    },
+    {
+      "id": "chase-freedom/cakes-body",
+      "card": "Chase Freedom",
+      "merchant": "CAKES Body",
+      "category": "Clothing & Jewelry",
+      "bonus": "10% cash back",
+      "expires": "2026-11-30",
+      "expires_text": "Offer expires 11/30/2026",
+      "activation": "needs_activation",
+      "channel": "online",
+      "spend_cap": null,
+      "minimum_spend": null,
+      "fine_print": "Earn 10% cash back on your CAKES Body purchase, with an $8.00 cash back maximum. Offer valid online only.",
+      "other_details": [
+        "Tagged New"
+      ],
+      "last_read": "2026-10-31",
+      "first_seen": "2026-10-31",
+      "status": "active",
+      "status_since": "2026-10-31"
+    },
+    {
+      "id": "chase-freedom/keeper-security",
+      "card": "Chase Freedom",
+      "merchant": "Keeper Security",
+      "category": "Electronics & Software",
+      "bonus": "10% cash back",
+      "expires": "2026-11-30",
+      "expires_text": "Offer expires 11/30/2026",
+      "activation": "needs_activation",
+      "channel": "none_shown",
+      "spend_cap": null,
+      "minimum_spend": null,
+      "fine_print": "Earn 10% cash back on your Keeper Security purchase, with a $15.00 cash back maximum.",
+      "other_details": [
+        "Tagged New"
+      ],
+      "last_read": "2026-10-31",
+      "first_seen": "2026-10-31",
+      "status": "active",
+      "status_since": "2026-10-31"
+    },
+    {
+      "id": "chase-freedom/osea-malibu",
+      "card": "Chase Freedom",
+      "merchant": "OSEA Malibu",
+      "category": "Beauty & Personal Care",
+      "bonus": "10% cash back",
+      "expires": "2026-12-15",
+      "expires_text": "Offer expires 12/15/2026",
+      "activation": "needs_activation",
+      "channel": "online",
+      "spend_cap": null,
+      "minimum_spend": null,
+      "fine_print": "Earn 10% cash back on your OSEA Malibu purchase, with a $20.00 cash back maximum. Offer valid online only.",
+      "other_details": [
+        "Tagged New"
+      ],
+      "last_read": "2026-10-31",
+      "first_seen": "2026-10-31",
+      "status": "active",
+      "status_since": "2026-10-31"
+    },
+    {
+      "id": "chase-freedom/harper-wilde",
+      "card": "Chase Freedom",
+      "merchant": "Harper Wilde",
+      "category": "Clothing & Jewelry",
+      "bonus": "10% cash back",
+      "expires": "2026-11-30",
+      "expires_text": "Offer expires 11/30/2026",
+      "activation": "needs_activation",
+      "channel": "online",
+      "spend_cap": null,
+      "minimum_spend": null,
+      "fine_print": "Earn 10% cash back on your Harper Wilde purchase, with a $14.00 cash back maximum. Offer valid online only.",
+      "other_details": [
+        "Tagged New"
+      ],
+      "last_read": "2026-10-31",
+      "first_seen": "2026-10-31",
+      "status": "active",
+      "status_since": "2026-10-31"
+    },
+    {
+      "id": "chase-freedom/cos",
+      "card": "Chase Freedom",
+      "merchant": "COS",
+      "category": "Clothing & Jewelry",
+      "bonus": "10% cash back",
+      "expires": "2026-11-30",
+      "expires_text": "Offer expires 11/30/2026",
+      "activation": "needs_activation",
+      "channel": "none_shown",
+      "spend_cap": null,
+      "minimum_spend": null,
+      "fine_print": "Earn 10% cash back on your COS purchase, with a $29.00 cash back maximum.",
+      "other_details": [
+        "Tagged New"
+      ],
+      "last_read": "2026-10-31",
+      "first_seen": "2026-10-31",
+      "status": "active",
+      "status_since": "2026-10-31"
+    },
+    {
+      "id": "chase-freedom/giftory",
+      "card": "Chase Freedom",
+      "merchant": "Giftory",
+      "category": "Marketplaces & Department Stores",
+      "bonus": "10% cash back",
+      "expires": "2026-11-30",
+      "expires_text": "Offer expires 11/30/2026",
+      "activation": "needs_activation",
+      "channel": "online",
+      "spend_cap": null,
+      "minimum_spend": null,
+      "fine_print": "Earn 10% cash back on your Giftory purchase, with a $15.00 cash back maximum. Offer valid online only.",
+      "other_details": [
+        "Tagged New"
+      ],
+      "last_read": "2026-10-31",
+      "first_seen": "2026-10-31",
+      "status": "active",
+      "status_since": "2026-10-31"
+    },
+    {
+      "id": "chase-freedom/braun",
+      "card": "Chase Freedom",
+      "merchant": "Braun",
+      "category": "Beauty & Personal Care",
+      "bonus": "10% cash back",
+      "expires": "2026-12-30",
+      "expires_text": "Offer expires 12/30/2026",
+      "activation": "needs_activation",
+      "channel": "online",
+      "spend_cap": null,
+      "minimum_spend": null,
+      "fine_print": "Earn 10% cash back on your Braun purchase, with a $38.00 cash back maximum. Offer valid online only.",
+      "other_details": [
+        "Tagged New"
+      ],
+      "last_read": "2026-10-31",
+      "first_seen": "2026-10-31",
+      "status": "active",
+      "status_since": "2026-10-31"
+    },
+    {
+      "id": "chase-freedom/lindt",
+      "card": "Chase Freedom",
+      "merchant": "Lindt",
+      "category": "Groceries & Food Delivery",
+      "bonus": "10% cash back",
+      "expires": "2026-11-30",
+      "expires_text": "Offer expires 11/30/2026",
+      "activation": "needs_activation",
+      "channel": "none_shown",
+      "spend_cap": null,
+      "minimum_spend": null,
+      "fine_print": "Earn 10% cash back on your Lindt purchase, with an $8.00 cash back maximum.",
+      "other_details": [
+        "Tagged New"
+      ],
+      "last_read": "2026-10-31",
+      "first_seen": "2026-10-31",
+      "status": "active",
+      "status_since": "2026-10-31"
+    },
+    {
+      "id": "chase-freedom/club-champion",
+      "card": "Chase Freedom",
+      "merchant": "Club Champion",
+      "category": "Health, Fitness & Vision",
+      "bonus": "$100 cash back",
+      "expires": "2026-12-31",
+      "expires_text": "Offer expires 12/31/2026",
+      "activation": "needs_activation",
+      "channel": "in_store",
+      "spend_cap": null,
+      "minimum_spend": "750",
+      "fine_print": "Earn $100 cash back on your Club Champion purchase when you spend $750 or more, including taxes and after any discounts. Club Champion is the world’s premier custom golf club fitting and building company, helping golfers of all skill levels play better through data-driven precision and expert craftsmanship. Using Tour-level technology, brand-agnostic fittings, and master fitters, every club is custom-built to exact specifications for maximum performance. With locations nationwide, Club Champion delivers confidence, consistency, and better golf through better fit. Offer expires 12/31/2026. Offer valid one time only. Offer only valid on purchase made directly with the merchant. Offer valid in-store only. Offer not valid on gift card purchase. Offer not valid on purchase made using third-party services, delivery services, or a third-party payment account (e.g., buy now pay later). Offer only valid on U.S. purchase. It is possible that the merchant may split your purchase into multiple transactions. Offer redemption awarded as statement credit on the first qualifying transaction amount. Payment must be made on or before 12/31/2026.",
+      "other_details": [
+        "Tagged New"
+      ],
+      "last_read": "2026-10-31",
+      "first_seen": "2026-10-31",
+      "status": "active",
+      "status_since": "2026-10-31"
+    },
+    {
+      "id": "chase-freedom/tonal",
+      "card": "Chase Freedom",
+      "merchant": "Tonal",
+      "category": "Health, Fitness & Vision",
+      "bonus": "$250 cash back",
+      "expires": "2026-11-30",
+      "expires_text": "Offer expires 11/30/2026",
+      "activation": "needs_activation",
+      "channel": "online",
+      "spend_cap": null,
+      "minimum_spend": "1000",
+      "fine_print": "Earn $250 cash back on your Tonal purchase when you spend $1000 or more, including taxes and after any discounts. Tonal is the ultimate strength training system, giving you the expertise of a personal trainer and a full gym in your home. Only Tonal can intuitively adjust weight based on your performance, help you maximize every rep efficiently—no wasted time or effort and track your progress to take the guesswork out of working out. Offer expires 11/30/2026. Offer valid one time only. Offer only valid on purchase made directly with the merchant. Offer valid online only. Offer not valid on purchase made using third-party services, delivery services, or a third-party payment account (e.g., buy now pay later). Offer only valid on U.S. purchase. It is possible that the merchant may split your purchase into multiple transactions. Offer redemption awarded as statement credit on the first qualifying transaction amount. Payment must be made on or before 11/30/2026.",
+      "other_details": [
+        "Tagged New"
+      ],
+      "last_read": "2026-10-31",
+      "first_seen": "2026-10-31",
+      "status": "active",
+      "status_since": "2026-10-31"
+    },
+    {
+      "id": "chase-freedom/brunt-workwear",
+      "card": "Chase Freedom",
+      "merchant": "BRUNT Workwear",
+      "category": "Clothing & Jewelry",
+      "bonus": "10% cash back",
+      "expires": "2026-12-31",
+      "expires_text": "Offer expires 12/31/2026",
+      "activation": "needs_activation",
+      "channel": "online",
+      "spend_cap": null,
+      "minimum_spend": null,
+      "fine_print": "Earn 10% cash back on your first two payments at BRUNT Workwear, including taxes and after any discounts. Limit of 2 statement credits (up to $50 cashback total). BRUNT Workwear is your ultimate destination for premium workwear and work boots tailored for tradesmen. We understand the importance of durable gear that keeps you safe and comfortable on the job. Our extensive collection features everything you need, from work boots to utility shorts, pants and work jackets. Offer expires 12/31/2026. Offer valid on first two payments only. Offer only valid on purchases made directly with the merchant. Offer valid online only. Offer not valid on purchases made using third-party services, delivery services, or a third-party payment account (e.g., buy now pay later). Offer only valid on U.S. purchases. Offer not valid on gift card purchase. It is possible that the merchant may split your purchase into multiple transactions. Offer redemption awarded as statement credit on the first two qualifying transaction amounts.",
+      "other_details": [
+        "Tagged New"
+      ],
+      "last_read": "2026-10-31",
+      "first_seen": "2026-10-31",
+      "status": "active",
+      "status_since": "2026-10-31"
+    },
+    {
+      "id": "chase-freedom/teleflora",
+      "card": "Chase Freedom",
+      "merchant": "Teleflora",
+      "category": "Marketplaces & Department Stores",
+      "bonus": "10% cash back",
+      "expires": "2026-11-30",
+      "expires_text": "Offer expires 11/30/2026",
+      "activation": "needs_activation",
+      "channel": "online",
+      "spend_cap": null,
+      "minimum_spend": null,
+      "fine_print": "Earn 10% cash back on your Teleflora purchase, including taxes and after any discounts, with a $50 cash back maximum. At Teleflora, we're proud to have been connecting customers with the nation's best florists for more than 81 years. With a network of over 8,000 florists, Teleflora is committed to hand-making bouquets using the freshest flowers available. Teleflora lets you send flowers and gifts with confidence. And since every arrangement is personally delivered, same-day delivery is available on almost every order. Offer expires 11/30/2026. Offer valid one time only. Offer only valid on purchase made directly with the merchant. Offer valid online only. Offer not valid on purchase made using third-party services, delivery services, or a third-party payment account (e.g., buy now pay later). Offer only valid on U.S. purchase. It is possible that the merchant may split your purchase into multiple transactions. Offer redemption awarded as statement credit on the first qualifying transaction amount. Payment must be made on or before 11/30/2026.",
+      "other_details": [
+        "Tagged New"
+      ],
+      "last_read": "2026-10-31",
+      "first_seen": "2026-10-31",
+      "status": "active",
+      "status_since": "2026-10-31"
+    },
+    {
+      "id": "chase-freedom/tommy-hilfiger",
+      "card": "Chase Freedom",
+      "merchant": "Tommy Hilfiger",
+      "category": "Clothing & Jewelry",
+      "bonus": "15% cash back",
+      "expires": "2026-11-30",
+      "expires_text": "Offer expires 11/30/2026",
+      "activation": "needs_activation",
+      "channel": "none_shown",
+      "spend_cap": null,
+      "minimum_spend": null,
+      "fine_print": "Earn 15% cash back on your Tommy Hilfiger purchase, including taxes and after any discounts, with a $15 cash back maximum. Discover modern twists on heritage style — elevate your everyday wardrobe with Tommy Hilfiger’s iconic American classics. Offer expires 11/30/2026. Offer valid one time only. Offer only valid on purchase made directly with the merchant. Offer valid in-store or online. Offer not valid on gift card purchase. Offer not valid on purchase made using third-party services, delivery services, or a third-party payment account (e.g., buy now pay later). Offer only valid on U.S. purchase. It is possible that the merchant may split your purchase into multiple transactions. Offer redemption awarded as statement credit on the first qualifying transaction amount. Payment must be made on or before 11/30/2026.",
+      "other_details": [
+        "Tagged New"
+      ],
+      "last_read": "2026-10-31",
+      "first_seen": "2026-10-31",
+      "status": "active",
+      "status_since": "2026-10-31"
+    },
+    {
+      "id": "chase-freedom/lands-end",
+      "card": "Chase Freedom",
+      "merchant": "Lands' End",
+      "category": "Clothing & Jewelry",
+      "bonus": "10% cash back",
+      "expires": "2026-11-30",
+      "expires_text": "Offer expires 11/30/2026",
+      "activation": "needs_activation",
+      "channel": "none_shown",
+      "spend_cap": null,
+      "minimum_spend": null,
+      "fine_print": "Earn 10% cash back on your Lands' End purchase including taxes and after any discounts, with a $50 cash back maximum. Lands' End® is a classic American lifestyle brand with a passion for quality, legendary service, real value and a simple two-word promise to stand behind everything it sells: Guaranteed. Period. As a global multi-channel retailer, Lands’ End offers classically styled apparel, swimwear, and outerwear for Women, Men, and Kids, plus a complete line of home products, luggage, and seasonal gifts. We provide our customers with the highest level of service in our industry, unparalleled quality and value, and an unequivocal ironclad guarantee. Consistently, Lands’ End ranks in the top 10 for best customer service by the NRF (National Retail Federation). Offer expires 11/30/2026. Offer valid one time only. Offer only valid on purchase made directly with the merchant. Offer valid in-store or online. Offer not valid on gift card purchase. Offer not valid on purchase made using third-party services, delivery services, or a third-party payment account (e.g., buy now pay later). Offer only valid on U.S. purchase. It is possible that the merchant may split your purchase into multiple transactions. Offer redemption awarded as statement credit on the first qualifying transaction amount. Payment must be made on or before 11/30/2026.",
+      "other_details": [
+        "Tagged New"
+      ],
+      "last_read": "2026-10-31",
+      "first_seen": "2026-10-31",
+      "status": "active",
+      "status_since": "2026-10-31"
+    },
+    {
+      "id": "chase-freedom/adidas",
+      "card": "Chase Freedom",
+      "merchant": "adidas",
+      "category": "Clothing & Jewelry",
+      "bonus": "$20 cash back",
+      "expires": "2026-11-30",
+      "expires_text": "Offer expires 11/30/2026",
+      "activation": "needs_activation",
+      "channel": "online",
+      "spend_cap": null,
+      "minimum_spend": "100",
+      "fine_print": "Earn a one- time $20 statement credit when you spend a minimum of $100 in one or more qualifying transactions at adidas, including taxes and after any discounts. At adidas we have the power to change lives through sport. Since 1949 we’ve created new athletic footwear, sport-centric fashion and accessories designed to help people harness the power of sport in their life. Offer expires 11/30/2026. Offer valid one time only. Offer only valid on purchases made directly with the merchant. Offer valid online only. Offer not valid on gift card purchases. Offer not valid on purchases made using third-party services, delivery services, or a third-party payment account (e.g., buy now pay later). Offer only valid on U.S. purchases. It is possible that the merchant may split your purchase into multiple transactions. Offer redemption awarded as a statement credit when your transactions total to $100 or more. Payment must be made on or before 11/30/2026.",
+      "other_details": [
+        "Tagged New"
+      ],
+      "last_read": "2026-10-31",
+      "first_seen": "2026-10-31",
+      "status": "active",
+      "status_since": "2026-10-31"
+    },
+    {
+      "id": "chase-freedom/lyft",
+      "card": "Chase Freedom",
+      "merchant": "Lyft",
+      "category": "Travel",
+      "bonus": "10% cash back",
+      "expires": "2026-11-30",
+      "expires_text": "Offer expires 11/30/2026",
+      "activation": "needs_activation",
+      "channel": "online",
+      "spend_cap": null,
+      "minimum_spend": null,
+      "fine_print": "Earn 10% cash back on your Lyft purchase, including taxes and after any discounts, with a $10 cash back maximum. Offer expires 11/30/2026. Offer valid one time only. Offer only valid on purchase made directly with the merchant. Offer valid online only. Offer not valid on gift card purchase. Offer not valid on purchase made using third-party services, delivery services, or a third-party payment account (e.g., buy now pay later). Offer only valid on U.S. purchase. It is possible that the merchant may split your purchase into multiple transactions. Offer redemption awarded as statement credit on the first qualifying transaction amount. Payment must be made on or before 11/30/2026.",
+      "other_details": [
+        "Tagged New"
+      ],
+      "last_read": "2026-10-31",
+      "first_seen": "2026-10-31",
+      "status": "active",
+      "status_since": "2026-10-31"
     },
     {
       "id": "us-bank/mcdonald-s",
