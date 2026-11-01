@@ -632,8 +632,8 @@ def card_check(card, rows, incs, view_list, batches, read_date):
     have it: offers one card gained after the other's last read are not evidence either way, since right after one
     card's refresh the other's page shows the new offers too. Only live offers count: active and not past
     `expires` on the read date (for this card, also an active one past it that the file shows again), and names
-    also match ignoring punctuation. It warns when the file has more
-    than half of the sibling's exclusive offers and more of them than of this card's own."""
+    also match ignoring punctuation. It warns when the file has more than half of the sibling's exclusive offers
+    and more of them than of this card's own."""
     named, cols, partial = file_cards(rows)
     refusal = stop = warning = None
     known = [n for n in named if n in ADAPTERS]
