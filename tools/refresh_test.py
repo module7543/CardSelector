@@ -1399,6 +1399,14 @@ class CardCheckUnit(unittest.TestCase):
         offers[0]["status"] = "missing"
         self.assertIsNone(self.check(offers, [("Lyft", "10% cash back"), ("Whisker", "10% cash back")])[2])
 
+    def test_own_offers_this_card_lost_are_not_its_evidence(self):
+        # A wrong-card file (the Flex page) that picked up offers Freedom has lost (missing, used) must not count
+        # them for Freedom; 1 of Flex's 1 against 0 still warns.
+        offers = [self.offer("Chase Freedom Flex", "Flex A"), self.offer("Chase Freedom", "Gone", status="missing"),
+                  self.offer("Chase Freedom", "Spent", status="used"), self.offer("Chase Freedom", "Freedom B")]
+        file_offers = [("Flex A", "10% cash back"), ("Gone", "10% cash back"), ("Spent", "10% cash back")]
+        self.assertIn("and 0 of the 1 only Chase Freedom had", self.check(offers, file_offers)[2] or "")
+
     def test_counts_not_shares(self):
         # 2 of the sibling's 2 against 3 of this card's 5: more of its own, no warning.
         offers = ([self.offer("Chase Freedom Flex", f"Flex {k}") for k in "AB"]

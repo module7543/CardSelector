@@ -630,8 +630,9 @@ def card_check(card, rows, incs, view_list, batches, read_date):
     exclusive offers is only a warning. An offer is exclusive to one sibling only if it was already on that card when
     the other card was last read (`first_seen` on or before the other card's newest batch) and the other card does not
     have it: offers one card gained after the other's last read are not evidence either way, since right after one
-    card's refresh the other's page shows the new offers too. Only live offers count: active and not past `expires`
-    on the read date (for this card, also any offer the file shows again), and names also match ignoring punctuation. It warns when the file has more
+    card's refresh the other's page shows the new offers too. Only live offers count: active and not past
+    `expires` on the read date (for this card, also an active one past it that the file shows again), and names
+    also match ignoring punctuation. It warns when the file has more
     than half of the sibling's exclusive offers and more of them than of this card's own."""
     named, cols, partial = file_cards(rows)
     refusal = stop = warning = None
@@ -660,9 +661,9 @@ def card_check(card, rows, incs, view_list, batches, read_date):
 
         in_file = set().union(*[names(i.merchant, i.new_aliases, i.bonus) for i in incs])
 
-        def live(o):  # active and not ended by the read date; for this card also any offer the file shows again
-            return (o["status"] == "active" and not (o.get("expires") and o["expires"] < read_date)) \
-                or (o["card"] == card and bool(ks(o) & in_file))
+        def live(o):  # active and not ended by the read date (for this card, ended but renewed: the file shows it)
+            ended = bool(o.get("expires")) and o["expires"] < read_date
+            return o["status"] == "active" and (not ended or (o["card"] == card and bool(ks(o) & in_file)))
 
         def only(c, d):  # c's live offers that were on c by d's last read and that d does not have
             return [o for o in view_list if o["card"] == c and live(o) and not ks(o) & keys[d]
