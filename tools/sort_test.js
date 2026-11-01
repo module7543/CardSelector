@@ -1,8 +1,9 @@
 // Headless sort checks at phone width (390 x 844), run against the site/ folder:
 //   node tools/sort_test.js
 // Needs Playwright (npm i playwright). CHROMIUM_PATH picks a browser binary if Playwright's own isn't installed.
-// The checks use the live data where they can; "shell" adds one test-only Shell offer in the browser, because
-// no Shell offer is active today. Nothing is written to the data files.
+// The checks use the live data where they can; some add test-only offers in the browser (a Shell offer for
+// "shell", and Shell, Shelly, Bombshell Sportswear, BP and NBPure for the shell / bp whole-word headline check).
+// Nothing is written to the data files.
 const http = require("http"), fs = require("fs"), path = require("path"), { execFileSync } = require("child_process");
 const { chromium } = require("playwright");
 const SITE = path.join(__dirname, "../site");
