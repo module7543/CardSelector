@@ -216,12 +216,28 @@ const label = r => r.merchant + " | " + r.card + " | " + r.bonus;
     ok(gb && gb.strict && bestOrderBreak(bk, "book") === -1, "book: exact-word stores first in Best offer (" + bk.slice(0, 3).map(r => r.merchant).join(", ") + ")");
   }
   // Nothing looser: "shell" never names Shelly or Bombshell Sportswear, "bp" never names NBPure.
-  for (const [q, bad] of [["shell", /Shelly|Bombshell/], ["bp", /NBPure/]]) {
+  // Test-only offers with no end date: the whole-word merchant (the saved BP offers are Citi countdown estimates,
+  // and once they end "bp" gets the category headline, whose "Top offer" hint may name NBPure) and the partial
+  // matches, so the check never depends on today's date or on what the last refresh kept.
+  const looseOffers = [["Shell", "Auto & Gas", "1% back", "pay_at_pump"], ["Shelly", "Electronics & Software", "6% back", "online"],
+    ["Bombshell Sportswear", "Clothing & Jewelry", "Spend $20, earn $10", "online"], ["BP", "Auto & Gas", "$5 back", "pay_at_pump"],
+    ["NBPure", "Beauty & Personal Care", "10% back", "online"]].map(([merchant, category, bonus, channel]) => ({
+    id: "test/loose-" + merchant.toLowerCase().replace(/\W+/g, "-"), card: "Capital One", merchant, category, bonus,
+    expires: null, expires_text: null, activation: "none_shown", channel, spend_cap: null, minimum_spend: null,
+    fine_print: null, other_details: [], last_read: "2026-10-18", first_seen: "2026-10-18", status: "active", status_since: "2026-10-18" }));
+  await page.route("**/data/offers.json", async route => {
+    const d = await (await route.fetch()).json();
+    d.offers.push(...looseOffers);
+    await route.fulfill({ json: d });
+  });
+  for (const [q, want, bad] of [["shell", "Shell", /Shelly|Bombshell/], ["bp", "BP", /NBPure/]]) {
     const r = await setup(q), names = await useNames(), t = await useText();
+    ok(names.includes(want) || (!names.length && /^Ready now:/.test(t)), q + ": headline is the whole-word " + want + " line (" + (names.join(", ") || t.split("\n")[0]) + ")");
     ok(!names.some(n => bad.test(n)) && !bad.test(t), q + ": headline leaves out " + bad.source.replace(/\|/g, " and ") + " (" + (names.join(", ") || t.split("\n")[0]) + ")");
     const part = [...new Set(r.filter(x => bad.test(x.merchant)).map(x => x.merchant))];
-    if (part.length) ok(part.every(m => !whole(m, q)), q + ": " + part.join(", ") + " not whole-word matches");
+    ok(part.length && part.every(m => !whole(m, q)), q + ": " + (part.join(", ") || "no partial match in the results") + " not whole-word matches");
   }
+  await page.unroute("**/data/offers.json");
 
   // Bonus rows open and close, closed on every render. Closed, one line of whole entries then "+N" for the rest
   // (entries left off plus the ones below the everyday rate); open, every entry on its own line, then the notes.
