@@ -783,6 +783,11 @@ const label = r => r.merchant + " | " + r.card + " | " + r.bonus;
     ok(tags.filter(t => t.tag).every(t => t.after && !t.gone && t.style === "13px 650 1px 7px 6px"), "New tag: right after the card name, 13px, 650, 1px 7px, 6px radius (" + JSON.stringify(tags.filter(t => t.tag)[0]) + ")");
     ok(tags.some(t => /Zq Papa Pens/.test(t.row) && !t.tag) && tags.some(t => /Zq Alpha Coffee \| Quicksilver/.test(t.row) && !t.tag),
       "New tag: none on the first-read Citi offer or the Capital One Zq Alpha Coffee (seen before)");
+    {
+      const ic = await page.$$eval("#main details.expired li.offer.gone", ls => ls.map(li => [getComputedStyle(li.querySelector("a.glink svg")).color, getComputedStyle(li.querySelector("a.cardlink svg")).color]));
+      const live = await page.$eval("#main > ul.results li.offer:not(.gone) a.glink svg", e => getComputedStyle(e).color);
+      ok(ic.length && ic.every(c => c[0] === c[1] && c[0] !== live), "Recently unavailable: the Google icon is grey like the card icon, blue on live rows (" + JSON.stringify([ic[0], live]) + ")");
+    }
     for (const scheme of ["light", "dark"]) {
       await page.emulateMedia({ colorScheme: scheme });
       const cr = await page.$eval("#main .newtag", t => {
@@ -830,8 +835,8 @@ const label = r => r.merchant + " | " + r.card + " | " + r.bonus;
     ok(JSON.stringify(s.tabs) === JSON.stringify(["New 1", "Gone 1"]) && JSON.stringify(s.rows) === JSON.stringify(["Zq Alpha Coffee | Chase Freedom Flex"]), "what changed: Dining gives New 1, Gone 1 (" + JSON.stringify(s.tabs) + ")");
     await page.locator("#wctabs button", { hasText: /^Gone/ }).click();
     s = await wcState();
-    ok(s.picked[0] === "Gone" && JSON.stringify(s.groups) === JSON.stringify(["Pulled early 1", "Ended 0"]) && JSON.stringify(s.rows) === JSON.stringify(["Zq Juliet Cafe | Chase Freedom Flex | Was to end Nov 9"]),
-      "what changed: Dining, Gone: Pulled early 1, Ended 0, Zq Juliet Cafe \"Was to end Nov 9\" (" + JSON.stringify(s) + ")");
+    ok(s.picked[0] === "Gone" && JSON.stringify(s.groups) === JSON.stringify(["Pulled early 1"]) && JSON.stringify(s.rows) === JSON.stringify(["Zq Juliet Cafe | Chase Freedom Flex | Was to end Nov 9"]),
+      "what changed: Dining, Gone: only the Pulled early 1 heading (no empty Ended heading), Zq Juliet Cafe \"Was to end Nov 9\" (" + JSON.stringify(s) + ")");
     await page.locator("#cats button", { hasText: /^All$/ }).click();
     s = await wcState();
     ok(JSON.stringify(s.groups) === JSON.stringify(["Pulled early 2", "Ended 2"]) &&
@@ -846,10 +851,25 @@ const label = r => r.merchant + " | " + r.card + " | " + r.bonus;
     ok(fox && fox.text === "Still on Bank of America and Capital One" && JSON.stringify(fox.dots) === JSON.stringify(["i-boa", "i-cap1"]),
       "what changed: Still on Bank of America and Capital One, each with its dot (names compared ignoring case, accents and punctuation; a missing U.S. Bank offer left out) (" + JSON.stringify(fox) + ")");
     ok(still.filter(x => x.m !== "Zq Foxtrot Pulled").every(x => x.text === null), "what changed: no Still on line where no other card has the merchant live");
+    // Gone rows: the Google icon is grey like the card icon (its own blue .ext color doesn't win).
+    const iconColors = () => page.$$eval("li.offer.gone", ls => ls.map(li => [getComputedStyle(li.querySelector("a.glink svg")).color, getComputedStyle(li.querySelector("a.cardlink svg")).color, getComputedStyle(li.querySelector(".meta")).color]));
+    const ic = await iconColors();
+    ok(ic.length && ic.every(c => c[0] === c[1] && c[0] === c[2]), "what changed: Gone rows' Google and card icons are both grey (" + JSON.stringify(ic[0]) + ")");
+    // Headings only for the groups the search leaves: one group left keeps its heading.
+    for (const [q, want] of [["zq hotel", ["Ended 1"]], ["zq foxtrot", ["Pulled early 1"]]]) {
+      await page.fill("#q", q);
+      await page.waitForTimeout(100);
+      s = await wcState();
+      ok(JSON.stringify(s.groups) === JSON.stringify(want) && s.rows.length === 1, "what changed: \"" + q + "\" on Gone keeps only the " + want[0] + " heading (" + JSON.stringify(s.groups) + ")");
+    }
     await page.fill("#q", "zq foxtrot");
     await page.waitForTimeout(100);
     s = await wcState();
     ok(JSON.stringify(s.tabs) === JSON.stringify(["New 0", "Gone 1"]) && s.rows.length === 1, "what changed: a search narrows both counts (" + JSON.stringify(s.tabs) + ")");
+    await page.fill("#q", "zq");
+    await page.waitForTimeout(100);
+    s = await wcState();
+    ok(JSON.stringify(s.groups) === JSON.stringify(["Pulled early 2", "Ended 2"]), "what changed: both headings back with the search widened (" + JSON.stringify(s.groups) + ")");
     await page.fill("#q", "");
     await page.locator("#cards button", { hasText: /^Capital One/ }).click();
     s = await wcState();
@@ -869,6 +889,8 @@ const label = r => r.merchant + " | " + r.card + " | " + r.bonus;
     // In the mode: In store, Newest added and a search; none of it is saved. The back arrow puts the old state back.
     await page.selectOption("#sort", "newest");
     await page.locator("#chans button", { hasText: /^In store/ }).click();
+    // Every test offer is online: the count line says how many the In store choice hides, as on the main list.
+    ok((await page.textContent("#count")) === "4 hidden by the In store filter", "what changed: the count line names what the In store filter hides (\"" + (await page.textContent("#count")) + "\")");
     await page.fill("#q", "kilo");
     const stIn = await stored();
     await page.click("#wcback");

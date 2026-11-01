@@ -2098,7 +2098,7 @@
       shownBefore = next;
       more.hidden = next >= list.length;
       more.textContent = "Show " + Math.min(pageSize, list.length - next) + " more (" + (list.length - next) + " left)";
-      if (setCount) setCount(liveShown);
+      if (setCount) setCount(liveShown, next);
     };
     more.addEventListener("click", function () { showMore(pageSize); });
     showMore(Math.max(pageSize, shownBefore));
@@ -2127,7 +2127,8 @@
   // ---- What changed (a mode of the main page) ----
   // The New or Gone list of the picked card (All cards: each card against its own latest read), through the same
   // search, filters, sort and Show more as the main list. No headline, bonus rows or Recently unavailable.
-  function renderWcList(query, today, inScope, scope, narrowed) {
+  // inAnyChan: the scope without the In store / Online choice (for the count it hides).
+  function renderWcList(query, today, inScope, inAnyChan, scope, narrowed) {
     renderHeadline([], today, false);
     // New keeps an offer marked used in this view in its place (dimmed) until the search or a filter changes, as
     // the main list does; the counts are the New rule's.
@@ -2140,7 +2141,19 @@
     renderActs(actCounts(isNewTab ? all.filter(function (o) { return isNew(o, today); }) : all));
     var list = actMode === "any" ? all : all.filter(actOk);
     var n = isNewTab ? nNew : nGone;
-    countEl.textContent = n ? n + (isNewTab ? " new" : " gone") + (n === 1 ? " offer" : " offers") + scope : "";
+    // The count line, with the main list's hints: "(showing N, keep typing to narrow)" while a plain search
+    // shows part of the list, and how many the In store / Online choice hides.
+    var inTab = isNewTab ? function (o) { return isNew(o, today); } : isDropped;
+    var chanHidden = chanMode === "any" ? 0 : search(query, function (o) { return !chanOk(o) && actOk(o) && inAnyChan(o) && inTab(o); }).length;
+    // shown: the New rows (an offer marked used here doesn't count) or the Gone rows on the page so far.
+    var setCount = function (liveShown, rowsShown) {
+      var shown = isNewTab ? liveShown : rowsShown, parts = [];
+      if (n) parts.push(n + (isNewTab ? " new" : " gone") + (n === 1 ? " offer" : " offers") + scope +
+        (!narrowed && n > shown ? " (showing " + shown + ", keep typing to narrow)" : ""));
+      if (chanHidden) parts.push(chanHidden + " hidden by the " + (chanMode === "store" ? "In store" : "Online") + " filter");
+      countEl.textContent = parts.join(" · ");
+    };
+    setCount(n, n);
     if (!list.length) {
       var p = el("p", "empty", "No " + (isNewTab ? "new" : "gone") + " offers" + scope.replace(/^,/, ""));
       if (compact(query) !== "") {
@@ -2152,12 +2165,13 @@
       return;
     }
     var cmp = comparator(sortMode, query, all);
-    if (isNewTab) return pagedList(list.sort(cmp), narrowed ? PAGE : MAX_SHOWN, today, "w", null);
+    if (isNewTab) return pagedList(list.sort(cmp), narrowed ? PAGE : MAX_SHOWN, today, "w", setCount);
     // Gone: "Pulled early N" then "Ended N" when any gone offer has an end date (offers with none, on All cards,
-    // follow under "Dropped N"); the sort applies inside each group. No end dates at all: no headings.
+    // follow under "Dropped N"); the sort applies inside each group. A group the search and filters leave empty
+    // has no heading. No end dates at all: no headings.
     var by = { pulled: [], ended: [], dropped: [] };
     list.forEach(function (o) { by[droppedKind(o)].push(o); });
-    var keys = by.pulled.length || by.ended.length ? ["pulled", "ended"].concat(by.dropped.length ? ["dropped"] : []) : [];
+    var keys = by.pulled.length || by.ended.length ? ["pulled", "ended", "dropped"].filter(function (k) { return by[k].length; }) : [];
     var NAMES = { pulled: "Pulled early", ended: "Ended", dropped: "Dropped" }, groups = [], ordered = [];
     keys.forEach(function (k) {
       var h = el("h3", "wcgroup", NAMES[k] + " ");
@@ -2166,7 +2180,7 @@
       ordered = ordered.concat(by[k].sort(cmp));
     });
     if (!keys.length) ordered = list.sort(cmp);
-    pagedList(ordered, narrowed ? PAGE : MAX_SHOWN, today, "w", null, { label: droppedLabel, groups: groups });
+    pagedList(ordered, narrowed ? PAGE : MAX_SHOWN, today, "w", setCount, { label: droppedLabel, groups: groups });
   }
 
   // The panel under the search box: back arrow, the card ("All cards"), the reads compared, then New and Gone.
@@ -2299,7 +2313,7 @@
     });
     renderWcPanel();
     renderFreshness(); // its New and Gone counts follow saves and new data
-    if (wc) return renderWcList(query, today, inScope, scope, narrowed);
+    if (wc) return renderWcList(query, today, inScope, inUsedScope, scope, narrowed);
     if (usedOn) return renderUsedList(query, today, inUsedScope,
       (category !== null ? " in " + category + (cuis !== null ? ": " + cuis : "") : "") + (card !== null ? " on " + card : ""));
     var gone = search(query, function (o) { return inCat(o) && isGone(o, today); });
