@@ -630,8 +630,8 @@ def card_check(card, rows, incs, view_list, batches, read_date):
     exclusive offers is only a warning. An offer is exclusive to one sibling only if it was already on that card when
     the other card was last read (`first_seen` on or before the other card's newest batch) and the other card does not
     have it: offers one card gained after the other's last read are not evidence either way, since right after one
-    card's refresh the other's page shows the new offers too. Only offers still live on the read date count (not
-    missing, expired or past `expires`), and names also match ignoring punctuation. It warns when the file has more
+    card's refresh the other's page shows the new offers too. Only live offers count: active and not past `expires`
+    on the read date (for this card, also any offer the file shows again), and names also match ignoring punctuation. It warns when the file has more
     than half of the sibling's exclusive offers and more of them than of this card's own."""
     named, cols, partial = file_cards(rows)
     refusal = stop = warning = None
@@ -658,12 +658,15 @@ def card_check(card, rows, incs, view_list, batches, read_date):
         ks = lambda o: names(o["merchant"], o.get("aliases", []), o["bonus"])
         keys = {c: set().union(*[ks(o) for o in view_list if o["card"] == c]) for c in (card, other)}
 
-        def only(c, d):
-            # c's offers still live on the read date that were on c by d's last read and that d does not have
-            return [o for o in view_list if o["card"] == c and o["status"] not in ("missing", "expired")
-                    and not (o.get("expires") and o["expires"] < read_date) and not ks(o) & keys[d]
-                    and (last[d] is None or (o.get("first_seen") or "") <= last[d])]
         in_file = set().union(*[names(i.merchant, i.new_aliases, i.bonus) for i in incs])
+
+        def live(o):  # active and not ended by the read date; for this card also any offer the file shows again
+            return (o["status"] == "active" and not (o.get("expires") and o["expires"] < read_date)) \
+                or (o["card"] == card and bool(ks(o) & in_file))
+
+        def only(c, d):  # c's live offers that were on c by d's last read and that d does not have
+            return [o for o in view_list if o["card"] == c and live(o) and not ks(o) & keys[d]
+                    and (last[d] is None or (o.get("first_seen") or "") <= last[d])]
         own_x, sib_x = only(card, other), only(other, card)
         a, b = (sum(1 for o in xs if ks(o) & in_file) for xs in (own_x, sib_x))
         # A card picking up a few of its sibling's offers is normal; a wrong-card file has most of them.

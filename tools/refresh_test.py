@@ -1382,6 +1382,23 @@ class CardCheckUnit(unittest.TestCase):
         refusal, stop, warning = self.check(flex + [self.offer("Chase Freedom", "Whisker")], [("Live One", "10% cash back")])
         self.assertIn("the list has 1 of the 1 offers only Chase Freedom Flex had", warning or "")
 
+    def test_renewed_own_offers_still_count(self):
+        # Freedom's own offers ended by their saved date but shown again (renewed) are this card's evidence.
+        offers = ([self.offer("Chase Freedom Flex", f"Flex {k}") for k in "ABC"]
+                  + [self.offer("Chase Freedom", f"Freedom {k}", expires="2026-10-30") for k in "DEF"])
+        file_offers = [(f"Flex {k}", "10% cash back") for k in "AB"] + [(f"Freedom {k}", "10% cash back") for k in "DEF"]
+        self.assertIsNone(self.check(offers, file_offers)[2])
+
+    def test_used_or_missing_sibling_offers_do_not_count_even_if_shown(self):
+        # A sibling offer marked used or missing is not on the sibling's page, so it is no evidence either way
+        # (Lyft: dropped from Flex on 10-31, on the Freedom page the same day).
+        offers = [self.offer("Chase Freedom Flex", "Live One"), self.offer("Chase Freedom Flex", "Used One", status="used"),
+                  self.offer("Chase Freedom Flex", "Lyft", status="missing"), self.offer("Chase Freedom", "Whisker")]
+        refusal, stop, warning = self.check(offers, [("Live One", "10% cash back")])
+        self.assertIn("the list has 1 of the 1 offers only Chase Freedom Flex had", warning or "")  # Used One not counted
+        offers[0]["status"] = "missing"
+        self.assertIsNone(self.check(offers, [("Lyft", "10% cash back"), ("Whisker", "10% cash back")])[2])
+
     def test_counts_not_shares(self):
         # 2 of the sibling's 2 against 3 of this card's 5: more of its own, no warning.
         offers = ([self.offer("Chase Freedom Flex", f"Flex {k}") for k in "AB"]
