@@ -6,7 +6,7 @@ name: Sort checks
 
 on:
   pull_request:
-    paths: ['site/js/**', 'site/index.html', 'site/sw.js', 'tools/offline_test.js', 'tools/write_version.py', '.github/workflows/pages.yml', 'site/data/phone-edits.json', 'tools/sort_test.js', 'tools/phone_edits_test.js', 'tools/fold_phone_edits.py', 'tools/fold_on_main.sh', '.github/workflows/fold-phone-edits.yml', 'tools/validate.py', 'tools/refresh.py', 'tools/refresh_test.py', 'tools/fixtures/**', 'tools/cuisines.py', 'site/data/cards.json', 'site/data/bonus-categories.json', 'site/data/card-links.json', '.github/workflows/sort-tests.yml']
+    paths: ['site/js/**', 'site/index.html', 'site/sw.js', 'tools/offline_test.js', 'tools/write_version.py', '.github/workflows/pages.yml', 'site/data/phone-edits.json', 'tools/sort_test.js', 'tools/phone_edits_test.js', 'tools/fold_phone_edits.py', 'tools/fold_on_main.sh', '.github/workflows/fold-phone-edits.yml', 'tools/validate.py', 'tools/refresh.py', 'tools/refresh_test.py', 'tools/fixtures/**', 'tools/cuisines.py', 'site/data/cards.json', 'site/data/bonus-categories.json', 'site/data/card-links.json', 'site/data/merchant-locations.json', '.github/workflows/sort-tests.yml']
   workflow_dispatch:
 
 permissions:

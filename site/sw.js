@@ -24,7 +24,7 @@ var META = PREFIX + VERSION + "-meta";
 var SET = PREFIX + VERSION + "-set-";
 var CODE = ["index.html", "js/edits.js", "js/store.js", "js/recent.js", "js/copy.js", "js/app.js"];
 var DATA = ["data/offers.json", "data/phone-edits.json", "data/bonus-categories.json", "data/cuisines.json",
-            "data/cards.json", "data/card-links.json"];
+            "data/cards.json", "data/card-links.json", "data/merchant-locations.json"];
 var FILES = CODE.concat(DATA);
 var HEADER = "X-Saved-Copy"; // on every answer from the copy: the set it came from
 var KNOWN = 30; // sets whose file hashes are kept, so a page can tell whether its own code is still current

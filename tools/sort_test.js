@@ -35,11 +35,12 @@ function whole(name, query, strict) {
   return false;
 }
 // Whole-word grouping, as the page's wholeLevel(): the matches with the "s" rule when they are 1 to 3 merchants
-// (name without " - Location"); when more than 3, the exact-word matches when those are 1 to 3; else none.
+// (the full name, as the page's merchant identity with no location groups); when more than 3, the exact-word
+// matches when those are 1 to 3; else none.
 // Returns false (no grouping) or the strict flag to use. `rows` must be the full result list.
 function grouped(rows, query) {
   if (!query) return false;
-  const count = strict => new Set(rows.filter(r => whole(r.merchant, query, strict)).map(r => spaced(r.merchant.replace(/\s+-\s+.*$/, "")).replace(/ /g, ""))).size;
+  const count = strict => new Set(rows.filter(r => whole(r.merchant, query, strict)).map(r => spaced(r.merchant.replace(/\.(com|net|org)\b/gi, "")).replace(/ /g, ""))).size;
   const n = count(false);
   if (n >= 1 && n <= 3) return { strict: false };
   if (n > 3) { const m = count(true); if (m >= 1 && m <= 3) return { strict: true }; }
@@ -952,6 +953,80 @@ const label = r => r.merchant + " | " + r.card + " | " + r.bonus;
     ok(!errs.length, "what changed: no page errors (" + errs.join("; ") + ")");
     await wcCtx.close();
     page = mainPage;
+  }
+
+  // Merchant identity on fixed fixture offers (offers.json replaced by these only): the full name is the merchant,
+  // nothing groups because of " - " or an alias, and only a member listed in merchant-locations.json joins its group.
+  {
+    const real = JSON.parse(fs.readFileSync(path.join(SITE, "data/offers.json")));
+    const fx = (id, card, merchant, category, bonus, extra) => Object.assign({ id: "test/id-" + id, card, merchant, category, bonus,
+      expires: null, expires_text: null, activation: "already_activated", channel: "in_store", spend_cap: null, minimum_spend: null,
+      fine_print: null, other_details: [], last_read: "2026-10-18", first_seen: "2026-10-18", status: "active", status_since: "2026-10-18" }, extra || {});
+    const FX = [
+      fx("ka-major", "Capital One", "KitchenAid - Major Appliances", "Home & Garden", "5% back", { activation: "none_shown", channel: "online" }),
+      fx("ka-counter", "Capital One", "KitchenAid - Countertop Appliances", "Home & Garden", "3% back", { activation: "none_shown", channel: "online" }),
+      fx("jb", "Citi Double Cash", "JetBlue", "Travel", "$50 Back", { activation: "needs_activation", channel: "none_shown" }),
+      fx("jb-points", "Citi Double Cash", "JetBlue TrueBlue Points", "Travel", "5% Back", { activation: "needs_activation", channel: "none_shown", aliases: ["JetBlue"] }),
+      fx("jb-vac", "Citi Double Cash", "jetBlue Vacations", "Travel", "4% Back", { activation: "needs_activation", channel: "none_shown" }),
+      fx("rt-flex", "Chase Freedom Flex", "Round Table Pizza", "Dining", "10% cash back", { activation: "needs_activation", channel: "none_shown" }),
+      fx("rt-usb", "U.S. Bank", "Round Table Pizza", "Dining", "6% cash back"),
+      fx("rt-nb", "Bank of America", "Round Table Pizza - Newport Beach", "Dining", "20% Cash back", { fine_print: "Zq Newport Beach terms only" }),
+      fx("rt-nb-2", "Bank of America", "Round Table Pizza - Newport Beach", "Dining", "$5 Cash back"),
+      fx("rt-irv", "Bank of America", "Round Table Pizza - Irvine", "Dining", "2% Cash back"),
+      ...["North", "South", "East", "West"].map((l, i) => fx("zqloc-" + i, "U.S. Bank", "Zqloc - " + l, "Clothing & Jewelry", (2 + i) + "% cash back")),
+      fx("zqlocal", "U.S. Bank", "Zqlocal Shop", "Clothing & Jewelry", "30% cash back")
+    ];
+    let LOC = { status: 200, body: '{ "groups": {} }\n' };
+    await page.route("**/data/offers.json", r => r.fulfill({ json: Object.assign({}, real, { offers: FX }) }));
+    await page.route("**/data/phone-edits.json", r => r.fulfill({ json: {} }));
+    await page.route("**/data/merchant-locations.json", r => r.fulfill({ status: LOC.status, contentType: "application/json", body: LOC.body }));
+    const id = async (q, o) => {
+      const r = await setup(q, o);
+      return { rows: r, names: await useNames(), text: await useText(), top: await page.$eval("#use", e => (e.querySelector(".usetop") || {}).textContent || ""),
+        n: await page.evaluate(() => window.__locations) };
+    };
+    const RT3 = ["Round Table Pizza", "Round Table Pizza - Irvine", "Round Table Pizza - Newport Beach"];
+    const empty = { rt: await id("round table"), ka: await id("kitchenaid"), jb: await id("jetblue"), zq: await id("zqloc"), top: await id("", { cat: "Dining" }) };
+    ok(empty.rt.n === 0, "identity: the empty locations file gives no merges");
+    ok(JSON.stringify(empty.ka.names) === JSON.stringify(["KitchenAid - Countertop Appliances", "KitchenAid - Major Appliances"]),
+      "identity: KitchenAid - Major Appliances and - Countertop Appliances are two merchants (" + empty.ka.names.join(", ") + ")");
+    ok(JSON.stringify(empty.jb.names) === JSON.stringify(["JetBlue", "JetBlue TrueBlue Points", "jetBlue Vacations"]),
+      "identity: JetBlue, JetBlue TrueBlue Points (alias JetBlue) and jetBlue Vacations are three merchants (" + empty.jb.names.join(", ") + ")");
+    ok(JSON.stringify(empty.rt.names) === JSON.stringify(RT3), "identity: \" - \" groups nothing, round table names three merchants (" + empty.rt.names.join(", ") + ")");
+    ok(!empty.zq.names.length && empty.zq.rows[0].merchant === "Zqlocal Shop" && !grouped(empty.zq.rows, "zqloc") && bestOrderBreak(empty.zq.rows, "zqloc") === -1,
+      "identity: four Zqloc - <place> names are four merchants: category headline, plain reward order (" + empty.zq.rows.map(r => r.merchant).join(", ") + ")");
+    ok(/^Top offer: Round Table Pizza - Newport Beach /.test(empty.top.top), "identity: Top offer names the Newport Beach offer's own merchant (" + empty.top.top + ")");
+
+    LOC = { status: 200, body: JSON.stringify({ groups: { "Round Table Pizza": ["Round Table Pizza - Newport Beach"], "Zqloc": ["Zqloc - North", "Zqloc - South", "Zqloc - East", "Zqloc - West"] } }) };
+    const g = { rt: await id("round table"), ka: await id("kitchenaid"), jb: await id("jetblue"), zq: await id("zqloc"), top: await id("", { cat: "Dining" }), nb: await id("newport") };
+    ok(g.rt.n === 5, "locations: five approved members loaded (" + g.rt.n + ")");
+    ok(JSON.stringify(g.rt.names) === JSON.stringify(["Round Table Pizza", "Round Table Pizza - Irvine"]),
+      "locations: only the listed Newport Beach member joins Round Table Pizza; Irvine stays apart (" + g.rt.names.join(", ") + ")");
+    ok(JSON.stringify(g.ka.names) === JSON.stringify(empty.ka.names) && JSON.stringify(g.jb.names) === JSON.stringify(empty.jb.names),
+      "locations: KitchenAid and JetBlue unchanged by a file that doesn't list them");
+    const rowsOf = x => x.rows.map(label).sort();
+    ok(JSON.stringify(rowsOf(g.rt)) === JSON.stringify(rowsOf(empty.rt)) && g.rt.rows.filter(r => r.merchant === "Round Table Pizza - Newport Beach").length === 2,
+      "locations: a grouped member keeps its own rows, name and bonus (" + g.rt.rows.length + " rows, same as without the file)");
+    await page.locator("#main li.offer").filter({ has: page.locator(".merchant", { hasText: /^Round Table Pizza - Newport Beach$/ }) })
+      .filter({ has: page.locator(".bonus", { hasText: /^20%/ }) }).locator("button.toggle").click();
+    const terms = await page.$eval("#main li.offer button.toggle[aria-expanded=true]", b => b.closest("li").innerText);
+    ok(/Zq Newport Beach terms only/.test(terms), "locations: the grouped offer's details show its own terms");
+    ok(/Ready now: /.test(g.nb.text) && JSON.stringify(g.nb.names) === JSON.stringify(["Round Table Pizza"]), "locations: \"newport\" names the group's merchant (" + g.nb.names.join(", ") + ")");
+    ok(!g.zq.names.length && /^Ready now: /.test(g.zq.text) && g.zq.rows[0].merchant !== "Zqlocal Shop" && grouped(g.zq.rows.map(r => Object.assign({}, r, { merchant: r.merchant.replace(/^Zqloc - .*$/, "Zqloc") })), "zqloc"),
+      "locations: the four Zqloc members are one merchant: its headline, and its offers first in Best offer (" + g.zq.rows.map(r => r.merchant).join(", ") + ")");
+    ok(/^Top offer: Round Table Pizza \d/.test(g.top.top), "locations: Top offer names the group (" + g.top.top + ")");
+
+    // A missing, broken or invalid file: no merges, the page works.
+    for (const [label, L] of [["404", { status: 404, body: "" }], ["not JSON", { status: 200, body: "{ nope" }], ["wrong shape", { status: 200, body: '{"groups": []}' }],
+      ["member not '<base> - <suffix>'", { status: 200, body: '{"groups": {"Round Table Pizza": ["Round Table Pizza Irvine", "Round Table Pizza - Newport Beach"]}}' }],
+      ["member in two groups", { status: 200, body: '{"groups": {"Round Table Pizza": ["Round Table Pizza - Newport Beach"], "Round Table": ["Round Table Pizza - Newport Beach"]}}' }]]) {
+      LOC = L;
+      const x = await id("round table");
+      ok(x.n === 0 && JSON.stringify(x.names) === JSON.stringify(RT3) && x.rows.length === empty.rt.rows.length, "locations file " + label + ": no merges, the page works (" + x.names.join(", ") + ")");
+    }
+    await page.unroute("**/data/offers.json");
+    await page.unroute("**/data/phone-edits.json");
+    await page.unroute("**/data/merchant-locations.json");
   }
 
   // Search box shadow: off at the top, on once scrolled, off again back at the top.

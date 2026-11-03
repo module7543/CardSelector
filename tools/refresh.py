@@ -8,8 +8,9 @@
 
 report reads the CSV(s) and site/data/offers.json with the pending phone edits on top (with_pending()) and
 changes nothing. apply makes the same plan, refuses while anything needs a decision, then writes offers.json
-(and moves cuisine entries for renames that add no alias), runs tools/cuisines.py sync and tools/validate.py,
-and puts both files back if either fails.
+(moves cuisine entries for renames that add no alias, and approved location members of renamed merchants in
+site/data/merchant-locations.json), runs tools/cuisines.py sync and tools/validate.py, and puts the files back if
+either fails. It never adds a location group: new "<base> - <location>" names are only listed for the owner.
 
 Multi-part batches: --part saves a part without marking anything missing, without the size check and without a
 batches entry; at "batch complete" run apply --complete-parts on the last part (offers already read on that date
@@ -37,7 +38,7 @@ from pathlib import Path
 sys.dont_write_bytecode = True
 ROOT = Path(__file__).resolve().parent.parent
 DATA = ROOT / "site/data"
-OFFERS, CUISINES = DATA / "offers.json", DATA / "cuisines.json"
+OFFERS, CUISINES, LOCATIONS = DATA / "offers.json", DATA / "cuisines.json", DATA / "merchant-locations.json"
 sys.path.insert(0, str(ROOT / "tools"))
 from fold_phone_edits import load_pending, with_pending  # noqa: E402
 
@@ -83,6 +84,17 @@ def compact(s):
 def nkey(s):
     """Name key for matching a file row to a saved offer: compact(), with '&' read as 'and'."""
     return compact(re.sub(r"\s*&\s*", " and ", s or ""))
+
+
+def merchant_key(s):
+    """The page's merchant identity, merchantKey(): compact() after dropping .com / .net / .org (as validate.py)."""
+    return compact(re.sub(r"\.(com|net|org)\b", "", s or "", flags=re.I | re.A))
+
+
+def location_of_base(member, base_key):
+    """'<base> - <suffix>' (validate.py's rule): some ' - ' splits the name into the base and a non-empty suffix."""
+    return any(merchant_key(member[:m.start()]) == base_key and compact(member[m.end():])
+               for m in re.finditer(r"\s+-\s+", member))
 
 
 def words(s):
@@ -1326,6 +1338,57 @@ def plan(card, paths, given_date, decisions=None, part=False, complete_parts=Fal
                 dining.append({"merchant": o["merchant"], "already_on_to_classify": compact(o["merchant"]) in todo})
     out["new_dining"] = sorted({d["merchant"]: d for d in dining}.values(), key=lambda d: d["merchant"].lower())
 
+    # merchant locations: never added here. A rename of an approved member moves it in the same run; new
+    # "<base> - <suffix>" names whose base is a saved merchant or group are listed for the owner (report only).
+    lj = json.loads(LOCATIONS.read_text()) if LOCATIONS.exists() else {"groups": {}}
+    groups_now = lj.get("groups") if isinstance(lj, dict) and isinstance(lj.get("groups"), dict) else {}
+    member_of = {merchant_key(m): (b, m) for b, ms in groups_now.items() if isinstance(ms, list) for m in ms if isinstance(m, str)}
+    still_all = {merchant_key(o["merchant"]) for o in new["offers"]}
+    loc_moves, loc_held, done, moved = [], [], set(), set()
+    for r in out["renames"]:
+        old_k, new_k = merchant_key(r["from"]), merchant_key(r["to"])
+        if old_k not in member_of or old_k == new_k or (old_k, new_k) in done:
+            continue
+        done.add((old_k, new_k))
+        base, member = member_of[old_k]
+        # another offer still has the old name (or it was already moved to another name): keep both
+        how = "copy" if old_k in still_all or old_k in moved else "move"
+        if new_k in member_of:
+            why = "already listed" if member_of[new_k][0] == base else f"already in group {member_of[new_k][0]!r}"
+        elif new_k == merchant_key(base):
+            why = "the new name is the group's own name (it is that merchant now)"
+        elif not location_of_base(r["to"], merchant_key(base)):
+            why = f"the new name is not '{base} - <location>'"
+        else:
+            why = None
+        if why:
+            loc_held.append({"from": member, "to": r["to"], "group": base, "why": why})
+            continue
+        loc_moves.append({"group": base, "from": member, "to": r["to"], "how": how})
+        if how == "move":
+            moved.add(old_k)
+        member_of[new_k] = (base, r["to"])
+    out["location_moves"], out["location_held"] = loc_moves, loc_held
+    saved_names = {merchant_key(o["merchant"]) for o in data["offers"]}
+    group_keys = {merchant_key(b): b for b in groups_now}
+    written = [m["merchant"] for m in out["new"]] + [r["to"] for r in out["renames"]]
+    cands, seen_c = [], set()
+    for name in written:
+        k = merchant_key(name)
+        if k in saved_names or k in member_of or k in seen_c:
+            continue
+        for m in re.finditer(r"\s+-\s+", name):
+            pk = merchant_key(name[:m.start()])
+            if not compact(name[m.end():]) or not pk:
+                continue
+            if pk in group_keys or pk in saved_names:
+                hit = (f"approved group {group_keys[pk]!r}" if pk in group_keys
+                       else "saved merchant " + repr(next(o["merchant"] for o in data["offers"] if merchant_key(o["merchant"]) == pk)))
+                cands.append({"merchant": name, "base": name[:m.start()], "matches": hit})
+                seen_c.add(k)
+                break
+    out["location_candidates"] = cands
+
     # proposals and checks
     out["proposals"] = [{"saved": o["id"], "saved_name": o["merchant"], "saved_bonus": o["bonus"], "saved_status": o["status"],
                          "file": incs[i].merchant, "bonus": incs[i].bonus, "lines": incs[i].lines, "why": why}
@@ -1463,6 +1526,12 @@ def show(out, limit=40):
         lambda m: m["merchant"] + (" (already on to_classify)" if m["already_on_to_classify"] else ""))
     lst("Cuisine entries following a rename that adds no alias", out["cuisine_moves"],
         lambda m: f"{m['from']!r} -> {m['to']!r} ({'moved' if m['how'] == 'move' else 'copied: the old name is still on other Dining offers'})")
+    lst("Approved location members following a rename (merchant-locations.json)", out["location_moves"],
+        lambda m: f"{m['group']}: {m['from']!r} -> {m['to']!r} ({'moved' if m['how'] == 'move' else 'added: the old name is still on other offers'})")
+    lst("Approved location members renamed but NOT moved (owner review; the file keeps the old name)", out["location_held"],
+        lambda m: f"{m['group']}: {m['from']!r} -> {m['to']!r}: {m['why']}")
+    lst("Possible new locations for the owner to review (never added automatically; merchant-locations.json is unchanged)",
+        out["location_candidates"], lambda m: f"{m['merchant']!r}: base {m['base']!r} matches {m['matches']}")
     lst("Other offers expired by date (cleanup)", out["expired"], lambda m: f"{m['id']} (expires {m['expires']})")
     lst("Deleted by the 30-day cleanup", out["deleted"], lambda m: f"{m['id']} ({m['status']} since {m['since']})")
     lst("Row notes", out["flags"], lambda m: m)
@@ -1500,6 +1569,7 @@ def apply(card, paths, given_date, decisions, part, complete_parts=False):
         raise Refused("not applied: " + "; ".join(out["blockers"]))
     offers_text = OFFERS.read_text()
     cuisines_text = CUISINES.read_text() if CUISINES.exists() else None
+    locations_text = LOCATIONS.read_text() if LOCATIONS.exists() else None
     edits = DATA / "phone-edits.json"
     edits_text = edits.read_text() if edits.exists() else None
     try:
@@ -1511,6 +1581,15 @@ def apply(card, paths, given_date, decisions, part, complete_parts=False):
                 # a renamed merchant keeps its cuisine: never re-classified by a refresh
                 c["merchants"][b] = c["merchants"].pop(a) if how == "move" else copy.deepcopy(c["merchants"][a])
             cu.write(c)
+        if out["location_moves"] and locations_text is not None:
+            lj = json.loads(locations_text)
+            for m in out["location_moves"]:
+                ms = lj["groups"][m["group"]]
+                if m["how"] == "move":
+                    ms[ms.index(m["from"])] = m["to"]
+                else:
+                    ms.append(m["to"])
+            LOCATIONS.write_text(json.dumps(lj, indent=2, ensure_ascii=False) + "\n")
         code, txt = run(["tools/cuisines.py", "sync"])
         print(mask("\ncuisines.py sync:\n" + txt))
         if code:
@@ -1523,7 +1602,9 @@ def apply(card, paths, given_date, decisions, part, complete_parts=False):
         OFFERS.write_text(offers_text)
         if cuisines_text is not None:
             CUISINES.write_text(cuisines_text)
-        print("\nNothing kept: offers.json and cuisines.json put back.")
+        if locations_text is not None:
+            LOCATIONS.write_text(locations_text)
+        print("\nNothing kept: offers.json, cuisines.json and merchant-locations.json put back.")
         raise
     if (edits.read_text() if edits.exists() else None) != edits_text:
         raise Refused("phone-edits.json changed during the run (it must never be written by a refresh)")

@@ -4,8 +4,10 @@
 // in the X-Saved-Copy header). It knows nothing about GitHub (store.js) or what the data means (app.js).
 //   CardCopy.start(registering)           takes app.js's register() promise (no-op where service workers aren't available)
 //   CardCopy.check({ throttle, force })   -> Promise of null (skipped) or { status, set, savedAt, offline, code }
-//   CardCopy.fetchTogether(paths)         -> Promise of { set, items: [{ path, ok, status, text }] }, one set
-//   CardCopy.readSet(paths)               -> the same from the current saved set in Cache Storage, or null
+//   CardCopy.fetchTogether(paths, opts)   -> Promise of { set, items: [{ path, ok, status, text }] }, one set
+//   CardCopy.readSet(paths, opts)         -> the same from the current saved set in Cache Storage, or null
+//   opts.optional: paths a set may lack (a set saved before the file existed); such a file that doesn't load
+//   comes back as ok: false and doesn't stop the others.
 (function (root) {
   "use strict";
   var THROTTLE = 30000; // checks when the page comes back on screen: at most one per 30 seconds
@@ -86,13 +88,18 @@
 
   // Fetches the files as one set: every answer from the same saved set, or every one from the network. A mix
   // (the copy was replaced between two requests) is fetched again; if it stays mixed, all of them come from
-  // the network instead, as they did before the saved copy existed.
-  function fetchTogether(paths, tries) {
+  // the network instead, as they did before the saved copy existed. An optional file that didn't load (not in
+  // an older saved set, and offline) is left out of that test, so the rest still opens from the copy.
+  function fetchTogether(paths, opts, tries) {
+    var optional = (opts && opts.optional) || [];
     tries = tries === undefined ? 3 : tries;
     return Promise.all(paths.map(function (p) { return one(p, tries < 0); })).then(function (items) {
       var sets = [];
-      items.forEach(function (it) { if (sets.indexOf(it.set) === -1) sets.push(it.set); });
-      if (sets.length > 1) return fetchTogether(paths, tries > 1 ? tries - 1 : -1);
+      items.forEach(function (it) {
+        if (!it.ok && optional.indexOf(it.path) !== -1) return;
+        if (sets.indexOf(it.set) === -1) sets.push(it.set);
+      });
+      if (sets.length > 1) return fetchTogether(paths, opts, tries > 1 ? tries - 1 : -1);
       var res = { set: sets[0] || null, items: items };
       if (!booted) { booted = true; bootSet = res.set; }
       return res;
@@ -104,7 +111,8 @@
   // (every later open hung). Same answer shape as fetchTogether; null when there is no saved set to read.
   // Must match the names in sw.js (META, CURRENT_KEY; PREFIX + VERSION): change both together.
   var META = "cardselector-copy-v1-meta", CURRENT = "__saved-copy__/current";
-  function readSet(paths) {
+  function readSet(paths, opts) {
+    var optional = (opts && opts.optional) || [];
     if (!root.caches) return Promise.resolve(null);
     var at = function (p) { return new URL(p, root.location.href).href; };
     // caches.match with a cacheName creates no cache (caches.open would leave an empty one after the off switch).
@@ -112,8 +120,9 @@
     return get(CURRENT, META).then(function (r) {
       return r ? r.json() : null;
     }).then(function (m) {
-      if (!m || !m.name || !m.files || !paths.every(function (p) { return m.files[p]; })) return null;
+      if (!m || !m.name || !m.files || !paths.every(function (p) { return m.files[p] || optional.indexOf(p) !== -1; })) return null;
       return Promise.all(paths.map(function (p) {
+        if (!m.files[p]) return { path: p, ok: false, status: 404, text: null, set: m.name }; // an older set
         return get(p, m.name).then(function (r) {
           if (!r) return null;
           return r.text().then(function (t) { return { path: p, ok: true, status: 200, text: t, set: m.name }; });

@@ -3,7 +3,8 @@
 
 Each check runs the tool in a throwaway copy of the repo layout: tools/ (refresh, validate, cuisines,
 fold_phone_edits) and site/data/ holding the fixture snapshot (tools/fixtures/offers.json, cuisines.json: 42 offers
-copied from offers.json on 2026-10-20) plus the repo's cards.json, bonus-categories.json and card-links.json.
+copied from offers.json on 2026-10-20) plus the repo's cards.json, bonus-categories.json, card-links.json and
+merchant-locations.json (empty; checks that need groups write their own).
 The fixture CSVs (tools/fixtures/*.csv) are in each issuer's real column format and reproduce the snapshot when
 read on 2026-10-25 (Citi countdowns and Chase end timestamps are set for that date). Checks change a copy of a
 CSV or of the snapshot, run report / apply, and compare. The repo's own data is never touched.
@@ -33,7 +34,7 @@ class Tree:
             shutil.copy(REPO / "tools" / f, self.root / "tools" / f)
         for f in ("offers.json", "cuisines.json"):
             shutil.copy(FIX / f, data / f)
-        for f in ("cards.json", "bonus-categories.json", "card-links.json"):
+        for f in ("cards.json", "bonus-categories.json", "card-links.json", "merchant-locations.json"):
             shutil.copy(REPO / "site/data" / f, data / f)
         self.data = data
         self.write_json("phone-edits.json", edits or {})
@@ -549,6 +550,76 @@ class RefreshTest(unittest.TestCase):
         by = self.t.offers()
         self.assertEqual(by["chase-freedom-flex/babbel"]["status"], "active")
         self.assertEqual(len([b for b in self.t.load()["batches"] if b["card"] == "Chase Freedom Flex"]), 1)
+
+    # --- merchant locations (site/data/merchant-locations.json) ----------------------------------------------------
+
+    def test_location_candidates_are_reported_never_written(self):
+        groups = {"groups": {"Pura Vida": ["Pura Vida - Santa Monica"]}}
+        self.t.write_json("merchant-locations.json", groups)
+        before = self.t.read("merchant-locations.json")
+        extra = [("CVS - Pasadena", "5% back"), ("Pura Vida - Venice", "6% back"), ("Zyxnew - Downtown", "7% back"),
+                 ("CVS Pharmacy Online", "8% back")]
+        p = self.t.csv("Capital One", lambda rows: rows + [dict(rows[0], merchant=m, bonus=b) for m, b in extra])
+        cats = {"CVS - Pasadena": "Health, Fitness & Vision", "Pura Vida - Venice": "Clothing & Jewelry",
+                "Zyxnew - Downtown": "Services & Utilities", "CVS Pharmacy Online": "Health, Fitness & Vision"}
+        dec = {"categories": cats, "owner_approved": ["new_share"]}
+        code, out, rep = self.t.run("report", "Capital One", [p], decisions=dec)
+        self.assertEqual(code, 0, out)
+        got = {c["merchant"]: c["matches"] for c in rep["location_candidates"]}
+        # a saved merchant's name or an approved group's name before " - "; no " - " or no such base: not listed
+        self.assertEqual(got, {"CVS - Pasadena": "saved merchant 'CVS'", "Pura Vida - Venice": "approved group 'Pura Vida'"}, out)
+        self.assertIn("Possible new locations for the owner to review", out)
+        self.assertEqual(rep["blockers"], [], out)  # report-only: nothing to decide
+        self.assertEqual(self.t.read("merchant-locations.json"), before)
+        self.apply_ok("Capital One", [p], decisions=dec)
+        self.assertEqual(self.t.read("merchant-locations.json"), before, "apply never adds a location group or member")
+        # once saved, the next read does not list it again
+        code, out, rep = self.t.run("report", "Capital One", [p])
+        self.assertEqual(rep["location_candidates"], [], out)
+
+    def test_renamed_location_member_follows_in_the_same_run(self):
+        self.t.change_offers(lambda by, d: by["capital-one/ebay"].update(merchant="eBay - Outlet"))
+        self.t.write_json("merchant-locations.json", {"groups": {"eBay": ["eBay - Outlet"]}})
+        def fn(rows):
+            for r in rows:
+                if r["merchant"] == "eBay":
+                    r["merchant"] = "eBay - Outlet Store"
+            return rows
+        out, rep = self.apply_ok("Capital One", [self.t.csv("Capital One", fn)])
+        self.assertEqual(self.t.offers()["capital-one/ebay"]["merchant"], "eBay - Outlet Store")
+        self.assertEqual(self.t.load("merchant-locations.json"), {"groups": {"eBay": ["eBay - Outlet Store"]}}, out)
+        self.assertEqual([(m["from"], m["to"], m["how"]) for m in rep["location_moves"]], [("eBay - Outlet", "eBay - Outlet Store", "move")])
+        self.assertEqual(rep["location_candidates"], [], "an approved member's rename is not a new candidate")
+
+    def test_renamed_location_member_that_no_longer_fits_is_held(self):
+        self.t.change_offers(lambda by, d: by["capital-one/ebay"].update(merchant="eBay - Outlet"))
+        self.t.write_json("merchant-locations.json", {"groups": {"eBay": ["eBay - Outlet"]}})
+        before = self.t.read("merchant-locations.json")
+        def fn(rows):
+            for r in rows:
+                if r["merchant"] == "eBay":
+                    r["merchant"] = "eBay Outlet Store"
+            return rows
+        out, rep = self.apply_ok("Capital One", [self.t.csv("Capital One", fn)])
+        self.assertEqual(self.t.read("merchant-locations.json"), before, "never rewritten into a member the validator would refuse")
+        self.assertEqual([(m["to"], m["why"]) for m in rep["location_held"]], [("eBay Outlet Store", "the new name is not 'eBay - <location>'")], out)
+        self.assertIn("is in no offer now", out)  # validate.py's note on the stale member
+
+    def test_location_file_put_back_when_validate_fails(self):
+        self.t.change_offers(lambda by, d: by["capital-one/ebay"].update(merchant="eBay - Outlet"))
+        self.t.write_json("merchant-locations.json", {"groups": {"eBay": ["eBay - Outlet"]}})
+        before = self.t.read("merchant-locations.json")
+        cards = self.t.load("cards.json")
+        cards["offer_lists"].pop("Citi Custom Cash")
+        self.t.write_json("cards.json", cards)
+        def fn(rows):
+            for r in rows:
+                if r["merchant"] == "eBay":
+                    r["merchant"] = "eBay - Outlet Store"
+            return rows
+        code, out, _ = self.t.run("apply", "Capital One", [self.t.csv("Capital One", fn)], decisions={})
+        self.assertNotEqual(code, 0, out)
+        self.assertEqual(self.t.read("merchant-locations.json"), before, out)
 
     def test_validate_failure_puts_files_back(self):
         cards = self.t.load("cards.json")
@@ -1414,6 +1485,74 @@ class CardCheckUnit(unittest.TestCase):
         file_offers = [(f"Flex {k}", "10% cash back") for k in "AB"] + [(f"Freedom {k}", "10% cash back") for k in "CDE"]
         self.assertIsNone(self.check(offers, file_offers)[2])
         self.assertIsNotNone(self.check(offers, file_offers[:3])[2])  # 2 against 1: a warning
+
+
+class ValidateLocationsTest(unittest.TestCase):
+    """tools/validate.py on site/data/merchant-locations.json, in the fixture tree (CVS, eBay, Pura, Pura Vida...)."""
+
+    def setUp(self):
+        self.t = Tree()
+
+    def tearDown(self):
+        self.t.close()
+
+    def validate(self, text):
+        p = self.t.data / "merchant-locations.json"
+        if text is None:
+            p.unlink()
+        else:
+            p.write_text(text if isinstance(text, str) else json.dumps(text))
+        r = subprocess.run([sys.executable, str(self.t.root / "tools/validate.py")], cwd=self.t.root, capture_output=True, text=True)
+        return r.returncode, r.stdout + r.stderr
+
+    def test_empty_file_passes(self):
+        code, out = self.validate('{ "groups": {} }\n')
+        self.assertEqual(code, 0, out)
+        self.assertIn("0 approved location variants in 0 groups", out)
+
+    def test_missing_file_is_an_error(self):
+        code, out = self.validate(None)
+        self.assertEqual(code, 1, out)
+        self.assertIn("merchant-locations.json is missing", out)
+
+    def test_bad_shapes_are_errors(self):
+        for bad in ["{ not json", "[]", '{"groups": []}', '{"groups": {}, "extra": 1}', '{}',
+                    {"groups": {"CVS": "CVS - Pasadena"}}, {"groups": {"CVS": []}}, {"groups": {"CVS": [3]}},
+                    {"groups": {"!!": ["!! - Pasadena"]}}]:
+            with self.subTest(bad=bad):
+                code, out = self.validate(bad)
+                self.assertEqual(code, 1, out)
+                self.assertIn("merchant-locations.json", out)
+
+    def test_member_rules(self):
+        cases = {
+            "not base - suffix": ({"groups": {"CVS": ["CVS Pasadena"]}}, "is not 'CVS - <location>'"),
+            "another base": ({"groups": {"CVS": ["Pura - Pasadena"]}}, "is not 'CVS - <location>'"),
+            "empty suffix": ({"groups": {"CVS": ["CVS - ..."]}}, "is its group's own name"),
+            "equal to its base": ({"groups": {"CVS": ["cvs"]}}, "is its group's own name"),
+            "equal to its base, .com": ({"groups": {"CVS": ["CVS.com"]}}, "is its group's own name"),
+            "in two groups": ({"groups": {"CVS": ["CVS - Pasadena"], "C.V.S.": ["cvs - pasadena"]}}, "and in group"),
+            "twice in one group": ({"groups": {"CVS": ["CVS - Pasadena", "CVS - PASADENA"]}}, "twice"),
+            "member is also a group": ({"groups": {"CVS": ["CVS - Pasadena"], "CVS - Pasadena": ["CVS - Pasadena - East"]}},
+                                       "is a group name and also a member"),
+        }
+        for label, (groups, msg) in cases.items():
+            with self.subTest(label):
+                code, out = self.validate(groups)
+                self.assertEqual(code, 1, out)
+                self.assertIn(msg, out)
+
+    def test_absent_member_only_warns(self):
+        code, out = self.validate({"groups": {"CVS": ["CVS - Pasadena"], "Round Table Pizza": ["Round Table Pizza - Newport Beach"]}})
+        self.assertEqual(code, 0, out)
+        self.assertIn("note: merchant-locations.json: 'CVS - Pasadena' (group 'CVS') is in no offer now", out)
+        self.assertIn("2 approved location variants in 2 groups", out)
+
+    def test_present_member_no_note(self):
+        self.t.change_offers(lambda by, d: by["capital-one/pura-vida"].update(merchant="Pura Vida - Santa Monica"))
+        code, out = self.validate({"groups": {"Pura Vida": ["Pura Vida - Santa Monica"]}})
+        self.assertEqual(code, 0, out)
+        self.assertNotIn("in no offer now", out)
 
 
 if __name__ == "__main__":
