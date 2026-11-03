@@ -97,6 +97,20 @@ def location_of_base(member, base_key):
                for m in re.finditer(r"\s+-\s+", member))
 
 
+def location_suffix(name, base_key):
+    """The part after the ' - ' that follows the base ('Newport Beach'), or None."""
+    for m in re.finditer(r"\s+-\s+", name):
+        if merchant_key(name[:m.start()]) == base_key and compact(name[m.end():]):
+            return name[m.end():]
+    return None
+
+
+def same_place(a, b):
+    """Two location suffixes name the same place: equal, or one is the other cut short ('Newport Be' / 'Newport Beach')."""
+    x, y = compact(a), compact(b)
+    return bool(x and y) and (x.startswith(y) or y.startswith(x))
+
+
 def words(s):
     return re.findall(r"[a-z0-9]+", deaccent(s or "").lower().replace("'", "").replace("’", ""))
 
@@ -1340,7 +1354,10 @@ def plan(card, paths, given_date, decisions=None, part=False, complete_parts=Fal
 
     # merchant locations: never added here. A rename of an approved member moves it in the same run; new
     # "<base> - <suffix>" names whose base is a saved merchant or group are listed for the owner (report only).
-    lj = json.loads(LOCATIONS.read_text()) if LOCATIONS.exists() else {"groups": {}}
+    try:
+        lj = json.loads(LOCATIONS.read_text()) if LOCATIONS.exists() else {"groups": {}}
+    except ValueError:
+        raise Refused("merchant-locations.json is not valid JSON (python3 tools/validate.py says why)")
     groups_now = lj.get("groups") if isinstance(lj, dict) and isinstance(lj.get("groups"), dict) else {}
     member_of = {merchant_key(m): (b, m) for b, ms in groups_now.items() if isinstance(ms, list) for m in ms if isinstance(m, str)}
     still_all = {merchant_key(o["merchant"]) for o in new["offers"]}
@@ -1359,6 +1376,8 @@ def plan(card, paths, given_date, decisions=None, part=False, complete_parts=Fal
             why = "the new name is the group's own name (it is that merchant now)"
         elif not location_of_base(r["to"], merchant_key(base)):
             why = f"the new name is not '{base} - <location>'"
+        elif not same_place(location_suffix(member, merchant_key(base)), location_suffix(r["to"], merchant_key(base))):
+            why = "the location part changed (only an extended or shortened location is followed)"
         else:
             why = None
         if why:
@@ -1372,6 +1391,13 @@ def plan(card, paths, given_date, decisions=None, part=False, complete_parts=Fal
     saved_names = {merchant_key(o["merchant"]) for o in data["offers"]}
     group_keys = {merchant_key(b): b for b in groups_now}
     written = [m["merchant"] for m in out["new"]] + [r["to"] for r in out["renames"]]
+    # What a new name's base may match: a saved or newly read merchant name, or the base of another saved or
+    # newly read " - " name (the location review's rule), besides an approved group.
+    plain, dashed = {}, {}
+    for n in [o["merchant"] for o in data["offers"]] + written:
+        plain.setdefault(merchant_key(n), n)
+        for m in re.finditer(r"\s+-\s+", n):
+            dashed.setdefault(merchant_key(n[:m.start()]), {}).setdefault(merchant_key(n), n)
     cands, seen_c = [], set()
     for name in written:
         k = merchant_key(name)
@@ -1381,12 +1407,18 @@ def plan(card, paths, given_date, decisions=None, part=False, complete_parts=Fal
             pk = merchant_key(name[:m.start()])
             if not compact(name[m.end():]) or not pk:
                 continue
-            if pk in group_keys or pk in saved_names:
-                hit = (f"approved group {group_keys[pk]!r}" if pk in group_keys
-                       else "saved merchant " + repr(next(o["merchant"] for o in data["offers"] if merchant_key(o["merchant"]) == pk)))
-                cands.append({"merchant": name, "base": name[:m.start()], "matches": hit})
-                seen_c.add(k)
-                break
+            others = [n for nk, n in dashed.get(pk, {}).items() if nk != k]
+            if pk in group_keys:
+                hit = f"approved group {group_keys[pk]!r}"
+            elif pk in plain:
+                hit = ("saved merchant " if pk in saved_names else "merchant new in this read ") + repr(plain[pk])
+            elif others:
+                hit = "another location-style name " + repr(sorted(others)[0])
+            else:
+                continue
+            cands.append({"merchant": name, "base": name[:m.start()], "matches": hit})
+            seen_c.add(k)
+            break
     out["location_candidates"] = cands
 
     # proposals and checks

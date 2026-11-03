@@ -626,10 +626,13 @@ class Hub {
   const oldSw = read("sw.js").toString().replace(', "data/merchant-locations.json"', "");
   ok(oldSw !== read("sw.js").toString(), "test sw.js without merchant-locations.json in DATA");
   await fresh({ over: { "sw.js": oldSw, "data/offers.json": locOffers, "data/merchant-locations.json": grouping } });
+  let n13b = site.log.length;
   await open(true);
+  const asked13b = site.log.slice(n13b).filter(p => /^data\//.test(p));
   st = await copy();
   lv = await locView();
   ok(st && st.locs === null && lv.names === ONE, "older saved set without the file, online: the file comes from the network and groups (" + lv.names + ")");
+  ok(JSON.stringify(asked13b) === JSON.stringify(["data/merchant-locations.json"]), "older saved set, online: offers.json and the rest still open from the copy, only the missing file is fetched (" + asked13b.join(", ") + ")");
   await site.stop();
   await page.goto(base()).catch(() => {});
   await page.waitForFunction(() => window.__copyLast, null, { timeout: 30000 });

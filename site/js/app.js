@@ -1518,7 +1518,7 @@
     return l ? l.cards : [];
   }
 
-  // Merchants among the matches, by name without a "- Location" suffix, plus typed bonus keywords that no offer
+  // Merchants among the matches, by merchant identity (containerKey: the full name, or an approved location's group), plus typed bonus keywords that no offer
   // carries ("shell" -> Shell). Whole-word matches win: when any merchant or keyword matches every typed word as a
   // whole word ("round table", "table round", "bp"), only those make the headline; partial matches (Shelly,
   // Bombshell Sportswear for "shell") stay in the results. When a name equals what was typed, keywords that only

@@ -88,15 +88,17 @@
 
   // Fetches the files as one set: every answer from the same saved set, or every one from the network. A mix
   // (the copy was replaced between two requests) is fetched again; if it stays mixed, all of them come from
-  // the network instead, as they did before the saved copy existed. An optional file that didn't load (not in
-  // an older saved set, and offline) is left out of that test, so the rest still opens from the copy.
+  // the network instead, as they did before the saved copy existed. An optional file the saved set lacks (an
+  // older set: it comes from the network, or not at all offline) is left out of that test, so the rest still
+  // opens from the copy.
   function fetchTogether(paths, opts, tries) {
     var optional = (opts && opts.optional) || [];
     tries = tries === undefined ? 3 : tries;
     return Promise.all(paths.map(function (p) { return one(p, tries < 0); })).then(function (items) {
       var sets = [];
       items.forEach(function (it) {
-        if (!it.ok && optional.indexOf(it.path) !== -1) return;
+        // An optional file the saved set lacks comes from the network (no set) or not at all: it doesn't make a mix.
+        if (optional.indexOf(it.path) !== -1 && (!it.ok || !it.set)) return;
         if (sets.indexOf(it.set) === -1) sets.push(it.set);
       });
       if (sets.length > 1) return fetchTogether(paths, opts, tries > 1 ? tries - 1 : -1);

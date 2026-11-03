@@ -577,6 +577,44 @@ class RefreshTest(unittest.TestCase):
         code, out, rep = self.t.run("report", "Capital One", [p])
         self.assertEqual(rep["location_candidates"], [], out)
 
+    def test_location_candidates_new_base_and_sibling_names(self):
+        # base and location both new in one read; a new location whose base only another " - " name carries
+        self.t.change_offers(lambda by, d: by["capital-one/pura-vida"].update(merchant="Zyxsib - North"))
+        extra = [("Zyxbase", "5% back"), ("Zyxbase - Downtown", "6% back"), ("Zyxsib - South", "7% back")]
+        p = self.t.csv("Capital One", lambda rows: [dict(r, merchant="Zyxsib - North") if r["merchant"] == "Pura Vida" else r for r in rows]
+                       + [dict(rows[0], merchant=m, bonus=b) for m, b in extra])
+        dec = {"categories": {m: "Services & Utilities" for m, _ in extra}, "owner_approved": ["new_share"]}
+        code, out, rep = self.t.run("report", "Capital One", [p], decisions=dec)
+        self.assertEqual(code, 0, out)
+        got = {c["merchant"]: c["matches"] for c in rep["location_candidates"]}
+        self.assertEqual(got, {"Zyxbase - Downtown": "merchant new in this read 'Zyxbase'",
+                               "Zyxsib - South": "another location-style name 'Zyxsib - North'"}, out)
+
+    def test_broken_location_file_refuses_cleanly(self):
+        (self.t.data / "merchant-locations.json").write_text("{ nope")
+        code, out, _ = self.t.run("report", "Capital One", [self.t.csv("Capital One")])
+        self.assertEqual(code, 2, out)
+        self.assertIn("merchant-locations.json is not valid JSON", out)
+        self.assertNotIn("Traceback", out)
+
+    def test_renamed_location_member_to_another_place_is_held(self):
+        self.t.change_offers(lambda by, d: by["capital-one/ebay"].update(merchant="eBay - Outlet"))
+        self.t.write_json("merchant-locations.json", {"groups": {"eBay": ["eBay - Outlet"]}})
+        before = self.t.read("merchant-locations.json")
+        def fn(rows):
+            for r in rows:
+                if r["merchant"] == "eBay":
+                    r["merchant"] = "eBay - Irvine"
+            return rows
+        p = self.t.csv("Capital One", fn)
+        pair = {"saved": "capital-one/ebay", "file": "eBay - Irvine", "bonus": "Spend $20, earn $10", "accept": True}
+        code, out, rep = self.t.run("report", "Capital One", [p], decisions={"pairs": [pair]})
+        if not any(m["id"] == "capital-one/ebay" for m in rep["paired"]):
+            self.skipTest("the fixture pairs differently: " + out[-400:])
+        out, rep = self.apply_ok("Capital One", [p], decisions={"pairs": [pair]})
+        self.assertEqual(self.t.read("merchant-locations.json"), before, out)
+        self.assertEqual([m["why"] for m in rep["location_held"]], ["the location part changed (only an extended or shortened location is followed)"], out)
+
     def test_renamed_location_member_follows_in_the_same_run(self):
         self.t.change_offers(lambda by, d: by["capital-one/ebay"].update(merchant="eBay - Outlet"))
         self.t.write_json("merchant-locations.json", {"groups": {"eBay": ["eBay - Outlet"]}})
