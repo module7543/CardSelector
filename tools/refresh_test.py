@@ -609,11 +609,34 @@ class RefreshTest(unittest.TestCase):
         p = self.t.csv("Capital One", fn)
         pair = {"saved": "capital-one/ebay", "file": "eBay - Irvine", "bonus": "Spend $20, earn $10", "accept": True}
         code, out, rep = self.t.run("report", "Capital One", [p], decisions={"pairs": [pair]})
-        if not any(m["id"] == "capital-one/ebay" for m in rep["paired"]):
-            self.skipTest("the fixture pairs differently: " + out[-400:])
+        self.assertTrue(any(m["id"] == "capital-one/ebay" for m in rep["paired"]), out)
         out, rep = self.apply_ok("Capital One", [p], decisions={"pairs": [pair]})
         self.assertEqual(self.t.read("merchant-locations.json"), before, out)
         self.assertEqual([m["why"] for m in rep["location_held"]], ["the location part changed (only an extended or shortened location is followed)"], out)
+
+    def test_same_place_by_whole_words(self):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("refresh_sp", self.t.root / "tools/refresh.py")
+        m = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(m)
+        for a, b, want in [("Newport Beach", "newport beach", True), ("Newport", "Newport Beach", True),
+                           ("Newport Be...", "Newport Beach", True), ("Newport Be", "Newport Beach", False),
+                           ("LA", "Lakewood", False), ("North", "Northridge", False), ("Irvine", "Newport Beach", False)]:
+            with self.subTest(a=a, b=b):
+                self.assertEqual(m.same_place(a, b), want)
+                self.assertEqual(m.same_place(b, a), want)
+
+    def test_rename_is_not_a_candidate_of_its_own_old_name(self):
+        self.t.change_offers(lambda by, d: by["capital-one/ebay"].update(merchant="eBay - Outlet"))
+        def fn(rows):
+            for r in rows:
+                if r["merchant"] == "eBay":
+                    r["merchant"] = "eBay - Outlet Store"
+            return rows
+        code, out, rep = self.t.run("report", "Capital One", [self.t.csv("Capital One", fn)])
+        self.assertEqual(code, 0, out)
+        self.assertIn("capital-one/ebay", [r["id"] for r in rep["renames"]], out)
+        self.assertEqual(rep["location_candidates"], [], out)
 
     def test_renamed_location_member_follows_in_the_same_run(self):
         self.t.change_offers(lambda by, d: by["capital-one/ebay"].update(merchant="eBay - Outlet"))

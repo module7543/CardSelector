@@ -106,9 +106,17 @@ def location_suffix(name, base_key):
 
 
 def same_place(a, b):
-    """Two location suffixes name the same place: equal, or one is the other cut short ('Newport Be' / 'Newport Beach')."""
-    x, y = compact(a), compact(b)
-    return bool(x and y) and (x.startswith(y) or y.startswith(x))
+    """Two location suffixes name the same place: the shorter one's words start the longer one ('Newport' /
+    'Newport Beach'); a cut-off last word counts only when the name shows the cut ('Newport Be...'). 'LA' is not
+    'Lakewood'."""
+    def starts(s, t):  # place s starts place t
+        x, y = words(s), words(t)
+        if not x or len(x) > len(y):
+            return False
+        if y[:len(x)] == x:
+            return True
+        return bool(re.search(r"(\.\.\.|…)\s*$", s)) and y[:len(x) - 1] == x[:-1] and y[len(x) - 1].startswith(x[-1])
+    return bool(a and b) and (starts(a, b) or starts(b, a))
 
 
 def words(s):
@@ -1353,7 +1361,8 @@ def plan(card, paths, given_date, decisions=None, part=False, complete_parts=Fal
     out["new_dining"] = sorted({d["merchant"]: d for d in dining}.values(), key=lambda d: d["merchant"].lower())
 
     # merchant locations: never added here. A rename of an approved member moves it in the same run; new
-    # "<base> - <suffix>" names whose base is a saved merchant or group are listed for the owner (report only).
+    # "<base> - <suffix>" names whose base is a saved or newly read merchant, the base of another such name, or
+    # a group are listed for the owner (report only).
     try:
         lj = json.loads(LOCATIONS.read_text()) if LOCATIONS.exists() else {"groups": {}}
     except ValueError:
@@ -1393,6 +1402,11 @@ def plan(card, paths, given_date, decisions=None, part=False, complete_parts=Fal
     written = [m["merchant"] for m in out["new"]] + [r["to"] for r in out["renames"]]
     # What a new name's base may match: a saved or newly read merchant name, or the base of another saved or
     # newly read " - " name (the location review's rule), besides an approved group.
+    # A renamed offer's old name is not another merchant: it is left out when its new name is checked.
+    renamed_from = {}
+    for r in out["renames"]:
+        renamed_from.setdefault(merchant_key(r["to"]), set()).add(merchant_key(r["from"]))
+    still_named = {merchant_key(o["merchant"]) for o in new["offers"]}
     plain, dashed = {}, {}
     for n in [o["merchant"] for o in data["offers"]] + written:
         plain.setdefault(merchant_key(n), n)
@@ -1403,14 +1417,15 @@ def plan(card, paths, given_date, decisions=None, part=False, complete_parts=Fal
         k = merchant_key(name)
         if k in saved_names or k in member_of or k in seen_c:
             continue
+        own_old = {f for f in renamed_from.get(k, set()) if f not in still_named}  # gone from the data: only its old name
         for m in re.finditer(r"\s+-\s+", name):
             pk = merchant_key(name[:m.start()])
             if not compact(name[m.end():]) or not pk:
                 continue
-            others = [n for nk, n in dashed.get(pk, {}).items() if nk != k]
+            others = [n for nk, n in dashed.get(pk, {}).items() if nk != k and nk not in own_old]
             if pk in group_keys:
                 hit = f"approved group {group_keys[pk]!r}"
-            elif pk in plain:
+            elif pk in plain and pk not in own_old:
                 hit = ("saved merchant " if pk in saved_names else "merchant new in this read ") + repr(plain[pk])
             elif others:
                 hit = "another location-style name " + repr(sorted(others)[0])
