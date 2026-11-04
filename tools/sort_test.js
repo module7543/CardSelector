@@ -466,7 +466,8 @@ function listRows(sel) {
     const diff = [];
     let soonSeen = 0;
     const locs = JSON.parse(fs.readFileSync(path.join(SITE, "data/merchant-locations.json"))).groups;
-    const mkey = s => s.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/\.(com|net|org)\b/gi, "").toLowerCase().replace(/[^a-z0-9]+/g, "");
+    // Merchant identity as the page has it (merchantKey: Alibaba and Ali Baba kept apart).
+    const mkey = s => { const sp = s.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/\.(com|net|org)\b/gi, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim(), k = sp.replace(/ /g, ""); return k === "alibaba" ? sp.replace(/ /g, "_") : k; };
     const member = {};
     Object.keys(locs).forEach(g => locs[g].forEach(m => { member[mkey(m)] = mkey(g); }));
     const cluster = list => { const by = new Map(); list.forEach(r => { const k = member[mkey(r.merchant)] || mkey(r.merchant); if (!by.has(k)) by.set(k, []); by.get(k).push(r); }); return [...by.values()].flat(); };
@@ -1527,7 +1528,18 @@ function listRows(sel) {
       // Review round 1: an approved group whose base row sorts first and whose member has more rows than the base.
       fx("zgr-base", "U.S. Bank", "Zqgroup Diner", "Clothing & Jewelry", "30% cash back"),
       fx("zgr-n1", "U.S. Bank", "Zqgroup Diner - North Hills", "Clothing & Jewelry", "10% cash back"),
-      fx("zgr-n2", "U.S. Bank", "Zqgroup Diner - North Hills", "Clothing & Jewelry", "8% cash back")
+      fx("zgr-n2", "U.S. Bank", "Zqgroup Diner - North Hills", "Clothing & Jewelry", "8% cash back"),
+      // Step 3A: Ali Baba (a restaurant) and Alibaba (a marketplace) are two merchants; Amazon / Amazon.com stay one.
+      fx("ab-rest", "Bank of America", "Ali Baba", "Dining", "4% Cash back", { activation: "auto_enrolled" }),
+      fx("ab-mkt", "Capital One", "Alibaba", "Marketplaces & Department Stores", "Up to 4% back", { activation: "none_shown", channel: "online" }),
+      fx("am-usb", "U.S. Bank", "Zqamazon", "Marketplaces & Department Stores", "5% cash back"),
+      fx("am-c1", "Capital One", "Zqamazon.com", "Marketplaces & Department Stores", "3% back", { activation: "none_shown", channel: "online" }),
+      fx("zsh-c1", "Capital One", "Zqshopx.com", "Clothing & Jewelry", "6% back", { activation: "none_shown", channel: "online" }),
+      fx("zdn-c1", "Capital One", "Zqdinerx.com", "Dining", "6% back", { activation: "none_shown", channel: "online" }),
+      // Step 3A: a Custom Cash row whose total adds the planned restaurants 5% (conditional), and one in a category
+      // the plan doesn't cover (its 1% base rate, certain).
+      fx("cc-dine", "Citi Custom Cash", "Zqcc Bistro", "Dining", "5% Back", { activation: "needs_activation", channel: "none_shown" }),
+      fx("cc-shop", "Citi Custom Cash", "Zqcc Boutique", "Clothing & Jewelry", "5% Back", { activation: "needs_activation", channel: "none_shown" })
     ];
     // Paging: 65 merchants, the 60th (the last on the first page) with 8 offers, its 7 weaker ones below the best of
     // the 5 merchants after it.
@@ -1678,6 +1690,52 @@ function listRows(sel) {
         "s3 r1 group name heads its container under " + mode + " (base first, member with more rows) (" + J(v.mcs.map(m => [m.name, m.rows.map(r => r.id + (r.loc ? "@" + r.loc : ""))])) + ")");
     }
 
+    // Step 3A: Ali Baba and Alibaba are separate containers and separate answer merchants (the named exception);
+    // Zqamazon and Zqamazon.com are one (".com" dropped, as before).
+    v = await open("alibaba", null);
+    ok(J(v.mcs.map(m => m.name + ": " + m.rows.map(r => r.id).join(" ")).sort()) === J(["Ali Baba: ab-rest", "Alibaba: ab-mkt"]),
+      "s3a Ali Baba and Alibaba: two containers (" + J(ids(v)) + ")");
+    const abNames = await page.$$eval("#use .usemname, #use .useat", es => es.map(e => e.textContent.replace(/:\s*$/, "").replace(/^At /, "")).sort());
+    ok(J(abNames) === J(["Ali Baba", "Alibaba"]), "s3a Ali Baba and Alibaba: two merchants in the answer card (" + J(abNames) + ")");
+    // The "At <merchant>" lead follows the same identity: "alibaba" answered for the restaurant names it.
+    // Ordinary names compare as in Step 2: "zqshopx" is not "Zqshopx.com" (lead shown), "zqshopx com" is (no lead).
+    for (const [q, ch, want] of [["alibaba", "store", "At Ali Baba"], ["ali baba", "online", "At Alibaba"], ["ali baba", "store", null],
+      ["zqshopx", null, "At Zqshopx.com"], ["zqshopx com", null, null], ["zqshopx.com", null, null]]) {
+      await open(q, ch);
+      const at = await page.$$eval("#use .useat", es => es.map(e => e.textContent));
+      ok(J(at) === J(want ? [want] : []), "s3a \"" + q + "\" " + ch + ": lead " + J(at));
+    }
+    // The bonus rows' lead keeps Step 2's test too: "zqdinerx" is the merchant Zqdinerx.com (merchant identity), so its
+    // dining row has no "Dining at Zqdinerx.com" lead; "alibaba" in store matched the restaurant, so it has one.
+    for (const [q, ch, want] of [["zqdinerx", null, false], ["alibaba", "store", true]]) {
+      await open(q, ch);
+      const leads = await page.$$eval("#use details.bonusrow .bhead", es => es.map(e => e.textContent));
+      ok(leads.length && leads.some(l => / at /.test(l)) === want, "s3a bonus-row lead for \"" + q + "\" " + (ch || "any") + ": " + J(leads));
+    }
+    v = await open("zqamazon", null);
+    ok(J(ids(v)) === J(["Zqamazon: am-usb am-c1"]) && v.mcs[0].sub === "Marketplaces & Department Stores · 2 offers",
+      "s3a Zqamazon and Zqamazon.com: one container, as before (" + J(ids(v)) + ")");
+    // Step 3A: a Custom Cash row's planned-category rate is marked conditional; the total and order are unchanged.
+    v = await open("zqcc", null);
+    const ccRow = id => v.mcs.flatMap(m => m.rows).find(r => r.id === id) || {};
+    ok(ccRow("cc-dine").brk === "5% Citi offer + 5% dining (conditional)" && ccRow("cc-dine").big === "10%",
+      "s3a Custom Cash with its planned 5%: the card rate reads conditional, the total stays 10% (" + J(ccRow("cc-dine")) + ")");
+    ok(ccRow("cc-shop").brk === "5% Citi offer + 1% Citi Custom Cash" && ccRow("cc-shop").big === "6%",
+      "s3a Custom Cash with no conditional rate added: no label (" + J(ccRow("cc-shop")) + ")");
+    ok(J(v.mcs.map(m => m.name)) === J(["Zqcc Bistro", "Zqcc Boutique"]), "s3a Custom Cash rows rank by the same totals (" + J(ids(v)) + ")");
+    v = await open("coffee bean", null);
+    ok(v.mcs[0].rows.filter(r => /^cb-f/.test(r.id)).every(r => r.brk === "10% Chase offer + 5% dining"),
+      "s3a an activated Chase dining rate is certain: no conditional label (" + J(v.mcs[0].rows.map(r => r.brk)) + ")");
+    if (baseApp) {
+      // The big numbers are today's offerTotal(): main's rows show the same totals in the same order.
+      await page.route("**/js/app.js", route => route.fulfill({ body: baseApp, contentType: "text/javascript" }));
+      await open("zqcc", null);
+      const baseTot = await page.$$eval("#main li.offer", ls => ls.map(li => li.dataset.oid.replace(/^test\/s3-/, "") + " " +
+        ((li.querySelector(".obig") || li.querySelector(".bonus .total") || {}).textContent || "").replace(/ with .*$/, "")));
+      await page.unroute("**/js/app.js");
+      ok(J(baseTot) === J(["cc-dine 10%", "cc-shop 6%"]), "s3a Custom Cash totals and order as on " + baseRef + " (" + J(baseTot) + ")");
+    }
+
     // Paging: 60 containers on the first page, the 60th whole (8 rows); Show more adds the last 5 whole; every
     // record once. The count line still counts offers.
     v = await open("zqpage", null);
@@ -1765,7 +1823,13 @@ function listRows(sel) {
       // (Citi) that are other merchants.
       wx("usb-rt", "U.S. Bank", "Round Table Pizza", "2026-10-18", "active", "2026-10-18", null, { activation: "already_activated", channel: "in_store" }),
       wx("c1-alias", "Capital One", "Zqround Pies", "2026-10-18", "active", "2026-10-18", null, { activation: "none_shown", channel: "online", aliases: ["Round Table Pizza"] }),
-      wx("citi-irv", "Citi Double Cash", "Round Table Pizza - Irvine", "2026-10-18", "active", "2026-10-18")
+      wx("citi-irv", "Citi Double Cash", "Round Table Pizza - Irvine", "2026-10-18", "active", "2026-10-18"),
+      // Step 3A: a gone Ali Baba (restaurant) is still on U.S. Bank (same name, other case), not on Capital One's Alibaba.
+      wx("gone-aliba", "Bank of America", "Ali Baba", "2026-10-18", "missing", "2026-10-31", null, { activation: "auto_enrolled", channel: "in_store" }),
+      wx("usb-aliba", "U.S. Bank", "ALI BABA", "2026-10-18", "active", "2026-10-18", null, { activation: "already_activated", channel: "in_store" }),
+      wx("c1-alibaba", "Capital One", "Alibaba", "2026-10-18", "active", "2026-10-18", null, { category: "Marketplaces & Department Stores", activation: "none_shown", channel: "online" }),
+      // And the reverse: a gone Alibaba (marketplace) is still on Capital One, not on U.S. Bank's ALI BABA.
+      wx("gone-alibaba", "Bank of America", "Alibaba", "2026-10-18", "missing", "2026-10-31", null, { category: "Marketplaces & Department Stores", activation: "auto_enrolled", channel: "online" })
     ];
     const real = JSON.parse(fs.readFileSync(path.join(SITE, "data/offers.json")));
     await page.route("**/data/offers.json", r => r.fulfill({ json: { categories: real.categories, batches: BATCHES, offers: OFF } }));
@@ -1799,7 +1863,11 @@ function listRows(sel) {
     if ((await page.getAttribute("#ftoggle", "aria-expanded")) !== "true") await page.click("#ftoggle");
     await page.locator("#cards button", { hasText: /^All cards/ }).click();
     w = await wv();
-    ok(J(w.tabs) === J(["New 3", "Gone 4"]), "s3 what changed All cards: counts are offer counts (" + J(w.tabs) + ")");
+    ok(J(w.tabs) === J(["New 3", "Gone 6"]), "s3 what changed All cards: counts are offer counts (" + J(w.tabs) + ")");
+    ok(w.still["gone-alibaba"] === "Still on Capital One" && w.mcs.some(m => /: Alibaba \[gone-alibaba\]$/.test(m)),
+      "s3a what changed: a gone Alibaba is still on Capital One, not on U.S. Bank's ALI BABA (" + J([w.still["gone-alibaba"], w.mcs]) + ")");
+    ok(w.still["gone-aliba"] === "Still on U.S. Bank" && w.mcs.some(m => /: Ali Baba \[gone-aliba\]$/.test(m)),
+      "s3a what changed: a gone Ali Baba is still on U.S. Bank (ALI BABA), not on Capital One's Alibaba (" + J([w.still["gone-aliba"], w.mcs]) + ")");
     await page.locator("#wctabs button", { hasText: /^New/ }).click();
     w = await wv();
     ok(J(w.mcs) === J(["Round Table Pizza [new-nb@Newport Beach, new-rt, new-boa-nb@Newport Beach]"]), "s3 what changed All cards New: one container, three rows (" + J(w.mcs) + ")");

@@ -123,8 +123,17 @@
       .replace(/[^a-z0-9]+/g, " ").trim();
   }
   function compact(s) { return spaced(s).replace(/ /g, ""); }
-  // Same-merchant key: "Amazon" and "Amazon.com" count as one merchant.
-  function merchantKey(s) { return compact(s.replace(/\.(com|net|org)\b/gi, "")); }
+  // Same-merchant key: "Amazon" and "Amazon.com" count as one merchant. Named exception (tools/validate.py's
+  // CATEGORY_EXCEPTIONS): Alibaba (the marketplace) and Ali Baba (a restaurant) are two businesses, so names that
+  // compact to "alibaba" keep their word breaks ("alibaba" / "ali_baba"); case, accents and punctuation are still ignored.
+  var NAME_EXCEPTIONS = { alibaba: 1 };
+  function merchantKey(s) {
+    var sp = spaced(s.replace(/\.(com|net|org)\b/gi, "")), k = sp.replace(/ /g, "");
+    return NAME_EXCEPTIONS[k] ? sp.replace(/ /g, "_") : k;
+  }
+  // A name as compared with what was typed (the "At <merchant>" / "Dining at <merchant>" leads): compact(), as in
+  // Step 2, so "jackery" is not "jackery.com"; only the named exception keeps its word breaks ("alibaba" is not "Ali Baba").
+  function typedForm(s) { var c = compact(s); return NAME_EXCEPTIONS[c] ? merchantKey(s) : c; }
 
   function todayISO() {
     var d = new Date(), p = function (n) { return String(n).padStart(2, "0"); };
@@ -404,10 +413,8 @@
     });
     return out;
   }
-  // Same-merchant key across cards: the merchant identity (containerKey: the full name, or an approved location's
-  // group, so a location and its group are one merchant; aliases never count), with tools/validate.py's one named
-  // exception: Alibaba and Ali Baba are two businesses, so that spelling must match exactly.
-  function sameMerchantKey(o) { var k = containerKey(o); return k === "alibaba" ? k + "|" + o.merchant : k; }
+  // Same merchant across cards: the merchant identity (containerKey: the full name, or an approved location's group,
+  // so a location and its group are one merchant; aliases never count; Alibaba and Ali Baba apart, merchantKey).
   // The other cards with a live offer at a gone offer's merchant, A to Z. The index is rebuilt on each render.
   var liveNames = null;
   function stillOn(o) {
@@ -416,11 +423,11 @@
       liveNames = Object.create(null);
       data.offers.forEach(function (x) {
         if (!isLive(x, today)) return;
-        var l = liveNames[sameMerchantKey(x)] || (liveNames[sameMerchantKey(x)] = []);
+        var l = liveNames[containerKey(x)] || (liveNames[containerKey(x)] = []);
         if (l.indexOf(x.card) === -1) l.push(x.card);
       });
     }
-    return (liveNames[sameMerchantKey(o)] || []).filter(function (c) { return c !== o.card; }).sort(collator.compare);
+    return (liveNames[containerKey(o)] || []).filter(function (c) { return c !== o.card; }).sort(collator.compare);
   }
 
   // The merchant name first, then its aliases (earlier or alternate names); each normalised once and kept on the offer.
@@ -869,7 +876,8 @@
   }
   // The breakdown under the card: the raw merchant offer plus what the card adds there ("15% Chase offer + 5% dining";
   // "10% U.S. Bank offer + 4% Smartly"; a shared offer list names its card: "+ 5.25% online shopping with Customized
-  // Cash"). Nothing is added when the card adds nothing; other offers keep their own wording ("Spend $20, earn $10 ·
+  // Cash"). A top-category rate (Citi Custom Cash's planned category) is marked: "+ 5% dining (conditional)".
+  // Nothing is added when the card adds nothing; other offers keep their own wording ("Spend $20, earn $10 ·
   // Capital One offer").
   function breakdownOf(o, tot) {
     var L = cardsCfg && cardsCfg.lists[o.card], lab = (L && L.label) || o.card + " offer", v = offerValue(o);
@@ -877,7 +885,7 @@
     var s = (v.upTo ? "Up to " : "") + pct(v.pct) + "% " + lab;
     if (tot && tot.rate > 0) {
       var shared = (L && L.cards.length > 1) || / \/ /.test(rowCard(o.card));
-      s += " + " + pct(tot.rate) + "% " + (tot.label ? tot.label + (shared ? " with " + tot.C.name : "") : tot.C.name);
+      s += " + " + pct(tot.rate) + "% " + (tot.label ? tot.label + (shared ? " with " + tot.C.name : "") : tot.C.name) + (tot.cond ? " (conditional)" : "");
     }
     return s;
   }
@@ -1362,7 +1370,7 @@
     order.forEach(function (t) {
       t.lead = null;
       if (!byQuery || !t.names.length || t.cuisine) return;
-      var same = t.names.some(function (n) { return compact(n) === qc || merchantKey(n) === merchantKey(query); });
+      var same = t.names.some(function (n) { return typedForm(n) === typedForm(query) || merchantKey(n) === merchantKey(query); });
       if (!same) t.lead = t.names[0] + (t.names.length > 1 ? " and " + (t.names.length - 1) + " more" : "");
     });
     // The everyday card (Smartly 4%) joins every row that has a bonus card, at its rank; bonus cards below it
@@ -1881,9 +1889,10 @@
       var M = { names: containerNames(o), offers: [o], online: o.channel === "online", rates: {} }, best = null;
       L.cards.forEach(function (C) {
         var r = rateAt(C, M, today, o.channel !== "online", true).ready;
-        if (!best || r.rate > best.rate) best = { C: C, rate: r.rate, label: r.label };
+        // cond: the rate is a top-category one (Citi Custom Cash's planned category, isConditional), shown as such.
+        if (!best || r.rate > best.rate) best = { C: C, rate: r.rate, label: r.label, cond: !!r.e && isConditional(r.e) };
       });
-      res = { total: v.pct + best.rate, pct: v.pct, rate: best.rate, C: best.C, label: best.label, upTo: v.upTo };
+      res = { total: v.pct + best.rate, pct: v.pct, rate: best.rate, C: best.C, label: best.label, cond: best.cond, upTo: v.upTo };
     }
     return (totalCache[o.id] = res);
   }
@@ -2252,7 +2261,7 @@
     var condNote = null;
     if (per.length === 1) {
       var G = per[0].M, L = per[0].L, rowsBy = null, alt = null;
-      if (compact(G.name) !== compact(query)) useEl.appendChild(el("div", "useat", "At " + G.name));
+      if (typedForm(G.name) !== typedForm(query)) useEl.appendChild(el("div", "useat", "At " + G.name));
       if (G.offers.length && chanMode === "any") {
         // Any: In store and Online answered apart when they recommend different things; one answer when the same.
         var S = merchantLines(viewOf(G, "store"), today), O = merchantLines(viewOf(G, "online"), today);
