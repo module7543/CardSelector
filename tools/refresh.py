@@ -170,6 +170,8 @@ def offer_location_change(o, name):
     """The current name decides when it shares a base with the file's name; otherwise any alias that does."""
     if shares_base(o["merchant"], name):
         return location_change(o["merchant"], name)
+    if not re.search(r"\s+-\s+", o["merchant"]) and not re.search(r"\s+-\s+", name or ""):
+        return None  # two plain names name no place now, whatever an old alias said
     return next((r for a in o.get("aliases", []) for r in [location_change(a, name)] if r), None)
 
 

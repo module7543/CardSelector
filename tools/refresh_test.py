@@ -791,6 +791,23 @@ class RefreshTest(unittest.TestCase):
                 finally:
                     t.close()
 
+    def test_old_location_alias_does_not_block_two_plain_names(self):
+        # Review 1A L1-L3: current "eBay" (alias "eBay - Encino", from an accepted strip) against file "eBay Store" is
+        # an ordinary extension again, and an unrelated plain leftover isn't promoted to a location proposal
+        for merchant, alias, new, auto in [("eBay", "eBay - Encino", "eBay Store", True), ("eBay Deals Club", "eBay - HB", "eBay Store", False)]:
+            with self.subTest(merchant=merchant, new=new):
+                t = Tree()
+                try:
+                    t.change_offers(lambda by, d: by["capital-one/ebay"].update(merchant=merchant, aliases=[alias]))
+                    p = t.csv("Capital One", lambda rows: [dict(r, merchant=new) if r["merchant"] == "eBay" else r for r in rows])
+                    code, out, rep = t.run("report", "Capital One", [p])
+                    self.assertFalse(any("never automatic" in m["why"] for m in rep["proposals"]), out)
+                    self.assertEqual(rep["stops"], [], out)
+                    if auto:
+                        self.assertEqual([(m["id"], m["rule"]) for m in rep["paired"] if m["id"] == "capital-one/ebay"], [("capital-one/ebay", "extends")], out)
+                finally:
+                    t.close()
+
     def test_cut_right_after_the_dash_is_the_same_name(self):
         # Review 1A H3: "eBay - ..." on screen against the saved "eBay - Newport Beach"
         self.t.change_offers(lambda by, d: by["capital-one/ebay"].update(merchant="eBay - Newport Beach"))
