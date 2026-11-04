@@ -1263,9 +1263,10 @@
     return answered.some(function (G) { return onlineByOffers(G.offers); });
   }
   // Why online shopping wasn't counted (Card rates here, "Not counted").
-  function notCountedWhy(t, mode, answered) {
+  // noAt: leave out where (the line already names the merchant).
+  function notCountedWhy(t, mode, answered, noAt) {
     if (mode === "store") return "online purchases only";
-    var at = answered ? " at " + answered.map(function (G) { return G.name; }).join(" and ") : " here";
+    var at = noAt ? "" : answered ? " at " + answered.map(function (G) { return G.name; }).join(" and ") : " here";
     var n = answered ? answered.reduce(function (k, G) {
       return k + G.offers.filter(function (o) { return chanIn("online", o) && !knownOnline(o); }).length;
     }, 0) : t.unknown;
@@ -1541,7 +1542,7 @@
       var nc = el("div", "ratesnc");
       nc.appendChild(el("div", "ratesnch", "Not counted"));
       mixed.forEach(function (x) {
-        nc.appendChild(el("div", "bnote", cap(x.t.name) + " at " + x.G.name + ": " + notCountedWhy(x.t, mode, [x.G]).replace(/ at .*$/, "") + "."));
+        nc.appendChild(el("div", "bnote", cap(x.t.name) + " at " + x.G.name + ": " + notCountedWhy(x.t, mode, [x.G], true) + "."));
       });
       left.forEach(function (t) {
         var cs = t.items.filter(function (it) { return !it.everyday; }).map(function (it) { return it.e.card + " " + pct(it.g._rate) + "%"; });
