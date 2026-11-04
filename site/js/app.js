@@ -29,7 +29,7 @@
   var cardLinks = {}; // card nickname -> { url }, from data/card-links.json; a missing entry means no icon
   var category = null; // null = All
   var card = null; // null = All cards
-  var openIds = {}; // offer id -> true while its details are open (kept across redraws)
+  var openIds = {}; // "<list>:<merchant identity>" -> true while that merchant container is open (kept across redraws)
   var SORT_KEY = "cardselector.sort";
   // [value, option label, description shown under the select (null = the label says it all)].
   var SORTS = [
@@ -262,9 +262,9 @@
       var key = merchantKey(name), list = j.groups[name];
       bases[key] = 1;
       return !!key && Array.isArray(list) && list.length > 0 && list.every(function (m) {
-        var k = typeof m === "string" ? merchantKey(m) : "";
-        if (!k || k === key || k in map || !locationOfBase(m, key)) return false;
-        map[k] = { name: name, key: key, n: { c: compact(name), s: spaced(name), w: wordForm(name) } };
+        var k = typeof m === "string" ? merchantKey(m) : "", suffix = k ? locationOfBase(m, key) : null;
+        if (!k || k === key || k in map || !suffix) return false;
+        map[k] = { name: name, key: key, suffix: suffix, n: { c: compact(name), s: spaced(name), w: wordForm(name) } };
         return true;
       });
     }) && !Object.keys(map).some(function (k) { return k in bases; });
@@ -272,18 +272,25 @@
     window.__locations = Object.keys(locations).length; // tools/offline_test.js, tools/sort_test.js
   }
   // "<base> - <suffix>": some " - " in the member splits it into the base (same merchantKey) and a non-empty
-  // suffix (tools/validate.py checks the file with the same rule).
+  // suffix (tools/validate.py checks the file with the same rule). Returns the suffix ("Newport Beach"), or null.
   function locationOfBase(member, key) {
     var re = /\s+-\s+/g, m;
     while ((m = re.exec(member))) {
-      if (merchantKey(member.slice(0, m.index)) === key && compact(member.slice(m.index + m[0].length))) return true;
+      var suffix = member.slice(m.index + m[0].length).trim();
+      if (merchantKey(member.slice(0, m.index)) === key && compact(suffix)) return suffix;
     }
-    return false;
+    return null;
   }
   function ownKey(o) { return o._mk !== undefined ? o._mk : (o._mk = merchantKey(o.merchant)); }
   function locationOf(o) { return locations[ownKey(o)] || null; }
   function containerKey(o) { var g = locationOf(o); return g ? g.key : ownKey(o); }
   function containerName(o) { var g = locationOf(o); return g ? g.name : o.merchant; }
+  // The location tag of an approved member's row ("Newport Beach" for "Round Table Pizza - Newport Beach"), from
+  // the offer's own name (else the name as the locations file lists it); null for every other offer, whatever its name.
+  function locationTag(o) {
+    var g = locationOf(o);
+    return g ? locationOfBase(o.merchant, g.key) || g.suffix : null;
+  }
   // The offer's names (merchant, aliases) plus its group's name when it is an approved location, for rate matching.
   function containerNames(o) {
     var g = locationOf(o), names = nameKeys(o);
@@ -395,9 +402,10 @@
     });
     return out;
   }
-  // Same-merchant key across cards, as tools/validate.py compares names (case, accents, spaces and punctuation
-  // ignored), with its one named exception: Alibaba and Ali Baba are two businesses, so that spelling must match exactly.
-  function sameNameKey(name) { var k = compact(name); return k === "alibaba" ? k + "|" + name : k; }
+  // Same-merchant key across cards: the merchant identity (containerKey: the full name, or an approved location's
+  // group, so a location and its group are one merchant; aliases never count), with tools/validate.py's one named
+  // exception: Alibaba and Ali Baba are two businesses, so that spelling must match exactly.
+  function sameMerchantKey(o) { var k = containerKey(o); return k === "alibaba" ? k + "|" + o.merchant : k; }
   // The other cards with a live offer at a gone offer's merchant, A to Z. The index is rebuilt on each render.
   var liveNames = null;
   function stillOn(o) {
@@ -406,11 +414,11 @@
       liveNames = Object.create(null);
       data.offers.forEach(function (x) {
         if (!isLive(x, today)) return;
-        var l = liveNames[sameNameKey(x.merchant)] || (liveNames[sameNameKey(x.merchant)] = []);
+        var l = liveNames[sameMerchantKey(x)] || (liveNames[sameMerchantKey(x)] = []);
         if (l.indexOf(x.card) === -1) l.push(x.card);
       });
     }
-    return (liveNames[sameNameKey(o.merchant)] || []).filter(function (c) { return c !== o.card; }).sort(collator.compare);
+    return (liveNames[sameMerchantKey(o)] || []).filter(function (c) { return c !== o.card; }).sort(collator.compare);
   }
 
   // The merchant name first, then its aliases (earlier or alternate names); each normalised once and kept on the offer.
@@ -529,6 +537,7 @@
   // recently unavailable row shows no activation, so its details keep it). Empty fields share one muted line.
   function renderDetails(o, gone) {
     var box = el("div", "details");
+    box.appendChild(offerLinks(o));
     offerEdits(o).forEach(function (r) { box.appendChild(r); });
     var dl = el("dl"), missing = [];
     var add = function (label, value, miss, cls) {
@@ -611,6 +620,24 @@
       : "Expired " + fmtDate(o.expires || o.status_since);
   }
 
+  // An open row's links: a Google search for the offer's own merchant name (a location row searches its location)
+  // and the card's offers page (card-links.json), both in a new tab.
+  function offerLinks(o) {
+    var box = el("div", "olinks");
+    var link = el("a", "glink");
+    link.href = googleUrl(o.merchant);
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
+    link.setAttribute("aria-label", "Search Google for " + o.merchant + " (opens in a new tab)");
+    link.title = "Search Google for " + o.merchant;
+    link.appendChild(extIcon());
+    link.appendChild(el("span", null, "Search Google"));
+    box.appendChild(link);
+    var cl = cardLink(o.card);
+    if (cl) box.appendChild(cl);
+    return box;
+  }
+
   // Google search for the merchant as displayed, minus a trailing "..." / "…" from truncated names.
   function googleUrl(name) {
     var q = name.replace(/\s*(?:\.{3}|…)+\s*$/, "").trim() || name;
@@ -637,6 +664,8 @@
     return null;
   }
   window.__issuerOf = issuerOf; // for tools/sort_test.js
+  // The page's copy of an offer by id (offers.json with pending edits and remembered saves), for the tests.
+  window.__offerOf = function (id) { return data && data.offers.filter(function (o) { return o.id === id; })[0] || null; };
   // The dot for a card name, or null when its issuer is unknown.
   function issuerDot(name) {
     var k = issuerOf(name);
@@ -746,9 +775,10 @@
     a.href = url;
     a.target = "_blank";
     a.rel = "noopener noreferrer";
-    a.setAttribute("aria-label", "Open issuer offers");
+    a.setAttribute("aria-label", "Open issuer offers for " + card + " (opens in a new tab)");
     a.title = "Open issuer offers";
     a.appendChild(cardIcon());
+    a.appendChild(el("span", null, "Issuer offers"));
     return a;
   }
 
@@ -774,85 +804,128 @@
     return n === 0 ? "Ends " + about + "today" : n === 1 ? "Ends " + about + "tomorrow" : "Ends in " + about + n + " days";
   }
 
-  // goneLabel: on the What changed Gone list, the label shown in place of "Dropped off ..." ("Was to end Nov 25").
+  // ---- Merchant containers: every result list shows one container per merchant (containerKey: the full name, or an
+  // approved location's group), each offer still its own row with its own terms and controls. ----
+
+  // The containers of a sorted list of offers, in its order: a container holds its offers in that order and ranks by
+  // its first (best) one, so rows and containers both follow the list's comparator. A to Z / Z to A (mode "az" /
+  // "za") rank containers by their own name instead. [{ key, name, rows }].
+  function containersOf(list, mode) {
+    var by = Object.create(null), out = [];
+    list.forEach(function (o) {
+      var k = containerKey(o), c = by[k];
+      if (!c) { c = by[k] = { key: k, rows: [], at: out.length }; out.push(c); }
+      c.rows.push(o);
+    });
+    out.forEach(function (c) { c.name = mcName(c.rows); });
+    if (mode === "az" || mode === "za") {
+      var dir = mode === "az" ? 1 : -1;
+      out.sort(function (a, b) {
+        return dir * (collator.compare(a.name, b.name) || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0)) || a.at - b.at;
+      });
+    }
+    return out;
+  }
+  // The name a container shows: an approved group's name, else the spelling most of its rows use ("Amazon" over
+  // "Amazon.com"; a tie takes the first A to Z).
+  function mcName(rows) {
+    var g = locationOf(rows[0]);
+    if (g) return g.name;
+    var n = {};
+    rows.forEach(function (o) { n[o.merchant] = (n[o.merchant] || 0) + 1; });
+    return Object.keys(n).sort(function (a, b) { return (n[b] - n[a]) || collator.compare(a, b) || (a < b ? -1 : 1); })[0];
+  }
+  // The header's cuisine or category: the one cuisine all its rows share (Dining), else the one category they share;
+  // null when they don't agree (no merchant-level label is made up).
+  function mcMeta(rows) {
+    var one = function (f) {
+      var v = rows.map(f);
+      return v.every(function (x) { return x && x === v[0]; }) ? v[0] : null;
+    };
+    var cu = rows.every(function (o) { return o.category === "Dining"; }) ? one(function (o) {
+      var e = cuisineOf(o);
+      return e && e.cuisine !== "Unclassified" ? e.detail || e.cuisine : null;
+    }) : null;
+    return cu || one(function (o) { return o.category; });
+  }
+
+  // What a row's status says: "Ready" (with a check), "Activate", "Add to card" or "Shop link", and its style.
+  function statusOf(o) {
+    var a = actOf(o);
+    if (a === "needs_activation") return ["Activate", "needs"];
+    if (a === "add_to_card") return ["Add to card", "needs"];
+    if (a === "via_shop_link") return ["Shop link", "needs"];
+    if (a === "already_activated" || a === "auto_enrolled") return ["Ready", "done"];
+    return ["Activation not listed", ""];
+  }
+  // The big number on the right: the row total for a percent offer (offerTotal, as the Best offer sort ranks it),
+  // else the offer's own amount; sub: "on $20+" for a dollar offer with a minimum.
+  function bigOf(o, tot) {
+    var v = offerValue(o);
+    if (v.kind === "pct") return { big: (v.upTo ? "up to " : "") + pct(tot ? tot.total : v.pct) + "%" };
+    if (v.kind === "dollar") return { big: (v.upTo ? "up to " : "") + money(v.amt), sub: v.min ? "on " + money(v.min) + "+" : null };
+    return { big: tidy(o.bonus) };
+  }
+  // The breakdown under the card: the raw merchant offer plus what the card adds there ("15% Chase offer + 5% dining";
+  // "10% U.S. Bank offer + 4% Smartly"; a shared offer list names its card: "+ 5.25% online shopping with Customized
+  // Cash"). Nothing is added when the card adds nothing; other offers keep their own wording ("Spend $20, earn $10 ·
+  // Capital One offer").
+  function breakdownOf(o, tot) {
+    var L = cardsCfg && cardsCfg.lists[o.card], lab = (L && L.label) || o.card + " offer", v = offerValue(o);
+    if (v.kind !== "pct") return tidy(o.bonus) + " · " + lab;
+    var s = (v.upTo ? "Up to " : "") + pct(v.pct) + "% " + lab;
+    if (tot && tot.rate > 0) {
+      var shared = (L && L.cards.length > 1) || / \/ /.test(rowCard(o.card));
+      s += " + " + pct(tot.rate) + "% " + (tot.label ? tot.label + (shared ? " with " + tot.C.name : "") : tot.C.name);
+    }
+    return s;
+  }
+  // The terms line, in order: channel ("Channel not shown" when none is), end date (or "Ends in N days" within a
+  // week), max reward, spending cap, minimum spend (a dollar offer's is on the right already), Shop now link.
+  function termsOf(o, gone) {
+    var t = [], ch = channel(o);
+    t.push(ch ? { text: ch, cls: "chan" } : { text: "Channel not shown", cls: "nochan" });
+    var soon = gone ? null : endsSoonText(o);
+    if (soon) t.push({ text: soon, cls: "soon" });
+    else if (o.expires && !gone) t.push({ text: "Ends " + (estimatedEnd(o) ? "about " : "") + fmtDate(o.expires) });
+    var mx = maxReward(o);
+    if (mx) t.push({ text: "Max " + mx });
+    if (o.spend_cap) t.push({ text: "Spending cap " + tidy(o.spend_cap), cls: "long" });
+    var v = offerValue(o);
+    if (o.minimum_spend && !(v.kind === "dollar" && v.min)) {
+      var num = /^\d+(\.\d+)?$/.test(o.minimum_spend);
+      t.push({ text: "Min " + tidy(num ? "$" + o.minimum_spend : o.minimum_spend), cls: num ? null : "long" });
+    }
+    if (o.activation === "via_shop_link") t.push({ text: "Shop now link only" });
+    return t;
+  }
+
+  // One offer row inside a merchant container. The row itself is not a tap target: the container header expands
+  // every row (setOpen), each showing its own details, controls and links. goneLabel: on the What changed Gone
+  // list, the label shown in place of "Dropped off ..." ("Was to end Nov 25").
   function renderOffer(o, id, gone, goneLabel) {
+    var today = todayISO();
     var li = el("li", gone ? "offer gone" : "offer");
     li.setAttribute("data-oid", o.id); // the day redraw finds the row again by it (focus)
-    var row = el("div", "row");
-    var btn = el("button", "toggle");
-    btn.type = "button";
-    btn.setAttribute("aria-expanded", "false");
-    btn.setAttribute("aria-label", "Details for " + o.merchant + ", " + tidy(o.bonus));
-
-    // The name is plain text, so tapping it (like the rest of the header) opens the details;
-    // the Google icon and the card icon next to it are the only separate targets.
-    var top = el("div", "top");
-    var names = el("div", "names");
-    names.appendChild(el("span", "merchant", o.merchant));
-    var link = el("a", "glink");
-    link.href = googleUrl(o.merchant);
-    link.target = "_blank";
-    link.rel = "noopener noreferrer";
-    link.setAttribute("aria-label", "Search Google for " + o.merchant + " (opens in a new tab)");
-    link.title = "Search Google for " + o.merchant;
-    link.appendChild(extIcon());
-    names.appendChild(link);
-    var cl = cardLink(o.card);
-    if (cl) names.appendChild(cl);
-    top.appendChild(names);
-    var chev = el("span", "chev", "▾");
-    chev.setAttribute("aria-hidden", "true");
-    btn.appendChild(chev);
-    top.appendChild(btn);
-    row.appendChild(top);
-    var bon = el("div", "bonus", tidy(o.bonus));
-    var mx = maxReward(o);
-    if (mx) bon.appendChild(el("span", "maxr", ", max " + mx));
-    // What it likely earns with its card ("· 15% with Freedom"), when the card adds something.
-    var tot = gone ? null : offerTotal(o, todayISO());
-    // A hidden ", " keeps the bonus and the pill apart in the text a screen reader or copy reads.
-    if (tot && tot.rate > 0) {
-      bon.appendChild(el("span", "sr-only", ", "));
-      bon.appendChild(el("span", "total", (tot.upTo ? "up to " : "") + pct(tot.total) + "% with " + tot.C.name));
-    }
-    row.appendChild(bon);
-
-    var meta = el("div", "meta");
-    meta.appendChild(withDot(el("span", "mcard", rowCard(o.card)), o.card));
+    var row = el("div", "orow"), left = el("div", "oleft"), right = el("div", "oright");
+    var cl = el("div", "ocard");
+    cl.appendChild(withDot(el("span", "mcard", rowCard(o.card)), o.card));
     // Outside What changed, an offer its card's latest read added gets a "New" pill after the card name.
-    if (!gone && !wc && isNew(o, todayISO())) meta.appendChild(el("span", "newtag", "New"));
-    if (gone) {
-      meta.appendChild(el("span", "dropped", goneLabel || droppedText(o)));
-      // Signed in, a used row (kept in place, or under the Used filter) is restored from the row itself.
-      if (o.status === "used" && editing()) meta.appendChild(editBtn("Restore offer", { type: "offer.status", id: o.id, from: "used", to: "active" }, "edlink"));
-    } else {
-      var a = activation(o);
-      var ab = el("span", "badge act " + a[1], a[0]);
-      if (a[1] === "done") ab.insertBefore(metaIcon("check"), ab.firstChild);
-      meta.appendChild(ab);
-      var soon = endsSoonText(o);
-      if (soon) {
-        var sb = el("span", "badge soon", soon);
-        sb.insertBefore(metaIcon("clock"), sb.firstChild);
-        meta.appendChild(sb);
-      }
-    }
-    var ch = channel(o);
-    if (ch) {
-      // In-store & online: shop and globe; online: globe; every other channel (pay at pump, in-app too): shop.
-      var cb = el("span", "badge chan", ch);
-      if (o.channel === "in_store_and_online") {
-        var pair = el("span", "bicos");
-        pair.appendChild(metaIcon("shop"));
-        pair.appendChild(metaIcon("globe"));
-        cb.insertBefore(pair, cb.firstChild);
-      } else cb.insertBefore(metaIcon(o.channel === "online" ? "globe" : "shop"), cb.firstChild);
-      meta.appendChild(cb);
-    }
-    else if (chanMode !== "any" && !(usedMode && editing())) meta.appendChild(el("span", "badge nochan", "channel not shown"));
-    var cu = cuisineOf(o);
-    if (cu && cu.cuisine !== "Unclassified") meta.appendChild(el("span", "badge cuis", cu.detail || cu.cuisine));
-    row.appendChild(meta);
+    if (!gone && !wc && isNew(o, today)) cl.appendChild(el("span", "newtag", "New"));
+    var lt = locationTag(o);
+    if (lt) cl.appendChild(el("span", "loctag", lt));
+    left.appendChild(cl);
+    // What it likely earns with its card (offerTotal); a recently unavailable row shows the offer alone, as before.
+    var tot = gone ? null : offerTotal(o, today);
+    left.appendChild(el("div", "obreak", breakdownOf(o, tot)));
+    var terms = el("div", "oterms");
+    termsOf(o, gone).forEach(function (t, i) {
+      if (i) terms.appendChild(el("span", "tsep", " · "));
+      var s = el("span", t.cls || null, t.text);
+      if (t.cls === "soon") s.insertBefore(metaIcon("clock"), s.firstChild);
+      terms.appendChild(s);
+    });
+    left.appendChild(terms);
     // Gone list: the other cards that still have a live offer at this merchant ("Still on ● Bank of America and ● Capital One").
     var still = goneLabel ? stillOn(o) : [];
     if (still.length) {
@@ -861,42 +934,82 @@
         if (i) so.appendChild(document.createTextNode(i === still.length - 1 ? " and " : ", "));
         so.appendChild(withDot(el("span", "socard", c), c));
       });
-      row.appendChild(so);
+      left.appendChild(so);
     }
-
-    // The details panel is built on the first tap, so long lists stay cheap to draw.
+    var b = bigOf(o, tot);
+    right.appendChild(el("div", "obig", b.big));
+    if (b.sub) right.appendChild(el("div", "omin", b.sub));
+    if (gone) right.appendChild(el("div", "ostat dropped", goneLabel || droppedText(o)));
+    else {
+      var st = statusOf(o), sp = el("div", "ostat " + st[1], st[0]);
+      if (st[1] === "done") sp.insertBefore(metaIcon("check"), sp.firstChild);
+      right.appendChild(sp);
+    }
+    row.appendChild(left);
+    row.appendChild(right);
+    li.appendChild(row);
+    // The details are built the first time the container opens, so long lists stay cheap to draw.
     var det = null;
-    var toggle = function () {
-      var open = btn.getAttribute("aria-expanded") === "true";
-      openIds[o.id] = !open;
-      if (!det) {
+    var setOpen = function (open) {
+      if (open && !det) {
         det = renderDetails(o, gone);
         det.id = id;
-        btn.setAttribute("aria-controls", id);
         li.appendChild(det);
       }
-      btn.setAttribute("aria-expanded", String(!open));
-      det.hidden = open;
-      // While the details show the activation switch, the row's activation badge steps aside (shown once).
-      li.classList.toggle("actctl", !open && hasActControl(o));
+      if (det) det.hidden = !open;
+      // While the details show the activation switch, the row's status steps aside (shown once).
+      li.classList.toggle("actctl", open && hasActControl(o));
+      return det ? det.id : null;
     };
-    btn.addEventListener("click", toggle);
-    li.appendChild(row);
-    if (openIds[o.id]) toggle();
+    return { li: li, setOpen: setOpen };
+  }
+
+  // One merchant container: a header (name, cuisine or category, offer count, chevron) that expands and collapses,
+  // over every row it holds. The rows always show; opening adds each row's details, controls and links. key: where
+  // the open state is kept across redraws (the list it is in, then the merchant).
+  function renderContainer(c, key, idPrefix, label) {
+    var today = todayISO();
+    var rows = c.rows.map(function (o, i) { return renderOffer(o, idPrefix + "-" + i, !isLive(o, today), label ? label(o) : null); });
+    var li = el("li", "mc" + (rows.every(function (r) { return r.li.classList.contains("gone"); }) ? " gone" : ""));
+    li.setAttribute("data-ck", key);
+    var head = el("button", "mchead");
+    head.type = "button";
+    head.setAttribute("aria-expanded", "false");
+    var txt = el("span", "mctext");
+    txt.appendChild(el("span", "mcname", c.name));
+    var meta = mcMeta(c.rows), n = c.rows.length;
+    txt.appendChild(el("span", "mcsub", (meta ? meta + " · " : "") + n + (n === 1 ? " offer" : " offers")));
+    head.appendChild(txt);
+    var chev = el("span", "chev", "▾");
+    chev.setAttribute("aria-hidden", "true");
+    head.appendChild(chev);
+    li.appendChild(head);
+    var ul = el("ul", "mcrows");
+    rows.forEach(function (r) { ul.appendChild(r.li); });
+    li.appendChild(ul);
+    var setOpen = function (open) {
+      openIds[key] = open;
+      head.setAttribute("aria-expanded", String(open));
+      var ids = rows.map(function (r) { return r.setOpen(open); }).filter(Boolean);
+      if (ids.length) head.setAttribute("aria-controls", ids.join(" "));
+    };
+    head.addEventListener("click", function () { setOpen(head.getAttribute("aria-expanded") !== "true"); });
+    if (openIds[key]) setOpen(true);
     return li;
   }
 
-  // "Recently unavailable" group (dropped off or expired, never used): open under a search, collapsed when browsing with no query.
+  // "Recently unavailable" group (dropped off or expired, never used): open under a search, collapsed when browsing
+  // with no query. Merchant containers like the results (the first 60), each row keeping its own status.
   function renderExpired(list, open) {
     if (!list.length) return null;
     var d = el("details", "expired");
     d.open = open;
     d.appendChild(el("summary", null, "Recently unavailable (" + list.length + ")"));
-    var ul = el("ul", "results");
-    list.slice(0, MAX_SHOWN).forEach(function (o, i) { ul.appendChild(renderOffer(o, "x" + i, true)); });
+    var ul = el("ul", "results"), cs = containersOf(list, sortMode);
+    cs.slice(0, MAX_SHOWN).forEach(function (c, i) { ul.appendChild(renderContainer(c, "x:" + c.key, "x" + i)); });
     d.appendChild(ul);
-    if (list.length > MAX_SHOWN) {
-      d.appendChild(el("p", "note", "Showing first " + MAX_SHOWN + ". Search to narrow."));
+    if (cs.length > MAX_SHOWN) {
+      d.appendChild(el("p", "note", "Showing the first " + MAX_SHOWN + " merchants. Search to narrow."));
     }
     return d;
   }
@@ -1767,9 +1880,9 @@
       var M = { names: containerNames(o), offers: [o], online: o.channel === "online", rates: {} }, best = null;
       L.cards.forEach(function (C) {
         var r = rateAt(C, M, today, o.channel !== "online", true).ready;
-        if (!best || r.rate > best.rate) best = { C: C, rate: r.rate };
+        if (!best || r.rate > best.rate) best = { C: C, rate: r.rate, label: r.label };
       });
-      res = { total: v.pct + best.rate, pct: v.pct, rate: best.rate, C: best.C, upTo: v.upTo };
+      res = { total: v.pct + best.rate, pct: v.pct, rate: best.rate, C: best.C, label: best.label, upTo: v.upTo };
     }
     return (totalCache[o.id] = res);
   }
@@ -2522,36 +2635,36 @@
     });
   }
 
-  // Results in pages ("Show N more"). A redraw in the same view (after a save) shows as many rows as before.
-  // setCount(n), when given, is told how many live offers the shown rows hold. opts (What changed Gone list):
-  // label(o) = the row's gone label; groups = [{ at: index of the group's first row, node: its heading }], each
-  // heading put in as the rows reach it (an empty group's heading still shows).
-  function pagedList(list, pageSize, today, prefix, setCount, opts) {
-    opts = opts || {};
-    var groups = opts.groups || [], gi = 0, ul = null;
-    var more = el("button", "more");
+  // Results in pages of merchant containers ("Show N more merchants"), never splitting one: the page sizes count
+  // containers. A redraw in the same view (after a save) shows as many containers as before. sections: [{ list:
+  // sorted offers, node: a heading or null, label(o): the row's gone label or null, key }], each grouped into
+  // containers on its own (What changed's Gone groups never merge across), a heading put in as its first container
+  // shows. mode: the sort, for A to Z / Z to A container order (containersOf). setCount(live offers shown, rows
+  // shown), when given, is told what the shown containers hold.
+  function pagedList(sections, pageSize, today, prefix, setCount, mode) {
+    var items = [];
+    sections.forEach(function (sec) {
+      var cs = containersOf(sec.list, mode);
+      cs.forEach(function (c, i) { items.push({ c: c, sec: sec, head: i === 0 ? sec.node : null }); });
+    });
+    var ul = null, more = el("button", "more");
     more.type = "button";
     main.appendChild(more);
-    var newUl = function () { ul = el("ul", "results"); main.insertBefore(ul, more); };
-    var headings = function (upTo) {
-      for (; gi < groups.length && groups[gi].at <= upTo; gi++) { main.insertBefore(groups[gi].node, more); ul = null; }
-    };
-    if (!groups.length) newUl();
-    var next = 0, liveShown = 0;
+    var next = 0, liveShown = 0, rowsShown = 0;
     var showMore = function (n) {
-      var end = Math.min(next + n, list.length);
+      var end = Math.min(next + n, items.length);
       for (; next < end; next++) {
-        var live = isLive(list[next], today);
-        if (live) liveShown++;
-        headings(next);
-        if (!ul) newUl();
-        ul.appendChild(renderOffer(list[next], prefix + next, !live, opts.label ? opts.label(list[next]) : null));
+        var it = items[next], k = it.sec.key ? prefix + "-" + it.sec.key : prefix;
+        if (it.head) { main.insertBefore(it.head, more); ul = null; }
+        if (!ul) { ul = el("ul", "results"); main.insertBefore(ul, more); }
+        it.c.rows.forEach(function (o) { rowsShown++; if (isLive(o, today)) liveShown++; });
+        ul.appendChild(renderContainer(it.c, k + ":" + it.c.key, k + next, it.sec.label));
       }
-      if (next >= list.length) headings(list.length);
       shownBefore = next;
-      more.hidden = next >= list.length;
-      more.textContent = "Show " + Math.min(pageSize, list.length - next) + " more (" + (list.length - next) + " left)";
-      if (setCount) setCount(liveShown, next);
+      more.hidden = next >= items.length;
+      var left = items.length - next;
+      more.textContent = "Show " + Math.min(pageSize, left) + " more merchant" + (Math.min(pageSize, left) === 1 ? "" : "s") + " (" + left + " left)";
+      if (setCount) setCount(liveShown, rowsShown);
     };
     more.addEventListener("click", function () { showMore(pageSize); });
     showMore(Math.max(pageSize, shownBefore));
@@ -2567,7 +2680,7 @@
     var since = function (o) { return kept(o) ? keep[o.id] : o.status_since || ""; };
     list.sort(function (a, b) { var x = since(a), y = since(b); return x === y ? byMerchant(a, b) : (x < y ? 1 : -1); });
     countEl.textContent = ""; // the Used button shows the count
-    if (list.length) return pagedList(list, PAGE, today, "u", null);
+    if (list.length) return pagedList([{ list: list }], PAGE, today, "u", null, null);
     var p = el("p", "empty", "No used offers" + where);
     if (compact(query) !== "") {
       p.appendChild(document.createTextNode(" match "));
@@ -2620,22 +2733,22 @@
       return;
     }
     var cmp = comparator(sortMode, query, all);
-    if (isNewTab) return pagedList(list.sort(cmp), narrowed ? PAGE : MAX_SHOWN, today, "w", setCount);
+    if (isNewTab) return pagedList([{ list: list.sort(cmp) }], narrowed ? PAGE : MAX_SHOWN, today, "wn", setCount, sortMode);
     // Gone: "Pulled early N" then "Ended N" when any gone offer has an end date (offers with none, on All cards,
-    // follow under "Dropped N"); the sort applies inside each group. A group the search and filters leave empty
-    // has no heading. No end dates at all: no headings.
+    // follow under "Dropped N"); the sort applies inside each group, and each group has its own merchant containers
+    // (an offer never leaves its group to join another's container). N counts offers. A group the search and
+    // filters leave empty has no heading. No end dates at all: no headings.
     var by = { pulled: [], ended: [], dropped: [] };
     list.forEach(function (o) { by[droppedKind(o)].push(o); });
     var keys = by.pulled.length || by.ended.length ? ["pulled", "ended", "dropped"].filter(function (k) { return by[k].length; }) : [];
-    var NAMES = { pulled: "Pulled early", ended: "Ended", dropped: "Dropped" }, groups = [], ordered = [];
-    keys.forEach(function (k) {
+    var NAMES = { pulled: "Pulled early", ended: "Ended", dropped: "Dropped" };
+    var sections = keys.map(function (k) {
       var h = el("h3", "wcgroup", NAMES[k] + " ");
       h.appendChild(el("span", "n", String(by[k].length)));
-      groups.push({ at: ordered.length, node: h });
-      ordered = ordered.concat(by[k].sort(cmp));
+      return { list: by[k].sort(cmp), node: h, label: droppedLabel, key: k };
     });
-    if (!keys.length) ordered = list.sort(cmp);
-    pagedList(ordered, narrowed ? PAGE : MAX_SHOWN, today, "w", setCount, { label: droppedLabel, groups: groups });
+    if (!keys.length) sections = [{ list: list.sort(cmp), label: droppedLabel }];
+    pagedList(sections, narrowed ? PAGE : MAX_SHOWN, today, "wg", setCount, sortMode);
   }
 
   // The panel under the search box: back arrow, the card ("All cards"), the reads compared, then New and Gone.
@@ -2855,7 +2968,7 @@
         p.appendChild(document.createTextNode("."));
         main.appendChild(p);
       } else {
-        pagedList(hits, narrowed ? PAGE : MAX_SHOWN, today, "d", setCount);
+        pagedList([{ list: hits }], narrowed ? PAGE : MAX_SHOWN, today, "d", setCount, sortMode);
       }
     }
     gone.sort(cmp);
@@ -3060,8 +3173,9 @@
   function focusSpot() {
     var f = document.activeElement;
     if (!f || f === document.body || f === input) return null;
-    var row = f.closest("[data-oid], [data-eid], details.bonusrow"), home = f.closest("[id]");
+    var row = f.closest("[data-oid], [data-ck], [data-eid], details.bonusrow"), home = f.closest("[id]");
     var at = !row ? { id: home && home.id } : row.hasAttribute("data-oid") ? { oid: row.getAttribute("data-oid") } :
+      row.hasAttribute("data-ck") ? { ck: row.getAttribute("data-ck") } :
       row.hasAttribute("data-eid") ? { eid: row.getAttribute("data-eid") } : { lead: row.querySelector(".bhead").textContent, topic: row.getAttribute("data-topic") };
     var kin = function (scope) {
       return Array.prototype.filter.call(scope.querySelectorAll(f.tagName), function (x) { return x.className === f.className; });
@@ -3071,6 +3185,7 @@
   }
   function findSpot(s) {
     var scope = s.at.oid ? main.querySelector("[data-oid=\"" + CSS.escape(s.at.oid) + "\"]") :
+      s.at.ck ? main.querySelector("[data-ck=\"" + CSS.escape(s.at.ck) + "\"]") :
       s.at.eid ? blist.querySelector("[data-eid=\"" + CSS.escape(s.at.eid) + "\"]") :
       s.at.lead != null ? Array.prototype.filter.call(useEl.querySelectorAll("details.bonusrow"), function (d) {
         return d.querySelector(".bhead").textContent === s.at.lead;
@@ -3342,7 +3457,7 @@
   }
 
   // Controls at the top of an offer's details, each next to the status it changes: mark used (on which
-  // card, where the issuer stands for two; a used offer's "Restore offer" is on its row), and the activation switch ("Needs activation
+  // card, where the issuer stands for two; a used offer's "Restore offer"), and the activation switch ("Needs activation
   // [Mark activated]", "Already activated Undo"). Activation values other than these two have no control.
   function offerEdits(o) {
     if (!editing()) return [];
@@ -3359,7 +3474,9 @@
       rows.push(act);
     }
     var used = el("div", "edrow");
-    if (isLive(o, todayISO())) {
+    // A used row (kept in place, or under the Used filter) is restored from its own details.
+    if (o.status === "used") used.appendChild(editBtn("Restore offer", { type: "offer.status", id: o.id, from: "used", to: "active" }, "edsm"));
+    else if (isLive(o, todayISO())) {
       (CardEdits.USED_ON[o.card] || [null]).forEach(function (c) {
         var ch = { type: "offer.status", id: o.id, from: o.status, to: "used" };
         if (c) ch.usedOn = c;
@@ -3737,7 +3854,7 @@
     return !saving && !wc && input.value.trim() === "" && category === null && card === null && cuisine === null && !usedMode &&
       // a save bar still showing (Deploying with Undo, an error with Retry); the small "Live" pill doesn't block
       (savebar.hidden || savebar.classList.contains("live")) &&
-      !main.querySelector("button.toggle[aria-expanded=true]") && !filtersEl.classList.contains("open") &&
+      !main.querySelector("button.mchead[aria-expanded=true]") && !filtersEl.classList.contains("open") &&
       !bstrip.open && !editDet.open && // an unsaved Focus / Choice pick, a half-typed password
       // The search box is autofocused on every open, so it counts as idle while focused (it must be empty, above);
       // any other field in use blocks the reload.

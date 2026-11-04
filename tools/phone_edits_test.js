@@ -383,22 +383,29 @@ function validator() {
   fs.rmSync(dir, { recursive: true });
 }
 
-// Used offers, signed in (phone width): marking used keeps the row in place, dimmed, with "Restore offer" on the row
-// (restoring puts it back as it was); the "Used (N)" filter lists every used offer newest first, with or without a
+// Used offers, signed in (phone width): marking used keeps the row in place in its merchant container, dimmed, with
+// "Restore offer" in its open details (restoring puts it back as it was); the "Used (N)" filter lists every used offer newest first, with or without a
 // search, under the card filter, whatever the sort; Recently unavailable no longer lists used offers; signed out
 // there is no Used filter. Saves go through a stub CardStore.save running the real CardEdits.apply: nothing is sent.
 async function usedChecks(page, load, search, testEdits) {
   const U = byId[ID.usbank], N = byId[ID.needs], C = byId[ID.chase];
   // d: the card in "(on <card>)"; null: no "(on ...)" (Chase, Citi); left out: either.
   const USED_RE = d => new RegExp("Used [A-Z][a-z]{2} \\d+" + (d ? " \\(on " + d + "\\)" : d === null ? "(?!\\d| \\(on )" : ""));
-  // Rows of the main list (not Recently unavailable): key, dimmed or not, the row's own text (details left out).
-  const rows = () => page.$$eval("#main > ul.results > li.offer", ls => ls.map(li => ({
-    key: li.querySelector(".merchant").textContent + " | " + li.querySelector(".mcard").textContent,
-    gone: li.classList.contains("gone"), text: li.querySelector(".row").innerText.replace(/\s+/g, " ")
+  // Rows of the main list (not Recently unavailable), in container order: key, dimmed or not, the row's own text
+  // (details left out), and whether its open details show Restore offer.
+  const rows = () => page.$$eval("#main > ul.results > li.mc li.offer", ls => ls.map(li => ({
+    key: window.__offerOf(li.dataset.oid).merchant + " | " + li.querySelector(".mcard").textContent,
+    gone: li.classList.contains("gone"), text: li.querySelector(".orow").innerText.replace(/\s+/g, " "),
+    restore: [...li.querySelectorAll(".details:not([hidden]) button")].some(b => b.textContent === "Restore offer")
   })));
   const keyOf = o => o.merchant + " | " + ROW_CARD(o.card);
-  const rowLoc = o => page.locator("#main > ul.results > li.offer").filter({ has: page.locator(".merchant", { hasText: new RegExp("^" + o.merchant.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "$") }) })
-    .filter({ has: page.locator(".mcard", { hasText: ROW_CARD(o.card) }) });
+  const rowLoc = o => page.locator("#main > ul.results li.offer[data-oid='" + o.id + "']");
+  // Opens the merchant container holding the offer (its header expands every row in it); no-op when open.
+  const openMc = async o => {
+    const h = page.locator("#main > ul.results > li.mc:has(li.offer[data-oid='" + o.id + "']) > button.mchead");
+    if ((await h.getAttribute("aria-expanded")) !== "true") await h.click();
+  };
+  const openAll = () => page.evaluate(() => document.querySelectorAll("#main > ul.results > li.mc > button.mchead[aria-expanded=false]").forEach(b => b.click()));
   const usedBtn = () => page.$eval("#used-filter", e => e.hidden ? null : e.innerText.trim()).catch(() => null);
   const openFilters = async () => { if (await page.$eval("#ftoggle", b => b.getAttribute("aria-expanded")) !== "true") await page.click("#ftoggle"); };
   const clickUsed = async () => { await openFilters(); await page.click("#used button"); await page.waitForTimeout(100); };
@@ -415,28 +422,30 @@ async function usedChecks(page, load, search, testEdits) {
   const copyOf = (o, edit) => Object.assign(JSON.parse(JSON.stringify(o)), edit ? { status: edit.status, status_since: edit.status_since,
     other_details: (o.other_details || []).filter(t => !/^Used on /.test(t)).concat(edit.used_on ? ["Used on " + edit.used_on] : []) } : {});
 
-  // 1. Mark used keeps the row where it is, dimmed, labelled, with Restore on the row; Restore puts it back in place.
+  // 1. Mark used keeps the row where it is, dimmed, labelled, with Restore in its details; Restore puts it back in place.
   await load({ status: 200, body: "{}\n" }, true);
   await stub({ [U.id]: copyOf(U) });
   const q = U.merchant.split(/\s+/)[0];
   await search(q);
   const before = await rows(), at = before.findIndex(r => r.key === keyOf(U));
   ok(before.length >= 2 && at !== -1, "search " + JSON.stringify(q) + ": " + before.length + " rows, " + U.merchant + " at row " + (at + 1));
-  await rowLoc(U).locator("button.toggle").click();
-  const opened = await rows(); // its activation badge steps aside while the details are open
+  const tapRow = await page.evaluate(id => { const li = document.querySelector("#main li.offer[data-oid='" + id + "']"); li.querySelector(".orow").click(); return li.closest("li.mc").querySelector(".mchead").getAttribute("aria-expanded"); }, U.id);
+  ok(tapRow === "false", "the offer row itself is not a tap target: tapping it opens nothing");
+  await openMc(U);
+  const opened = await rows(); // its status steps aside while the details show an activation switch
   await rowLoc(U).locator("button.edsm", { hasText: "Used on Smartly" }).click();
   await page.waitForTimeout(150);
   const marked = await rows(), mrow = marked[at] || {};
   ok(marked.length === before.length && marked.map(r => r.key).join("\n") === before.map(r => r.key).join("\n"), "mark used: same rows in the same order (" + marked.length + ")");
-  ok(mrow.key === keyOf(U) && mrow.gone && USED_RE("Smartly").test(mrow.text) && /Restore offer/.test(mrow.text),
-     "mark used: row stays dimmed with \"Used <date> (on Smartly)\" and Restore offer: " + JSON.stringify(mrow.text));
+  ok(mrow.key === keyOf(U) && mrow.gone && USED_RE("Smartly").test(mrow.text) && mrow.restore,
+     "mark used: row stays dimmed with \"Used <date> (on Smartly)\" and Restore offer in its open details: " + JSON.stringify(mrow));
   ok(marked.every((r, i) => i === at || JSON.stringify(r) === JSON.stringify(opened[i])), "mark used: other rows unchanged");
   ok(!/U\.S\. Bank offer/.test(await page.$eval("#use", e => e.hidden ? "" : e.innerText)), "mark used: the headline no longer counts the used offer");
   ok(/Used \(\d+\)/.test(await usedBtn() || ""), "mark used: Used filter shows " + JSON.stringify(await usedBtn()));
   const gone1 = await page.$eval("#main", e => (e.querySelector("details.expired") || {}).innerText || "");
   ok(!/Used [A-Z][a-z]{2} \d+/.test(gone1), "mark used: the offer is not under Recently unavailable");
-  // A real tap on the row's Restore link (it must sit above the row's own tap layer).
-  await rowLoc(U).locator(".meta button.edlink", { hasText: "Restore offer" }).click({ timeout: 3000 });
+  // A real tap on the row's Restore offer button.
+  await rowLoc(U).locator(".details button", { hasText: "Restore offer" }).click({ timeout: 3000 });
   await page.waitForTimeout(150);
   const restored = await rows();
   ok(JSON.stringify(restored) === JSON.stringify(opened), "Restore offer: the row is back as it was, in the same place" + (JSON.stringify(restored) === JSON.stringify(opened) ? "" : ": " + JSON.stringify(restored[at])));
@@ -456,8 +465,9 @@ async function usedChecks(page, load, search, testEdits) {
   await page.waitForTimeout(150);
   const long = await rows(), deep = 150, dm = long[deep] && long[deep].key.split(" | ")[0];
   await stub(Object.fromEntries(offersData.offers.filter(o => o.card === "Capital One" && o.merchant === dm).map(o => [o.id, copyOf(o)])));
-  const deepLoc = page.locator("#main > ul.results > li.offer").nth(deep);
-  await deepLoc.locator("button.toggle").click();
+  const deepLoc = page.locator("#main > ul.results li.offer").nth(deep);
+  const deepId = await deepLoc.getAttribute("data-oid");
+  await openMc({ id: deepId });
   await deepLoc.locator("button.edsm", { hasText: "Used on Quicksilver" }).click();
   await page.waitForTimeout(200);
   const long2 = await rows();
@@ -475,15 +485,23 @@ async function usedChecks(page, load, search, testEdits) {
   await stub(Object.fromEntries(used.map(o => [o.id, copyOf(o)])));
   ok(await usedBtn() === "Used (" + used.length + ")", "blank search: " + JSON.stringify(await usedBtn()) + " (want Used (" + used.length + "))");
   await clickUsed();
+  await openAll();
   let list = await rows();
-  ok(list.map(r => r.key).join("\n") === want.map(keyOf).join("\n"), "Used list, blank search: every used offer, newest used first: " + list.map(r => r.key.split(" | ")[0].slice(0, 20)).join(", "));
-  ok(list.length && list.every(r => r.gone && /Restore offer/.test(r.text) && USED_RE().test(r.text)), "Used list rows: dimmed, \"Used <date> ...\" and Restore offer" + (list.every(r => r.gone && /Restore offer/.test(r.text) && USED_RE().test(r.text)) ? "" : ": " + JSON.stringify(list)));
+  // Merchant containers in the order of their newest used offer (a merchant's used offers together).
+  // (Merchant identity as the page has it: the full name, an approved location under its group.)
+  const mkey = n => n.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/\.(com|net|org)\b/gi, "").toLowerCase().replace(/[^a-z0-9]+/g, "");
+  const locs = JSON.parse(fs.readFileSync(path.join(DATA, "merchant-locations.json"))).groups, member = {};
+  Object.keys(locs).forEach(g => locs[g].forEach(m => { member[mkey(m)] = mkey(g); }));
+  const wantMc = (l => { const by = new Map(); l.forEach(o => { const k = member[mkey(o.merchant)] || mkey(o.merchant);
+    if (!by.has(k)) by.set(k, []); by.get(k).push(o); }); return [...by.values()].flat(); })(want);
+  ok(list.map(r => r.key).join("\n") === wantMc.map(keyOf).join("\n"), "Used list, blank search: every used offer, newest used first: " + list.map(r => r.key.split(" | ")[0].slice(0, 20)).join(", "));
+  ok(list.length && list.every(r => r.gone && r.restore && USED_RE().test(r.text)), "Used list rows: dimmed, \"Used <date> ...\" and Restore offer" + (list.every(r => r.gone && r.restore && USED_RE().test(r.text)) ? "" : ": " + JSON.stringify(list)));
   const urow = list.find(r => r.key === keyOf(U)), crow = list.find(r => r.key === keyOf(C));
   ok(urow && USED_RE("Smartly").test(urow.text) && crow && USED_RE(null).test(crow.text) && !/\(on /.test(crow.text), "labels: \"Used <date> (on Smartly)\" for U.S. Bank, \"Used <date>\" for " + C.card);
   ok(await page.$eval("#count", e => e.innerText) === "" && /Used/.test(await page.$eval("#ftoggle", e => e.innerText)), "count line empty (the button shows N), Filters summary: " + JSON.stringify(await page.$eval("#count", e => e.innerText)) + ", " + JSON.stringify(await page.$eval("#ftoggle", e => e.innerText)));
   await page.selectOption("#sort", "az");
   await page.waitForTimeout(100);
-  ok((await rows()).map(r => r.key).join("\n") === want.map(keyOf).join("\n"), "sort menu (A to Z) does not reorder the Used list");
+  ok((await rows()).map(r => r.key).join("\n") === wantMc.map(keyOf).join("\n"), "sort menu (A to Z) does not reorder the Used list");
   await page.selectOption("#sort", "best");
   await search(U.merchant);
   list = await rows();
@@ -491,15 +509,17 @@ async function usedChecks(page, load, search, testEdits) {
   await search("");
   await page.locator("#cards button", { hasText: /^U\.S\. Bank$/ }).click();
   await page.waitForTimeout(100);
-  const usb = want.filter(o => o.card === "U.S. Bank");
+  const usb = wantMc.filter(o => o.card === "U.S. Bank");
   list = await rows();
   ok(list.map(r => r.key).join("\n") === usb.map(keyOf).join("\n") && await usedBtn() === "Used (" + usb.length + ")", "card filter U.S. Bank: " + JSON.stringify(await usedBtn()) + ", " + list.length + " rows");
   // Restore inside the Used list: the row stays in place, back to normal, until the view changes.
   const ui = list.findIndex(r => r.key === keyOf(N));
-  await rowLoc(N).locator(".meta button.edlink", { hasText: "Restore offer" }).click({ timeout: 3000 });
+  await openMc(N);
+  list = await rows();
+  await rowLoc(N).locator(".details button", { hasText: "Restore offer" }).click({ timeout: 3000 });
   await page.waitForTimeout(150);
   const after = await rows();
-  ok(after.length === list.length && after[ui].key === keyOf(N) && !after[ui].gone && !/Restore offer/.test(after[ui].text) && await usedBtn() === "Used (" + (usb.length - 1) + ")",
+  ok(after.length === list.length && after[ui].key === keyOf(N) && !after[ui].gone && !after[ui].restore && await usedBtn() === "Used (" + (usb.length - 1) + ")",
      "Restore in the Used list: row back to normal in place, count " + JSON.stringify(await usedBtn()));
   await page.locator("#cards button", { hasText: /^All cards$/ }).click();
   await page.waitForTimeout(100);
@@ -511,7 +531,8 @@ async function usedChecks(page, load, search, testEdits) {
   await search("");
   await page.locator("#cards button", { hasText: /^All cards$/ }).click();
   await page.waitForTimeout(100);
-  await rowLoc(C).locator(".meta button.edlink", { hasText: "Restore offer" }).click({ timeout: 3000 });
+  await openMc(C);
+  await rowLoc(C).locator(".details button", { hasText: "Restore offer" }).click({ timeout: 3000 });
   await page.waitForTimeout(150);
   await page.locator("#cards button", { hasText: /^U\.S\. Bank$/ }).click();
   await page.waitForTimeout(100);
@@ -520,13 +541,14 @@ async function usedChecks(page, load, search, testEdits) {
   list = await rows();
   ok(list.length && list.every(r => /Smartly \/ Cash\+|U\.S\. Bank/.test(r.key)), "Used list on U.S. Bank after a save-bar Undo of a " + C.card + " edit: only U.S. Bank rows (" + list.map(r => r.key.split(" | ")[1]).join(", ") + ")");
   await page.locator("#cards button", { hasText: /^All cards$/ }).click();
-  // In store / Online and Activation don't apply to the Used list: no "channel not shown" label, not in the summary.
+  // In store / Online and Activation don't apply to the Used list: not in the summary, and it lists the same rows.
+  const nUsed = (await rows()).length; // the Used list is on here
   await clickUsed();
   await page.locator("#chans button", { hasText: /^In store$/ }).click();
   await page.locator("#acts button", { hasText: /^Ready now/ }).click();
   await clickUsed();
-  ok(!/channel not shown/.test(await page.$eval("#main", e => e.innerText)) && await page.$eval("#ftoggle", e => e.innerText.trim()) === "Filters: Used",
-     "Used list ignores In store and Ready now: no \"channel not shown\", summary " + JSON.stringify(await page.$eval("#ftoggle", e => e.innerText.trim())));
+  ok(nUsed > 0 && (await rows()).length === nUsed && await page.$eval("#ftoggle", e => e.innerText.trim()) === "Filters: Used",
+     "Used list ignores In store and Ready now: every used offer listed, summary " + JSON.stringify(await page.$eval("#ftoggle", e => e.innerText.trim())));
   ok(await page.$$eval("#chans button, #acts button", bs => bs.every(b => b.disabled)) && await page.$eval("#acts", e => e.parentNode.classList.contains("off")),
      "while Used is on, the In store / Online and Activation buttons are greyed out and disabled");
   await clickUsed();
@@ -555,6 +577,83 @@ async function usedChecks(page, load, search, testEdits) {
   ok(await usedBtn() === null && !(await rows()).some(r => r.key === keyOf(U)) && !/Used [A-Z][a-z]{2} \d+/.test(await page.$eval("#main", e => e.innerText)), "signed out: no Used filter, the used offer stays hidden");
   await search("");
   ok(await usedBtn() === null, "signed out, blank search: no Used filter");
+}
+
+// Step 3, edit controls inside a merchant container (signed in, phone width): three offers at one merchant, two on
+// the same card. Each row's Mark activated, Used on and Restore offer save a change for that offer only; the save
+// bar's Undo puts it back; signed out the open container has no controls. Saves go to a stub CardStore.save running
+// the real CardEdits.apply on fixture records: nothing is sent.
+async function containerEditChecks(br, base) {
+  const T = "2026-11-04";
+  const fx = (id, card, bonus, extra) => Object.assign({ id: "test/zqe-" + id, card, merchant: "Zqedit Cafe", category: "Dining", bonus, expires: null,
+    expires_text: null, activation: "already_activated", channel: "in_store", spend_cap: null, minimum_spend: null, fine_print: null, other_details: [],
+    last_read: "2026-10-18", first_seen: "2026-10-18", status: "active", status_since: "2026-10-18" }, extra || {});
+  const FX = [fx("a", "U.S. Bank", "10% cash back", { activation: "needs_activation" }), fx("b", "U.S. Bank", "8% cash back", { channel: "online" }),
+    fx("c", "Capital One", "5% back", { activation: "none_shown", channel: "online" })];
+  const ctx = await br.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: "block" });
+  const page = await ctx.newPage();
+  const errs = [];
+  page.on("pageerror", e => errs.push(e.message));
+  await page.clock.install({ time: new Date(2026, 10, 4, 12, 0, 0) });
+  await page.route("https://api.github.com/**", r => r.abort());
+  await page.route("**/data/phone-edits.json", r => r.fulfill({ status: 200, contentType: "application/json", body: "{}\n" }));
+  await page.route("**/data/offers.json", async r => { const j = await (await r.fetch()).json(); j.offers.push(...FX); await r.fulfill({ json: j }); });
+  const open = async signedIn => {
+    await page.goto(base);
+    await page.evaluate(t => { try { localStorage.clear(); if (t) localStorage.setItem("cardselector.token", "test"); } catch (e) {} }, signedIn);
+    await page.goto(base);
+    await page.waitForFunction(() => /active offers loaded/.test(document.body.innerText));
+    await page.evaluate(([recs, today]) => {
+      window.__recs = recs; window.__calls = [];
+      CardStore.save = function (change) {
+        window.__calls.push(change.type + " " + change.id.replace(/^test\/zqe-/, "") + " " + change.from + "->" + change.to + (change.usedOn ? " " + change.usedOn : ""));
+        var rec = window.__recs[change.id], r = CardEdits.apply({ offers: { offers: [rec] } }, change, today);
+        return Promise.resolve({ status: "saved", message: r.summary, record: JSON.parse(JSON.stringify(rec)), undo: CardEdits.inverse(change, r.before) });
+      };
+      CardStore.liveStatus = function () { return Promise.resolve({ state: "live" }); };
+    }, [Object.fromEntries(FX.map(o => [o.id, JSON.parse(JSON.stringify(o))])), T]);
+    await page.fill("#q", "zqedit");
+    await page.waitForTimeout(150);
+    await page.click("#main li.mc > button.mchead");
+    await page.waitForTimeout(50);
+  };
+  const st = () => page.evaluate(() => [...document.querySelectorAll("#main > ul.results li.mc li.offer")].map(li => {
+    const d = li.querySelector(".details");
+    return li.dataset.oid.replace(/^test\/zqe-/, "") + (li.classList.contains("gone") ? " dimmed" : "") + " | " +
+      (d && !d.hidden ? [...d.querySelectorAll(".edrow")].map(r => r.innerText.replace(/\s+/g, " ").trim()).join(" / ") : "closed");
+  }));
+  const calls = () => page.evaluate(() => window.__calls);
+  const tap = async (id, text) => { await page.locator("#main li.offer[data-oid='test/zqe-" + id + "'] .details button", { hasText: new RegExp("^" + text + "$") }).click(); await page.waitForTimeout(150); };
+
+  await open(true);
+  let s = await st();
+  ok(s.length === 3 && /^a \| Needs activation Mark activated \/ Used on Cash\+ Used on Smartly$/.test(s[0]) && /^b \| Already activated Mark not activated \/ Used on Cash\+ Used on Smartly$/.test(s[1]) &&
+    /^c \| Used on Quicksilver Used on Discover it$/.test(s[2]), "container edits: each open row has its own controls (" + JSON.stringify(s) + ")");
+  await tap("a", "Mark activated");
+  s = await st();
+  ok(JSON.stringify(await calls()) === JSON.stringify(["offer.activation a needs_activation->already_activated"]) && /^a \| Already activated/.test(s[0]) && /^b \| Already activated/.test(s[1]),
+    "container edits: Mark activated saves that row's offer only (" + JSON.stringify([await calls(), s]) + ")");
+  await tap("b", "Used on Smartly");
+  s = await st();
+  const usedB = s.find(x => /^b /.test(x));
+  ok((await calls())[1] === "offer.status b active->used Smartly" && /^b dimmed \| .*Restore offer/.test(usedB) && s.filter(x => / dimmed/.test(x)).length === 1 && s.length === 3,
+    "container edits: Used on Smartly marks only that offer; it stays in its container, dimmed, with Restore offer (" + JSON.stringify(s) + ")");
+  const usedLabel = await page.$eval("#main li.offer[data-oid='test/zqe-b'] .ostat", e => e.textContent);
+  ok(/^Used [A-Z][a-z]{2} \d+ \(on Smartly\)$/.test(usedLabel), "container edits: the used row's status reads \"" + usedLabel + "\"");
+  await tap("b", "Restore offer");
+  s = await st();
+  ok((await calls())[2] === "offer.status b used->active" && !s.some(x => / dimmed/.test(x)) && /^a \| Already activated/.test(s[0]),
+    "container edits: Restore offer restores only that offer (" + JSON.stringify([(await calls())[2], s]) + ")");
+  await page.click("#savebtns button:has-text('Undo')");
+  await page.waitForTimeout(200);
+  s = await st();
+  ok((await calls())[3] === "offer.status b active->used Smartly" && /^b dimmed/.test(s.find(x => /^b /.test(x))) && /^a \| Already activated/.test(s[0]),
+    "container edits: the save bar's Undo puts that offer back as it was (" + JSON.stringify([(await calls())[3], s]) + ")");
+  await open(false);
+  s = await st();
+  ok(s.length === 3 && s.every(x => / \| $/.test(x)) && !(await page.locator("#main li.mc .details button").count()), "container edits: signed out, the open container has no edit controls (" + JSON.stringify(s) + ")");
+  ok(!errs.length, "container edits: no page errors (" + errs.join("; ") + ")");
+  await ctx.close();
 }
 
 // A new day while saving (signed in, phone width, the clock at 23:59:50 on Oct 21): no redraw while the save runs,
@@ -598,18 +697,18 @@ async function dayChecks(br, base) {
     return { ctx, page };
   };
   const st = page => page.evaluate(() => {
-    const row = m => [...document.querySelectorAll("li.offer")].find(l => l.querySelector(".merchant").textContent === m);
+    const row = m => [...document.querySelectorAll("li.offer")].find(l => window.__offerOf(l.dataset.oid).merchant === m);
     const t = row("Zzday Ends Today"), b = document.getElementById("savebar");
     return { renders: window.__renders, today: t ? (t.classList.contains("gone") ? "gone" : "live") : "none",
       bar: b.hidden ? null : (btns => document.getElementById("savemsg").firstChild.textContent + (btns.length ? " · " + btns.join(" ") : ""))([...document.querySelectorAll("#savebtns button")].map(x => x.textContent)),
       live: b.classList.contains("live"), q: document.getElementById("q").value,
-      open: [...document.querySelectorAll("li.offer button.toggle[aria-expanded=true]")].map(x => x.closest("li").querySelector(".merchant").textContent) };
+      open: [...document.querySelectorAll("li.mc > button.mchead[aria-expanded=true]")].map(x => x.querySelector(".mcname").textContent) };
   });
 
   // 1. A save running across midnight.
   let { ctx, page } = await open();
-  await page.locator("li.offer:has(.merchant:text-is('Zzday Ends Tomorrow')) button.toggle").first().click();
-  await page.locator("li.offer:has(.merchant:text-is('Zzday Ends Tomorrow')) button", { hasText: /^Mark activated$/ }).click();
+  await page.locator("li.mc:has(li.offer[data-oid='test/zzday-1']) > button.mchead").first().click();
+  await page.locator("li.offer[data-oid='test/zzday-1'] button", { hasText: /^Mark activated$/ }).click();
   const s0 = await st(page);
   await page.clock.runFor(15000); // past midnight, the save still running
   const s1 = await st(page);
@@ -620,7 +719,7 @@ async function dayChecks(br, base) {
   ok(s2.renders === s1.renders + 1 && s2.today === "gone" && s2.q === "zzday" && JSON.stringify(s2.open) === JSON.stringify(["Zzday Ends Tomorrow"]),
     "save across midnight: exactly one redraw when it ends, the ended offer moved, search and open details kept (" + (s2.renders - s1.renders) + " renders, " + JSON.stringify(s2) + ")");
   ok(s2.bar === "Saved · Deploying · Undo ×" && !s2.live, "save across midnight: bar \"" + s2.bar + "\"");
-  ok(/Already activated/.test(await page.locator("li.offer:has(.merchant:text-is('Zzday Ends Tomorrow'))").first().innerText()), "save across midnight: the offer shows Already activated");
+  ok(/Already activated/.test(await page.locator("li.offer[data-oid='test/zzday-1']").first().innerText()), "save across midnight: the offer shows Already activated");
   await page.clock.runFor(6000);
   await page.waitForTimeout(50);
   const s3 = await st(page);
@@ -630,7 +729,7 @@ async function dayChecks(br, base) {
   await page.waitForTimeout(50);
   const s4 = await st(page);
   ok(s4.bar === "Saved · Deploying · Undo ×" && s4.renders === s3.renders + 2 &&
-    /Needs activation/.test(await page.locator("li.offer:has(.merchant:text-is('Zzday Ends Tomorrow'))").first().innerText()),
+    /Needs activation/.test(await page.locator("li.offer[data-oid='test/zzday-1']").first().innerText()),
     "save across midnight: Undo saves as always (bar \"" + s4.bar + "\", " + (s4.renders - s3.renders) + " renders, back to Needs activation)");
   await ctx.close();
 
@@ -728,7 +827,7 @@ async function browser() {
     await page.fill("#q", q);
     await page.waitForTimeout(150);
     return page.$$eval("#main li.offer", ls => ls.map(li => ({
-      id: li.querySelector(".merchant").textContent + " | " + li.querySelector(".mcard").textContent,
+      id: window.__offerOf(li.dataset.oid).merchant + " | " + li.querySelector(".mcard").textContent,
       gone: li.classList.contains("gone"),
       text: li.innerText.replace(/\s+/g, " ")
     })));
@@ -759,13 +858,13 @@ async function browser() {
   const realEmpty = read(EDITS) === "{}\n"; // main may hold pending edits between folds
   ok(JSON.stringify(empty) === JSON.stringify(missing) && (!realEmpty || JSON.stringify(empty) === JSON.stringify(real)),
      "missing phone-edits.json = empty file" + (realEmpty ? " = the real file" : " (real file has pending edits, not compared)") + " (searches: " + JSON.stringify(U.merchant) + ", " + JSON.stringify(C.merchant) + ")");
-  ok(rowOf(U, empty.u.rows) && /Already activated/.test(rowOf(U, empty.u.rows).text) && rowOf(C, empty.c.rows) && /Needs activation/.test(rowOf(C, empty.c.rows).text),
+  ok(rowOf(U, empty.u.rows) && /\bReady\b/.test(rowOf(U, empty.u.rows).text) && rowOf(C, empty.c.rows) && /\bActivate\b/.test(rowOf(C, empty.c.rows).text),
      "without edits: " + U.merchant + " (" + U.card + ") listed, " + C.merchant + " (" + C.card + ") needs activation");
 
   await load({ status: 200, body: ser(testEdits) });
   const ed = await both();
   ok(!rowOf(U, ed.u.rows), "used edit: " + U.merchant + " (" + U.card + ") is gone from the results (signed out)");
-  ok(rowOf(C, ed.c.rows) && /Already activated/.test(rowOf(C, ed.c.rows).text), "activated edit: " + C.merchant + " (" + C.card + ") shows Already activated");
+  ok(rowOf(C, ed.c.rows) && /\bReady\b/.test(rowOf(C, ed.c.rows).text), "activated edit: " + C.merchant + " (" + C.card + ") shows Ready");
   // The headlines, where they named these offers without the edits.
   if (/U\.S\. Bank offer/.test(empty.u.use)) ok(!/U\.S\. Bank offer/.test(ed.u.use), "headline no longer counts the used U.S. Bank offer: " + JSON.stringify(ed.u.use.split("\n").slice(0, 2).join(" / ")));
   else console.log("SKIP headline for " + U.merchant + " didn't name the U.S. Bank offer: " + JSON.stringify(empty.u.use.split("\n").slice(0, 2).join(" / ")));
@@ -820,6 +919,7 @@ async function browser() {
   ok(res2.kind === "reload" && !calls.some(c => /^POST/.test(c)), "browser: a different offers.json on main -> reload, nothing written: " + res2.message);
 
   await dayChecks(br, base);
+  await containerEditChecks(br, base);
 
   await br.close();
   server.close();
