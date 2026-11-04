@@ -2695,9 +2695,11 @@
     return notes.filter(function (n) { return n && n.length <= QP_NOTE_MAX; })[0] || null;
   }
   // One topic's answer: the best ready rate and its leading card (Smartly wins a tie it is in, then cards.json
-  // order), how many other cards are ready at that rate, the dated label of a dated winning rate, a bonus not yet
-  // activated only when it beats the ready rate, Citi Custom Cash only when its conditional rate would beat it
-  // (never ready, never counted), and the note.
+  // order), how many other cards are ready at that rate, whether merchant coding decides it (a category rate:
+  // Likely), the dated label of a dated winning rate, the bonuses not yet activated only when they beat the ready
+  // rate (every card tied at that better rate, by its short name: "Flex or Freedom"), Citi Custom Cash's conditional
+  // rate whenever the topic is its CardSelector focus (strong when it would beat the ready rate; never ready, never
+  // counted), and the note.
   function quickPick(topic, today) {
     var L = merchantLines(topicMerchant(topic), today);
     if (!L) return null;
@@ -2705,8 +2707,9 @@
     var aLine = L.lines.filter(function (l) { return l.label === "After activating"; })[0];
     return {
       rate: p.total, card: lead.C.name, more: p.wins.length - 1, cat: !!lead.base.cat, dated: datedLabel(lead.base.e),
-      after: L.after ? { card: L.after.wins[0].C.name, rate: L.after.total, gain: aLine.gain } : null,
-      cond: L.cond && L.cond.strong ? L.cond : null, note: quickNote(p)
+      after: L.after ? { names: L.after.wins.map(function (c) { return (c.base.e && c.base.e.short) || c.C.name; }),
+        cards: L.after.wins.map(function (c) { return c.C.name; }), rate: L.after.total, gain: aLine.gain } : null,
+      cond: L.cond || null, note: quickNote(p)
     };
   }
   // The section under the search box on the home screen (no search, category or card picked; not What changed or
@@ -2719,8 +2722,6 @@
     var picks = QUICK_PICKS.map(function (q) { return { label: q[0], p: quickPick(q[1], today) }; });
     var head = el("div", "qphead");
     head.appendChild(el("h2", "qph", "Quick picks · no offer needed")).id = "qp-h";
-    // One "Likely" for the section when a category rate leads any tile (merchant coding decides it).
-    if (picks.some(function (x) { return x.p && x.p.cat; })) head.appendChild(likelyTag());
     qpEl.appendChild(head);
     var ul = el("ul", "qpgrid");
     picks.forEach(function (x) {
@@ -2731,18 +2732,26 @@
       var w = el("div", "qpw");
       w.appendChild(el("span", "qpr", pct(p.rate) + "%"));
       w.appendChild(withDot(el("span", "qpc", p.card), p.card));
+      // "Likely" on a tile whose winning rate is a category rate (merchant coding decides it); none for Smartly's.
+      if (p.cat) w.appendChild(likelyTag());
       li.appendChild(w);
       if (p.more) li.appendChild(el("div", "qpm", "+" + p.more + " more ready"));
       if (p.dated) li.appendChild(el("div", "qpm qpd", p.dated));
       if (p.after) {
-        var a = el("div", "qpx qpa", "After activating: " + p.after.card + " " + pct(p.after.rate) + "%");
-        a.appendChild(el("span", "usegain", p.after.gain));
+        // "Activate Flex or Freedom: 5% · +1 pt" (every card tied at the better rate).
+        var n = p.after.names, who = n.length > 1 ? n.slice(0, -1).join(", ") + " or " + n[n.length - 1] : n[0];
+        var a = el("div", "qpx qpa", "Activate " + who + ": "), ag = el("span", "qpkeep", pct(p.after.rate) + "% · ");
+        a.setAttribute("data-cards", p.after.cards.join("|"));
+        ag.appendChild(el("span", "usegain", p.after.gain));
+        a.appendChild(ag);
         li.appendChild(a);
       }
       if (p.cond) {
-        var c = el("div", "qpx qpcond", p.cond.e.card + " " + pct(p.cond.rate) + "% · conditional");
+        // "Citi Custom Cash 5% · conditional · +1 pt" when it would beat the ready rate; else the short muted line.
+        var c = el("div", "qpx qpcond" + (p.cond.strong ? " strong" : ""), p.cond.e.card + " " + pct(p.cond.rate) + "% · ");
+        var cg = c.appendChild(el("span", "qpkeep", "conditional" + (p.cond.strong ? " · " : "")));
+        if (p.cond.strong) cg.appendChild(el("span", "usegain", p.cond.gain));
         c.appendChild(el("span", "sr-only", ", " + condWhy(p.cond.e)));
-        c.appendChild(el("span", "usegain", p.cond.gain));
         li.appendChild(c);
       }
       if (p.note) li.appendChild(el("div", "qpnote", p.note));

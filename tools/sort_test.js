@@ -1966,14 +1966,16 @@ function listRows(sel) {
       q.querySelectorAll(".qpgrid > li.qpt").forEach(li => {
         const a = li.querySelector(".qpa"), c = li.querySelector(".qpcond");
         tiles[li.dataset.topic] = { rate: txt(li.querySelector(".qpr")), card: txt(li.querySelector(".qpc")), more: txt(li.querySelector(".qpm:not(.qpd)")),
-          dated: txt(li.querySelector(".qpd")), after: a ? txt(a) + " " + gain(a) : null, cond: c ? txt(c) + " " + gain(c) : null,
+          dated: txt(li.querySelector(".qpd")), after: a ? txt(a) + gain(a) : null, afterCards: a ? a.dataset.cards.split("|") : null,
+          cond: c ? (txt(c) + (gain(c) || "")).trim() : null, condKind: c ? (c.classList.contains("strong") ? "strong" : "muted") : null,
           condSr: c ? (c.querySelector(".sr-only") || {}).textContent : null, note: txt(li.querySelector(".qpnote")),
+          likely: li.querySelector(".qpw .likely") ? li.querySelector(".qpw .likely").textContent : null,
           empty: [...li.querySelectorAll("*")].filter(x => !x.textContent.trim() && !x.classList.contains("idot")).length,
           over: li.scrollWidth > li.clientWidth + 1, h: Math.round(li.getBoundingClientRect().height) };
       });
       const sizes = [...q.querySelectorAll("*")].filter(x => x.textContent.trim() && !x.closest(".sr-only")).map(x => parseFloat(getComputedStyle(x).fontSize));
       const ev = q.querySelector(".qpe"), r = q.getBoundingClientRect(), strip = document.getElementById("bstrip");
-      return { head: q.querySelector(".qph").textContent, likely: !!q.querySelector(".qphead .likely"),
+      return { head: q.querySelector(".qph").textContent, headLikely: !!q.querySelector(".qphead .likely"),
         order: [...q.querySelectorAll(".qpgrid > li.qpt")].map(li => li.dataset.topic), tiles,
         ev: ev ? ev.innerText.replace(/\s+/g, " ").trim() : null, evFull: ev ? Math.abs(ev.getBoundingClientRect().width - q.getBoundingClientRect().width) < 1 : false,
         cols: getComputedStyle(q.querySelector(".qpgrid")).gridTemplateColumns.split(" ").length,
@@ -1983,7 +1985,8 @@ function listRows(sel) {
         beforeStrip: !!(q.compareDocumentPosition(strip) & Node.DOCUMENT_POSITION_FOLLOWING), stripShown: !strip.hidden && strip.getBoundingClientRect().height > 0 };
     });
     // The Step 2 answer for one merchant: the Ready now card and rate, how many cards are ready at it (named, "+N more
-    // ready", a Smartly tie's "also"), the After activating card, rate and gain, the strong Citi Custom Cash line.
+    // ready", a Smartly tie's "also"), the After activating cards (named, "+N more at"), rate and gain, and the Citi
+    // Custom Cash line (strong with its gain, or muted).
     const step2 = async (q, chan) => {
       await page.fill("#q", q);
       await page.waitForTimeout(120);
@@ -1992,8 +1995,9 @@ function listRows(sel) {
         const u = document.getElementById("use");
         const hs = [...u.querySelectorAll(":scope > .usehead:not(.usechan)")].map(e => ({ t: e.innerText.replace(/\s+/g, " "),
           s: (e.querySelector("strong") || {}).textContent || "", g: (e.querySelector(".usegain") || {}).textContent || null }));
-        const c = u.querySelector(":scope > .usecond.strong");
-        return { hs, cond: c ? { s: c.querySelector("strong").textContent, g: (c.querySelector(".usegain") || {}).textContent || null } : null };
+        const c = u.querySelector(":scope > .usecond.strong"), m = u.querySelector(":scope > .usecond:not(.strong)");
+        return { hs, cond: c ? { k: "strong", s: c.querySelector("strong").textContent, g: (c.querySelector(".usegain") || {}).textContent || null } :
+          m ? { k: "muted", s: m.textContent, g: null } : null };
       });
       if (chan) await page.click("#use .chansel button[data-ch=any]");
       await page.fill("#q", "");
@@ -2001,8 +2005,10 @@ function listRows(sel) {
       const r = a.hs.find(h => /^Ready now: /.test(h.t)), f = a.hs.find(h => /^After activating: /.test(h.t));
       const first = s => { const m = /^(.+?) ([\d.]+)%/.exec(s.split(" or ")[0]); return m ? { card: m[1], rate: m[2] + "%" } : {}; };
       const n = r ? r.s.split(" or ").length + +((/\+(\d+) more ready/.exec(r.t) || [0, 0])[1]) + (r.t.match(/ also [\d.]+%/g) || []).length : 0;
-      return { ready: r ? Object.assign(first(r.s), { n }) : null, after: f ? Object.assign(first(f.s), { gain: f.g }) : null,
-        cond: a.cond ? Object.assign(first(a.cond.s), { gain: a.cond.g }) : null, raw: a.hs.map(h => h.t) };
+      const fNames = f ? f.s.split(" or ").map(x => /^(.+?) [\d.]+%/.exec(x)[1]) : null;
+      const fN = f ? fNames.length + +((/\+(\d+) more at/.exec(f.t) || [0, 0])[1]) : 0;
+      return { ready: r ? Object.assign(first(r.s), { n }) : null, after: f ? Object.assign(first(f.s), { gain: f.g, names: fNames, n: fN }) : null,
+        cond: a.cond ? Object.assign(first(a.cond.s), { kind: a.cond.k, gain: a.cond.g }) : null, raw: a.hs.map(h => h.t) };
     };
     const open = async (c, when) => {
       CASE = c || {};
@@ -2019,10 +2025,14 @@ function listRows(sel) {
         const t = Q.tiles[topic], s = await step2(PAR[topic][0], PAR[topic][1]);
         // A line the tile shows but that doesn't read as expected counts as a mismatch, never as no line.
         const parts = (text, re) => { if (!text) return null; const m = re.exec(text); return m ? [m[1], m[2], m[3]] : ["unreadable", text]; };
-        const tAfter = parts(t.after, /^After activating: (.+) ([\d.]+%) (\+.+)$/), tCond = parts(t.cond, /^(.+) ([\d.]+%) · conditional (\+.+)$/);
+        // The activation line: every tied card (Step 2 names two, then "+N more at"), the rate and the gain.
+        const tA = parts(t.after, /^Activate (.+): ([\d.]+%) · (\+.+)$/);
+        const tAfter = tA && tA[0] !== "unreadable" ? [t.afterCards.slice(0, 2), t.afterCards.length, tA[1], tA[2]] : tA;
+        const tC = t.cond ? parts(t.cond, t.condKind === "strong" ? /^(.+) ([\d.]+%) · conditional · (\+.+)$/ : /^(.+) ([\d.]+%) · (conditional)$/) : null;
+        const tCond = tC && tC[0] !== "unreadable" ? [t.condKind, tC[0], tC[1], t.condKind === "strong" ? tC[2] : null] : tC;
         const same = s.ready && t.card === s.ready.card && t.rate === s.ready.rate && (t.more ? +/\d+/.exec(t.more)[0] : 0) === s.ready.n - 1 &&
-          J(tAfter) === J(s.after ? [s.after.card, s.after.rate, s.after.gain] : null) &&
-          J(tCond) === J(s.cond ? [s.cond.card, s.cond.rate, s.cond.gain] : null);
+          J(tAfter) === J(s.after ? [s.after.names, s.after.n, s.after.rate, s.after.gain] : null) &&
+          J(tCond) === J(s.cond ? [s.cond.kind, s.cond.card, s.cond.rate, s.cond.gain] : null);
         ok(same, "qp " + name + ": " + topic + " matches the Step 2 answer for \"" + PAR[topic][0] + "\" (tile " + J(t) + "; Step 2 " + J(s.raw) + ")");
       }
     };
@@ -2037,7 +2047,7 @@ function listRows(sel) {
     let Q = await open({});
     ok(J(Q.order) === J(["Dining", "Grocery stores", "Online shopping", "Gas stations", "Entertainment", "Utilities"]), "qp A: the six topics in order (" + J(Q.order) + ")");
     ok(Q.head === "Quick picks · no offer needed" && !/Q\d|Dec|Nov|through|20\d\d/.test(Q.head), "qp G: the heading has no quarter or date (" + Q.head + ")");
-    tileIs("A", Q, "Dining", { rate: "5%", card: "Freedom Flex", more: "+2 more ready", dated: Q4, after: null, cond: null, note: null });
+    tileIs("A", Q, "Dining", { rate: "5%", card: "Freedom Flex", more: "+2 more ready", dated: Q4, after: null, cond: "Citi Custom Cash 5% · conditional", condKind: "muted", note: null });
     tileIs("A", Q, "Grocery stores", { rate: "5%", card: "Freedom Flex", more: "+1 more ready", dated: Q4, after: null, cond: null, note: GROCERY_NOTE });
     tileIs("A", Q, "Online shopping", { rate: "5.25%", card: "Customized Cash", more: null, dated: null, after: null, cond: null, note: BOOST });
     tileIs("A/E", Q, "Gas stations", { rate: "4%", card: "Smartly", more: "+1 more ready", dated: null, after: null, cond: null, note: "Costco Visa also 4%, 5% at Costco gas" });
@@ -2047,7 +2057,15 @@ function listRows(sel) {
     ok(Q.ev === "Everyday default · Smartly 4% First $10,000 per billing cycle, then 2%; some categories always 2%" && Q.evFull,
       "qp everyday: full-width tile, rate and caveat from Smartly's headline_note (" + Q.ev + ")");
     ok(!/everywhere|on everything/i.test(J(Q)), "qp: never \"4% everywhere\" or \"4% on everything\"");
-    ok(Q.likely, "qp: one Likely tag for the section when a category rate leads a tile");
+    // Likely on each tile whose winner is a category rate (merchant coding decides it), never on the heading, and not on
+    // Smartly's everyday rate (Gas stations) just because other tiles have it.
+    ok(!Q.headLikely && J(Q.order.map(k => !!Q.tiles[k].likely)) === J([true, true, true, false, true, true]) && Q.tiles.Dining.likely === "Likely, not certain: how the merchant codes the purchase decides it.",
+      "qp Likely: on the five category-rate tiles, not on Gas stations (Smartly) or the heading, with likelyTag's screen-reader text (" + J([Q.headLikely, Q.order.map(k => Q.tiles[k].likely)]) + ")");
+    // A Custom Cash conditional 5% that ties the ready 5% (Dining, its focus): the short muted line, no gain, and not
+    // counted in +N more ready (+2 is Freedom and Discover it). Topics that aren't its focus get no Custom Cash line.
+    ok(Q.tiles.Dining.condSr === ", only if restaurants is your actual top eligible category this cycle" &&
+      ["Grocery stores", "Online shopping", "Gas stations", "Entertainment", "Utilities"].every(k => Q.tiles[k].cond === null),
+      "qp custom cash: muted line on its focus topic (with why, for screen readers), none on the other five");
     ok(Q.cols === 2 && Q.actions === 0 && Q.minFont >= 11.5 && Q.pageW <= 390,
       "qp 390px: a two-column grid, no buttons or links (no tap action in 4A), no text under 11.5px, no sideways scroll (" + J([Q.cols, Q.actions, Q.minFont, Q.pageW]) + ")");
     ok(Q.afterSearch && Q.beforeStrip && Q.stripShown && Q.bottom < 844, "qp placement: after the search box, before the Bonus categories strip, which still shows; within the first screen (" + J([Q.top, Q.bottom]) + ")");
@@ -2077,27 +2095,32 @@ function listRows(sel) {
     // C / I. Both Chase cards not activated: Smartly 4% stays the ready answer for grocery stores, with the 5%
     // after activating (+1 pt); a not-activated bonus never leads or counts as ready.
     Q = await open({ set: { "Freedom Flex": "not_confirmed", "Freedom": "not_confirmed" } });
-    tileIs("C", Q, "Grocery stores", { rate: "4%", card: "Smartly", more: null, dated: null, after: "After activating: Freedom Flex 5% +1 pt", cond: null, note: null });
+    tileIs("C", Q, "Grocery stores", { rate: "4%", card: "Smartly", more: null, dated: null, after: "Activate Flex or Freedom: 5% · +1 pt", cond: null, note: null, likely: null });
     tileIs("C", Q, "Dining", { rate: "5%", card: "Discover it", more: null, after: null });
     await parity("C", Q);
 
     // D. Citi Custom Cash's conditional 5% beats the ready answer (the other 5% dining cards ended): Smartly 4% leads,
     // Custom Cash is a separate conditional alternative (+1 pt), not ready and not in +N more ready.
     Q = await open({ set: { "Freedom Flex": "ended", "Freedom": "ended", "Discover it": "ended" } });
-    tileIs("D", Q, "Dining", { rate: "4%", card: "Smartly", more: null, dated: null, after: null, cond: "Citi Custom Cash 5% · conditional +1 pt" });
+    tileIs("D", Q, "Dining", { rate: "4%", card: "Smartly", more: null, dated: null, after: null, cond: "Citi Custom Cash 5% · conditional · +1 pt", condKind: "strong", likely: null });
+    // A mix: Smartly-led tiles have no Likely; Customized Cash's online shopping rate (a category rate) does.
+    ok(J(Q.order.map(k => !!Q.tiles[k].likely)) === J([false, false, true, false, false, false]) && !Q.headLikely,
+      "qp Likely D: only Online shopping (Customized Cash), not the Smartly tiles (" + J(Q.order.map(k => Q.tiles[k].card + ":" + !!Q.tiles[k].likely)) + ")");
     ok(Q.tiles.Dining.condSr === ", only if restaurants is your actual top eligible category this cycle", "qp D: screen readers hear why it is conditional (" + Q.tiles.Dining.condSr + ")");
     tileIs("D/G", Q, "Utilities", { rate: "4%", card: "Smartly", dated: null });
     await parity("D", Q);
     // D with the 5% cards not activated instead: both the activation and the conditional alternative, Smartly still leads.
     Q = await open({ set: { "Freedom Flex": "not_confirmed", "Freedom": "not_confirmed", "Discover it": "not_confirmed" } });
-    tileIs("D/I", Q, "Dining", { rate: "4%", card: "Smartly", more: null, after: "After activating: Freedom Flex 5% +1 pt", cond: "Citi Custom Cash 5% · conditional +1 pt" });
-    tileIs("I", Q, "Utilities", { rate: "4%", card: "Smartly", after: "After activating: Discover it 5% +1 pt" });
+    tileIs("D/I", Q, "Dining", { rate: "4%", card: "Smartly", more: null, after: "Activate Flex, Freedom or Discover it: 5% · +1 pt",
+      afterCards: ["Freedom Flex", "Freedom", "Discover it"], cond: "Citi Custom Cash 5% · conditional · +1 pt", condKind: "strong" });
+    // Only one card's activation improves the answer: only it is named.
+    tileIs("I", Q, "Utilities", { rate: "4%", card: "Smartly", after: "Activate Discover it: 5% · +1 pt", afterCards: ["Discover it"] });
     await parity("D/I", Q);
 
     // F. Preferred Rewards: with dining as the Customized Cash choice, its 3% x 1.75 = 5.25% beats the Chase 5% now;
     // after Dec 15 (50%: 4.5%) Freedom Flex leads again and the note follows the tier. Gas likewise.
     Q = await open({ choice: "dining" });
-    tileIs("F", Q, "Dining", { rate: "5.25%", card: "Customized Cash", more: null, dated: null, note: BOOST });
+    tileIs("F", Q, "Dining", { rate: "5.25%", card: "Customized Cash", more: null, dated: null, note: BOOST, cond: "Citi Custom Cash 5% · conditional", condKind: "muted" });
     tileIs("F", Q, "Online shopping", { rate: "4%", card: "Smartly", note: null });
     await parity("F", Q);
     Q = await open({ choice: "dining" }, new Date(2026, 11, 20, 12, 0, 0));
@@ -2105,6 +2128,19 @@ function listRows(sel) {
     Q = await open({ choice: "gas & EV charging stations" }, new Date(2026, 11, 20, 12, 0, 0));
     tileIs("F after Dec 15", Q, "Gas stations", { rate: "4.5%", card: "Customized Cash", more: null, note: "Incl. 50% Preferred Rewards" });
     await parity("F after Dec 15", Q);
+
+    // Custom Cash focus on grocery stores: its conditional line moves to Grocery stores (muted: it ties the ready 5%),
+    // and Dining, no longer its focus, has none.
+    Q = await open({ set: { "Citi Custom Cash": { planned: "grocery stores" } } });
+    tileIs("focus", Q, "Grocery stores", { rate: "5%", card: "Freedom Flex", more: "+1 more ready", cond: "Citi Custom Cash 5% · conditional", condKind: "muted" });
+    tileIs("focus", Q, "Dining", { rate: "5%", card: "Freedom Flex", more: "+2 more ready", cond: null });
+    await parity("focus", Q);
+    // Smartly 4% ready with the Custom Cash focus on grocery stores and both Chase cards off: the strong line with +1 pt,
+    // next to the activation of both Chase cards.
+    Q = await open({ set: { "Citi Custom Cash": { planned: "grocery stores" }, "Freedom Flex": "not_confirmed", "Freedom": "not_confirmed" } });
+    tileIs("focus", Q, "Grocery stores", { rate: "4%", card: "Smartly", more: null, after: "Activate Flex or Freedom: 5% · +1 pt",
+      cond: "Citi Custom Cash 5% · conditional · +1 pt", condKind: "strong" });
+    await parity("focus/C", Q);
 
     // G. A dated bonus that isn't a calendar quarter: "Through Nov 30", no quarter name.
     Q = await open({ set: { "Discover it": { start: "2026-11-01", end: "2026-11-30" } } });
