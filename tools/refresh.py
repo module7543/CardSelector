@@ -22,7 +22,7 @@ The tool encodes the mechanical rules. Judgment stays with the session, through 
    "categories": {"<new merchant>": "<category>" or {"category": "...", "unsure": true}},
    "clashes": {"<merchant>": "<category>"},             set on every offer with that name, on every card
    "new_names": {"<file merchant>": {"merchant": "...", "aliases": [...]}},  a new offer saved under another name
-   "owner_approved": ["size_check", "missing", "new_share", "card_check", "parts"]}   only after the owner said go ahead
+   "owner_approved": ["size_check", "missing", "new_share", "card_check", "parts", "location_pairs"]}   only after the owner said go ahead
 report --template writes one with every open question set to null. A pair the tool did not propose can be added.
 
 Never stored: card or account numbers. Columns such as card / card_name / card_last4 are read only by the card
@@ -116,6 +116,63 @@ def same_place(old, new):
     x, y = words(old), words(new)
     cut = re.search(r"(\.\.\.|…)\s*$", old)
     return bool(cut and x) and len(x) <= len(y) and y[:len(x) - 1] == x[:-1] and y[len(x) - 1].startswith(x[-1])
+
+
+def location_change(a, b):
+    """Two names on the same base where one is '<base> - <location>' and the other names a different place or
+    none: 'X - LA' / 'X - La Habra', 'X - North' / 'X Northridge' (the dash dropped), 'X - Encino' / 'X' (the
+    location dropped or added). The reason such a pair is never automatic, or None. The same location once case
+    and punctuation are ignored, or one cut off on screen ('X - Newport Be...') that the other completes, is not a
+    change."""
+    def same(sa, sb):
+        return compact(sa) == compact(sb) or (truncated(sa) and same_place(sa, sb)) or (truncated(sb) and same_place(sb, sa))
+    for x, y in ((a or "", b or ""), (b or "", a or "")):
+        for m in re.finditer(r"\s+-\s+", x):
+            base, loc = x[:m.start()], x[m.end():]
+            bkey, bw = merchant_key(base), words(base)
+            if not bkey or not compact(loc):
+                continue
+            other = None
+            for mb in re.finditer(r"\s+-\s+", y):
+                if merchant_key(y[:mb.start()]) == bkey:
+                    other = y[mb.end():]
+                    break
+            if other is None:
+                if truncated(y) and merchant_key(re.sub(r"\s*-\s*$", "", stem(y))) == bkey:
+                    return None  # cut off on screen at the base ("eBay...", "Two Hands Corn Dogs -..."): the same name
+                if merchant_key(y) == bkey:
+                    other = ""
+                elif bw and words(y)[:len(bw)] == bw and len(words(y)) > len(bw):
+                    other = " ".join(words(y)[len(bw):])
+            if other is None:
+                continue
+            if other and not compact(other) and truncated(other):
+                return None  # "X - ...": cut off on screen right after the base
+            if other and same(loc, other):
+                return None
+            return (f"location-style names on one base with different locations ({loc!r} / {other!r}): never automatic"
+                    if other else f"one name adds or drops the location {loc!r}: never automatic")
+    return None
+
+
+def shares_base(a, b):
+    """Some ' - ' in either name gives a base the other name has (equal, or its first words)."""
+    for x, y in ((a or "", b or ""), (b or "", a or "")):
+        for m in re.finditer(r"\s+-\s+", x):
+            bk, bw = merchant_key(x[:m.start()]), words(x[:m.start()])
+            if bk and (merchant_key(re.split(r"\s+-\s+", y)[0]) == bk or (bw and words(y)[:len(bw)] == bw)
+                       or (truncated(y) and merchant_key(re.sub(r"\s*-\s*$", "", stem(y))) == bk)):
+                return True
+    return False
+
+
+def offer_location_change(o, name):
+    """The current name decides when it shares a base with the file's name; otherwise any alias that does."""
+    if shares_base(o["merchant"], name):
+        return location_change(o["merchant"], name)
+    if not re.search(r"\s+-\s+", o["merchant"]) and not re.search(r"\s+-\s+", name or ""):
+        return None  # two plain names name no place now, whatever an old alias said
+    return next((r for a in o.get("aliases", []) for r in [location_change(a, name)] if r), None)
 
 
 def words(s):
@@ -537,17 +594,20 @@ class Citi(Adapter):
         recs = []
         for oid, (lines, r) in by_id.items():
             full = re.sub(r"\s+", " ", r["merchant"]).strip()
-            base, loc = full, None
-            if oid.upper().startswith("RN-") and " - " in full:
-                base, loc = [p.strip() for p in full.split(" - ", 1)]
-            recs.append({"oid": oid, "lines": lines, "r": r, "full": full, "base": base, "loc": loc,
+            rn = oid.upper().startswith("RN-")
+            if rn and " - " in full:
+                full = app.spelling(full) or full  # already in the app ignoring case and punctuation: its spelling
+            recs.append({"oid": oid, "lines": lines, "r": r, "full": full, "rn": rn,
                          "bkey": bonus_key(r["bonus"]), "exp": r["expiration"].strip()})
-        # Restaurant rows with the same base name and bonus are one offer ("N locations listed"), unless their
-        # expirations differ (then each keeps its full name; the owner decides).
+        # Restaurant names are kept whole, location included ("Subway - Encino" stays "Subway - Encino"): a
+        # location is never stripped or merged into its base here; refresh lists such names as location
+        # candidates for the owner. Only restaurant rows with the very same name and bonus are one offer
+        # ("N locations listed": Citi lists one tile per location under one name), unless their expirations
+        # differ (then they stay separate; the owner decides).
         groups = {}
         for rec in recs:
-            if rec["oid"].upper().startswith("RN-"):
-                groups.setdefault((compact(rec["base"]), rec["bkey"]), []).append(rec)
+            if rec["rn"]:
+                groups.setdefault((compact(rec["full"]), rec["bkey"]), []).append(rec)
         merged, split = {}, set()
         for k, g in groups.items():
             if len(g) > 1:
@@ -557,35 +617,19 @@ class Citi(Adapter):
                     split.add(k)
         out, done = [], set()
         for rec in recs:
-            k = (compact(rec["base"]), rec["bkey"])
             if rec["oid"] in done:
                 continue
-            if k in merged:
-                g = merged[k]
-                done.update(x["oid"] for x in g)
-                plain = next((x for x in g if not x["loc"]), g[0])
-                inc = self.row(plain["base"], g, read_date)
-                locs = [x["loc"] for x in g if x["loc"]]
-                inc.replace.append((r"^\d+ locations listed$", f"{len(g)} locations listed"))
-                inc.replace.append((r"^Locations? listed: ", (("Location listed: " if len(locs) == 1 else "Locations listed: ")
-                                                              + "; ".join(locs)) if locs else None))
-                out.append(inc)
-                continue
-            name = rec["full"]
-            if rec["loc"]:
-                spelled = app.spelling(rec["full"])
-                if spelled:
-                    name = spelled  # the full name, location included, is already in the app: its spelling
-                elif k in split:
-                    name = rec["full"]
-                else:
-                    name = rec["base"]
-            inc = self.row(name, [rec], read_date)
-            if rec["loc"] and name == rec["base"]:
-                inc.replace.append((r"^Locations? listed: ", f"Location listed: {rec['loc']}"))
+            k = (compact(rec["full"]), rec["bkey"])
+            g = merged.get(k, [rec])
+            done.update(x["oid"] for x in g)
+            inc = self.row(rec["full"], g, read_date)
+            if rec["rn"]:
+                # count note for one name listed several times; "Location(s) listed:" notes (the old rule) go
+                inc.replace.append((r"^\d+ locations listed$", f"{len(g)} locations listed" if len(g) > 1 else None))
+                inc.replace.append((r"^Locations? listed: ", None))
             if k in split:
-                inc.flags.append("same base name and bonus as another row with a different expiration: "
-                                 "kept separate under the full name (ask the owner before merging)")
+                inc.flags.append("same name and bonus as another row with a different expiration: "
+                                 "kept separate (ask the owner before merging)")
             out.append(inc)
         return out
 
@@ -983,6 +1027,8 @@ def plan(card, paths, given_date, decisions=None, part=False, complete_parts=Fal
                     continue
                 if any(nkey(n) in file_names for n in names(o)):
                     continue
+                if offer_location_change(o, incs[i].merchant):
+                    continue  # the location changes between the offer's name and the file's: proposed (step 4)
                 why = fn(incs[i], o)
                 if why:
                     found.setdefault(i, []).append((o, why))
@@ -1051,6 +1097,9 @@ def plan(card, paths, given_date, decisions=None, part=False, complete_parts=Fal
                     score, w = 0.9, f"the file's merchant_tld {inc.tld} is close to {n!r}"
                 if score > best:
                     best, why = score, w
+            lc = offer_location_change(o, inc.merchant)  # a location change on this offer: the reason, always shown
+            if lc:
+                best, why = 1.0, lc
             if best >= 0.8:
                 scored.append((best, o, why))
         for best, o, why in sorted(scored, key=lambda x: -x[0])[:3]:
@@ -1081,6 +1130,13 @@ def plan(card, paths, given_date, decisions=None, part=False, complete_parts=Fal
         claimed.add(sid)
         match[i] = (sid, "decided", "accepted in the decisions file")
     open_pairs = [(i, o, why) for i, o, why in open_pairs if i not in match and o["id"] not in claimed]
+    # A decided pair whose location changes (CLAUDE.md, Automatic vs proposed) is the owner's call, not the session's.
+    loc_decided = []
+    for (sid, fname, bkey), acc in decided.items():
+        o = view.get(sid)
+        inc = next((x for x in incs if compact(x.merchant) == fname and bonus_key(x.bonus) == bkey), None)
+        if acc is not None and o and inc and offer_location_change(o, inc.merchant):
+            loc_decided.append(f"{o['merchant']!r} <- {inc.merchant!r} ({'accepted' if acc else 'rejected'})")
 
     # ---------- build the new data ----------
     new = copy.deepcopy(data)
@@ -1158,10 +1214,21 @@ def plan(card, paths, given_date, decisions=None, part=False, complete_parts=Fal
             eff = rule
             if rule == "decided":  # an accepted pair follows the same name rules as an automatic one
                 eff = "truncated" if rule_truncated(inc, v) else ("extends" if rule_extends(inc, v) else "decided")
-            merchant, alias, drop = ad.pair_name(v, inc, eff)
+                if not bare_domain(inc.merchant) and offer_location_change(v, inc.merchant):
+                    eff = "location"  # (a bare lowercase domain keeps the saved name, as for any pair)
+            merchant, alias, drop = ad.pair_name(v, inc, "decided" if eff == "location" else eff)
+            if eff == "location":
+                # an accepted location change takes the place the file shows, even cut off ("X - La Ha..."), with
+                # the old name as an alias; a later read completes a visible cut as usual
+                merchant, alias = inc.merchant, v["merchant"]
             if rule == "decided" and alias is None and merchant == v["merchant"] and bare_domain(inc.merchant) \
                     and nkey(inc.merchant) != nkey(merchant):
                 alias = inc.merchant  # the saved name stays; the domain becomes an alias, so the next read matches it
+        # The old name is the new name's base ("Subway" -> "Subway - Encino"): no alias. Search already finds it,
+        # and the base as an alias would tie this location to the base merchant (and to its cuisine entry).
+        base_alias = bool(alias) and nkey(alias) == nkey(o["merchant"]) and location_of_base(merchant, merchant_key(alias))
+        if base_alias:
+            alias = None
         rename = None
         if merchant != o["merchant"]:
             rename = {"id": sid, "from": o["merchant"], "to": merchant, "rule": rule}
@@ -1175,7 +1242,7 @@ def plan(card, paths, given_date, decisions=None, part=False, complete_parts=Fal
             # once case, accents and punctuation are ignored, or never offered as one.
             saved = alias and compact(alias) in {compact(a) for a in o.get("aliases", [])}
             same = alias and not saved and compact(alias) == compact(merchant)
-            rename["alias"] = "added" if saved else ("same_name" if same else "none")
+            rename["alias"] = "added" if saved else ("same_name" if same else ("base" if base_alias else "none"))
             rename["alias_added"] = bool(saved)
         if inc.bonus is not None and inc.bonus != o["bonus"]:
             (out["bonus_changes"] if bonus_key(inc.bonus) != bonus_key(o["bonus"]) else out["wording_changes"]).append(
@@ -1394,6 +1461,14 @@ def plan(card, paths, given_date, decisions=None, part=False, complete_parts=Fal
             why = "the location part changed (only a name cut off on screen and now complete is followed)"
         else:
             why = None
+            # A cut-off member that another saved offer completes differently is ambiguous: never settled here.
+            cut = location_suffix(member, merchant_key(base))
+            if compact(cut) != compact(location_suffix(r["to"], merchant_key(base))):
+                other = sorted({o["merchant"] for o in new["offers"]
+                                if merchant_key(o["merchant"]) not in (old_k, new_k)
+                                and same_place(cut, location_suffix(o["merchant"], merchant_key(base)))})
+                if other:
+                    why = f"another offer completes the cut-off name differently ({other[0]!r})"
         if why:
             loc_held.append({"from": member, "to": r["to"], "group": base, "why": why})
             continue
@@ -1473,6 +1548,8 @@ def plan(card, paths, given_date, decisions=None, part=False, complete_parts=Fal
     stops = []
     if card_stop:
         stops.append(("card_check", card_stop))
+    if loc_decided:
+        stops.append(("location_pairs", f"{len(loc_decided)} location pair decision(s) are the owner's: " + "; ".join(loc_decided)))
     left_today = [o for o in mine if o["id"] not in claimed and o["status"] == "active" and o["last_read"] == read_date]
     if not part and not complete_parts and left_today and read_date not in batches:
         stops.append(("parts", f"{len(left_today)} offers not in this file were read on {read_date} by an earlier --part "
@@ -1520,7 +1597,7 @@ def plan(card, paths, given_date, decisions=None, part=False, complete_parts=Fal
 # ---------- output ----------
 
 RENAME_ALIAS = {"added": " (old name added to aliases)", "same_name": " (no alias needed: same name once punctuation is ignored)",
-                "none": " (no alias)"}
+                "base": " (no alias: the old name is the new name's base)", "none": " (no alias)"}
 
 def show(out, limit=40):
     def p(t=""):
