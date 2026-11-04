@@ -416,6 +416,37 @@
     .wrap.wcon details.bstrip + .ftoggle[aria-expanded="true"] { border-bottom: 0; border-radius: 0; }
   }
 
+  /* Quick picks (home screen): six compact topic tiles in two columns, then the full-width Everyday default.
+     Quieter than the answer card and offer containers: plain surface tiles, one green rate each. */
+  .qp { margin: 2px 0 0; }
+  .qp[hidden] { display: none; }
+  .qphead { display: flex; align-items: center; gap: 8px; margin: 0 2px 6px; }
+  .qph { margin: 0; font-size: 12px; font-weight: 700; letter-spacing: .03em; color: var(--muted); }
+  .qphead .likely {
+    padding: 0 6px; line-height: 17px; font-size: 11.5px; font-weight: 600; color: var(--muted);
+    border: 1px solid var(--line); border-radius: 5px;
+  }
+  .qpgrid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .qpt {
+    min-width: 0; padding: 8px 10px 9px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px;
+    font-size: 13px; line-height: 1.3; overflow-wrap: anywhere;
+  }
+  .qpn { font-size: 13px; font-weight: 650; color: var(--muted); }
+  .qpw { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 6px; margin-top: 1px; }
+  .qpr { font-size: 20px; font-weight: 750; letter-spacing: -0.01em; color: var(--bonus); }
+  .qpc { font-size: 14px; font-weight: 650; }
+  .qpc .idot { width: 7px; height: 7px; margin-right: 5px; }
+  .qpm { font-size: 12.5px; color: var(--muted); }
+  .qpx { margin-top: 3px; font-size: 12.5px; font-weight: 600; }
+  .qpx .usegain { margin-left: 5px; line-height: 16px; font-size: 11.5px; }
+  .qpcond { color: var(--muted); }
+  .qpcond .usegain { color: var(--muted); border-color: var(--line); }
+  .qpnote { margin-top: 3px; font-size: 12px; color: var(--muted); }
+  .qpe { margin-top: 8px; }
+  .qpe .qpw { align-items: center; }
+  .qpe .qpn { font-size: 14px; }
+  .qpe .qpc { font-size: 15px; font-weight: 750; color: var(--bonus); }
+
   /* Bonus categories strip (under the search box): one summary line, tap to expand. On phones it is the top
      of one panel with the Filters button under it. */
   details.bstrip {
@@ -682,6 +713,8 @@
     </div>
     <div class="wctabs" id="wctabs" role="group" aria-label="New or gone"></div>
   </section>
+  <!-- Quick picks: the card to use for a type of purchase with no offer (home screen only). -->
+  <section class="qp" id="qp" aria-labelledby="qp-h" hidden></section>
   <details class="bstrip" id="bstrip" hidden>
     <summary id="bsum"></summary>
     <ul id="blist"></ul>
