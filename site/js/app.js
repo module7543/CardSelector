@@ -58,14 +58,22 @@
     return c === "none_shown" || CHANNEL_OK[mode].indexOf(c) !== -1;
   }
   function chanOk(o) { return chanIn(chanMode, o); }
-  // Known to work online (the Online choice's channels). none_shown is "channel not shown": never known online.
-  function knownOnline(o) { return CHANNEL_OK.online.indexOf(o.channel) !== -1; }
+  // Known online, for the online shopping category rate: the offer's channel is "online" (online only). The Online
+  // choice also keeps in_store_and_online and in_store_and_app offers (usable when paying online or in an app), but
+  // they don't show the merchant is an online store; none_shown is "channel not shown", never known online.
+  function knownOnline(o) { return o.channel === "online"; }
   // Online shopping (a category rate for online purchases) counts at a merchant through its offers only when every
-  // offer an online purchase there could use (the ones the Online choice keeps) is known to work online. One offer
-  // with no channel shown blocks it; offers that work only in store don't, since they aren't for an online purchase.
+  // offer the Online choice keeps there is known online (online only). One none_shown, in_store_and_online or
+  // in_store_and_app offer blocks it; offers that work only in store don't, since they aren't for an online purchase.
   function onlineByOffers(offers) {
     var on = offers.filter(function (o) { return chanIn("online", o); });
     return on.length > 0 && on.every(knownOnline);
+  }
+  // What blocks it: { unknown: offers with no channel shown, both: offers that also work in store or in an app }.
+  function onlineBlockers(offers) {
+    var on = offers.filter(function (o) { return chanIn("online", o) && !knownOnline(o); });
+    var unknown = on.filter(function (o) { return (o.channel || "none_shown") === "none_shown"; }).length;
+    return { unknown: unknown, both: on.length - unknown };
   }
   function chanName(mode) { return mode === "store" ? "In store" : mode === "online" ? "Online" : "Any"; }
 
@@ -961,6 +969,32 @@
     });
   }
 
+  // The count line's head and channel parts, from the same channel rules as the list (chanIn), over the offers it
+  // holds (list) and the matches the choice hides (hidden). noun: " offer", " new offer"; scope: " in Dining, ready
+  // now"; hint: the "(showing N, keep typing to narrow)" note. In store / Online: "3 offers shown for Online ·
+  // 2 channel not shown", "1 offer shown for In store · 3 online only hidden". Any: what the offers are, "4 offers ·
+  // 3 online only · 1 in store only". none_shown is always "channel not shown".
+  function countLine(list, hidden, noun, scope, hint) {
+    var parts = [], n = list.length;
+    var add = function (k, w) { if (k) parts.push(k + " " + w); };
+    var cnt = function (f) { return list.filter(f).length; };
+    var none = cnt(function (o) { return (o.channel || "none_shown") === "none_shown"; });
+    if (n || (chanMode !== "any" && hidden)) parts.push(n + noun + (n === 1 ? "" : "s") +
+      (chanMode !== "any" ? " shown for " + chanName(chanMode) : "") + scope + hint);
+    if (chanMode === "any") {
+      add(cnt(function (o) { return o.channel === "online"; }), "online only");
+      add(cnt(function (o) { return o.channel === "in_store" || o.channel === "pay_at_pump"; }), "in store only");
+      add(cnt(function (o) { return o.channel === "in_store_and_online"; }), "in store & online");
+      add(cnt(function (o) { return o.channel === "in_store_and_app"; }), "in store & app");
+      add(none, "channel not shown");
+    } else {
+      add(none, "channel not shown");
+      // Hidden: In store hides online-only offers; Online hides in-store-only ones (pay at the pump included).
+      add(hidden, (chanMode === "store" ? "online only" : "in store only") + " hidden");
+    }
+    return parts;
+  }
+
   // "In store or online" buttons; the choice is remembered on this phone like the sort.
   function renderChans() {
     chansEl.textContent = "";
@@ -1184,9 +1218,9 @@
           if (!t.chKw && byQuery) {
             var mo = offersHit().filter(function (o) { return !excludedName(o, list); });
             t.onlineOk = onlineByOffers(mo);
-            t.unknown = mo.filter(function (o) { return chanIn("online", o) && !knownOnline(o); }).length;
+            t.block = onlineBlockers(mo);
           }
-          if (t.chKw) { t.onlineOk = true; t.unknown = 0; }
+          if (t.chKw) { t.onlineOk = true; t.block = { unknown: 0, both: 0 }; }
         }
         if (strong) t.strong = true;
         t.weak = (t.weak || []).concat(weak);
@@ -1266,11 +1300,15 @@
   // noAt: leave out where (the line already names the merchant).
   function notCountedWhy(t, mode, answered, noAt) {
     if (mode === "store") return "online purchases only";
+    // 2 or 3 merchants: one reason each ("channel not shown on 1 offer at X · 1 offer at Y also works in store …").
+    if (answered && answered.length > 1 && !noAt) return answered.map(function (G) { return notCountedWhy(t, mode, [G]); }).join(" · ");
     var at = noAt ? "" : answered ? " at " + answered.map(function (G) { return G.name; }).join(" and ") : " here";
-    var n = answered ? answered.reduce(function (k, G) {
-      return k + G.offers.filter(function (o) { return chanIn("online", o) && !knownOnline(o); }).length;
-    }, 0) : t.unknown;
-    return n ? "channel not shown on " + n + (n === 1 ? " offer" : " offers") + at : "no offer" + at + " is known to work online";
+    var b = answered ? onlineBlockers([].concat.apply([], answered.map(function (G) { return G.offers; }))) : t.block || { unknown: 0, both: 0 };
+    var n = b.unknown, m = b.both;
+    var offers = function (k) { return k + (k === 1 ? " offer" : " offers"); };
+    return n ? "channel not shown on " + offers(n) + at :
+      m ? offers(m) + at + (m === 1 ? " also works" : " also work") + " in store or in an app" :
+      "no offer" + at + " is online only";
   }
   // A top-category card (Citi Custom Cash): its rate is conditional (only if that category is the actual top one
   // this cycle), so it never leads an answer and never counts as ready.
@@ -1883,15 +1921,18 @@
     return { total: top, wins: wins };
   }
 
-  // One short condition, in this order: max reward ("first $60"), minimum ("on $20+"), channel, ends soon.
-  function offerNote(c, today) {
+  // One short condition, in this order: max reward ("first $60"), minimum ("on $20+"), channel, ends soon. M (the
+  // merchant view): a channel the line already says isn't a condition ("online" on an "online" total or under
+  // Online, "in store" under In store), so the next one in the order ("ends Nov 9") is used instead.
+  function offerNote(c, today, M) {
     var o = c.o;
     if (!o) return null;
     var mx = maxReward(o);
     if (mx && c.v.kind === "pct" && c.v.pct > 0) return "first " + money(Math.round(+mx.replace(/[$,]/g, "") / c.v.pct * 100));
     if (c.v.kind === "pct" && /^\d+(\.\d+)?$/.test(o.minimum_spend || "") && +o.minimum_spend > 0) return "on " + money(+o.minimum_spend) + "+";
     var ch = { in_store: "in store", online: "online", pay_at_pump: "at the pump", in_store_and_app: "in store & app" }[o.channel];
-    if (ch) return ch;
+    var said = M && ((ch === "online" && (needsOnline(c) || M.ch === "online")) || (ch === "in store" && M.ch === "store"));
+    if (ch && !said) return ch;
     if (o.expires) {
       var days = (parseDay(o.expires) - parseDay(today));
       if (days >= 0 && days <= 7) return "ends " + fmtDate(o.expires);
@@ -1922,16 +1963,17 @@
     var mnc = w.slice(0, smartlyTie ? 1 : 2).filter(function (c) { return c.base.mnc; })[0];
     if (mnc) extra.push("may not count for " + M.name);
     if (first.act) extra.push(first.act);
-    var n = offerNote(first, today);
     // The channel the answer is already for isn't repeated ("online" under Online, "in store" under In store).
-    if (n && !((n === "online" && (needsOnline(first) || M.ch === "online")) || (n === "in store" && M.ch === "store"))) extra.push(n);
+    var n = offerNote(first, today, M);
+    if (n) extra.push(n);
     var cns = unknownCh(first, M);
     if (cns) extra.push("channel not shown");
     if (smartlyTie) w.slice(1).forEach(function (c) {
       extra.push(c.C.name + " also " + pct(c.total) + "%" + (c.base.g && c.base.g.rate_note ? ", " + c.base.g.rate_note : ""));
     });
     // "+N more ready" counts only cards that pay now (a conditional rate is never among them).
-    return { mnc: !!mnc, cns: cns, names: names, first: first.C.name,
+    // note: the one short condition, kept on the compact rows too.
+    return { mnc: !!mnc, cns: cns, note: n, names: names, first: first.C.name,
       more: more > 0 ? ", +" + more + " more " + (isReady ? "ready " : "") + "at " + pct(p.total) + "%" : "",
       extra: extra.length ? " (" + extra.join(", ") + ")" : "", named: smartlyTie ? [first] : w.slice(0, 2) };
   }
@@ -1969,7 +2011,7 @@
       out.named = out.named.concat(sTie ? [sw[0]] : sw.slice(0, 2));
     }
     out.lines.push({ label: "Ready now", first: r.first, text: r.names, extra: r.more + r.extra + orElse + store, short: r.names, mnc: r.mnc,
-      orElse: orElse, store: store, cns: r.cns, value: t.ready.total });
+      orElse: orElse, store: store, cns: r.cns, note: r.note, value: t.ready.total });
     out.named = out.named.concat(r.named);
     var best = t.ready.total, aft = t.after && t.after.total > best ? t.after : null;
     var deal = null;
@@ -1985,14 +2027,14 @@
       // Compact rows keep the kind of step: a Capital One add or a BofA Shop now link is not an activation.
       var aAct = aft.wins[0].act;
       out.lines.push({ label: "After activating", first: a.first, text: a.names, extra: a.more + a.extra, short: a.names, mnc: a.mnc,
-        cns: a.cns, gain: gainText(aft.total - best), value: aft.total,
+        cns: a.cns, note: a.note, gain: gainText(aft.total - best), value: aft.total,
         clabel: aAct && /^(add to |via the Shop now)/.test(aAct) ? aAct : "after activating" });
       out.named = out.named.concat(a.named);
     } else if (t.upto && t.upto.total > best) {
       // Only when no definite second line: "Up to: Quicksilver 21.5% (1.5% + up to 20% Capital One offer, ...)".
       var u = winText(t.upto, today, M);
       out.lines.push({ label: "Up to", first: u.first, text: u.names, extra: u.more + u.extra, short: u.names.replace(/ (\d[\d.]*%)/g, " up to $1"),
-        bare: true, cns: u.cns, value: null });
+        bare: true, cns: u.cns, note: u.note, value: null });
       out.named = out.named.concat(u.named);
     }
     t.discounts.forEach(function (x) {
@@ -2036,14 +2078,17 @@
     return g;
   }
   // Compact lines, as for 2 or 3 merchants: "Smartly 19% ready now · Freedom Flex 20% after activating +1 pt".
-  function compactLines(d, lines, noGain) {
+  // withNote (the channel rows): each line keeps its one short condition, as its full line does.
+  function compactLines(d, lines, noGain, withNote) {
     lines.forEach(function (ln, i) {
       if (i) d.appendChild(document.createTextNode(" · "));
       useStrong(d, ln.short, ln.first);
       if (!ln.bare) d.appendChild(el("span", "useextra", " " + (ln.clabel || ln.label.toLowerCase())));
+      // The line's one short condition, as on its full line ("first $60", "on $20+", "ends Nov 9"), and "channel not shown".
+      var cs = [withNote ? ln.note : null, ln.cns ? "channel not shown" : null, ln.mnc ? "may not count" : null].filter(Boolean);
+      if (cs.length) d.appendChild(el("span", "useextra", " (" + cs.join(", ") + ")"));
       if (ln.gain && !noGain) d.appendChild(el("span", "usegain", ln.gain));
-      if (ln.mnc) d.appendChild(el("span", "useextra", " (may not count)" + (ln.orElse || "")));
-      if (ln.cns) d.appendChild(el("span", "useextra", " (channel not shown)"));
+      if (ln.mnc && ln.orElse) d.appendChild(el("span", "useextra", ln.orElse));
       if (ln.store) d.appendChild(el("span", "useextra", ln.store));
     });
   }
@@ -2054,7 +2099,7 @@
     b.type = "button";
     b.setAttribute("data-ch", ch);
     b.appendChild(el("span", "usechn", chanName(ch) + ": "));
-    compactLines(b, alt ? [bestLine(L)] : L.lines, alt);
+    compactLines(b, alt ? [bestLine(L)] : L.lines, alt, true);
     b.appendChild(el("span", "sr-only", " (shows the " + chanName(ch).toLowerCase() + " answer)"));
     b.addEventListener("click", function () { setChan(ch, true); });
     return b;
@@ -2554,16 +2599,18 @@
     var inTab = isNewTab ? function (o) { return isNew(o, today); } : isDropped;
     var chanHidden = chanMode === "any" ? 0 : search(query, function (o) { return !chanOk(o) && actOk(o) && inAnyChan(o) && inTab(o); }).length;
     // shown: the New rows (an offer marked used here doesn't count) or the Gone rows on the page so far.
+    var counted = isNewTab ? list.filter(function (o) { return isNew(o, today); }) : list;
     var setCount = function (liveShown, rowsShown) {
-      var shown = isNewTab ? liveShown : rowsShown, parts = [];
-      if (n) parts.push(n + (isNewTab ? " new" : " gone") + (n === 1 ? " offer" : " offers") + scope +
-        (!narrowed && n > shown ? " (showing " + shown + ", keep typing to narrow)" : ""));
-      if (chanHidden) parts.push(chanHidden + " hidden by the " + (chanMode === "store" ? "In store" : "Online") + " filter");
-      countEl.textContent = parts.join(" · ");
+      var shown = isNewTab ? liveShown : rowsShown;
+      countEl.textContent = countLine(counted, chanHidden, isNewTab ? " new offer" : " gone offer", scope,
+        !narrowed && n > shown ? " (showing " + shown + ", keep typing to narrow)" : "").join(" · ");
     };
     setCount(n, n);
     if (!list.length) {
-      var p = el("p", "empty", "No " + (isNewTab ? "new" : "gone") + " offers" + scope.replace(/^,/, ""));
+      var chw = chanMode !== "any" ? (chanMode === "store" ? ", in store" : ", online") : "";
+      var actw = actMode !== "any" ? (actMode === "ready" ? ", ready now" : ", needs activation") : "";
+      var p = el("p", "empty", "No " + (isNewTab ? "new" : "gone") + " offers" +
+        (scope.slice(0, scope.length - actw.length) + chw + actw).replace(/^,/, ""));
       if (compact(query) !== "") {
         p.appendChild(document.createTextNode(" match "));
         p.appendChild(el("strong", null, "“" + query.trim() + "”"));
@@ -2716,9 +2763,10 @@
       return (category === null || o.category === category) && (card === null || o.card === card) &&
         (cuis === null || cuisineLabel(o) === cuis);
     };
-    // "in Dining", "on U.S. Bank", "in Dining on U.S. Bank", "in Dining: Persian & Mediterranean", ", in store"
+    // "in Dining", "on U.S. Bank", "in Dining on U.S. Bank", "in Dining: Persian & Mediterranean", ", ready now"
+    // (the channel choice has its own words on the count line: countLine).
     var scope = (category !== null ? " in " + category + (cuis !== null ? ": " + cuis : "") : "") +
-      (card !== null ? " on " + card : "") + (chanMode !== "any" ? (chanMode === "store" ? ", in store" : ", online") : "") +
+      (card !== null ? " on " + card : "") +
       (actMode !== "any" ? (actMode === "ready" ? ", ready now" : ", needs activation") : "");
     renderFilterSummary();
     renderUsed(editing() && !wc ? search(query, function (o) { return o.status === "used" && inUsedScope(o); }).length : null);
@@ -2764,13 +2812,10 @@
       // Sorted as a copy: the headline (allHits) keeps the search's own name-match order.
       hits = hits.slice().sort(cmp);
       // The count line; a search with no filter adds a narrowing hint while not everything is shown.
+      var listLive = hits.filter(function (o) { return isLive(o, today); });
       var setCount = function (shown) {
-        var parts = [];
-        if (liveCount) parts.push(liveCount + (liveCount === 1 ? " offer" : " offers") +
-          scope +
-          (!narrowed && liveCount > shown ? " (showing " + shown + ", keep typing to narrow)" : ""));
+        var parts = countLine(listLive, chanHidden, " offer", scope, !narrowed && liveCount > shown ? " (showing " + shown + ", keep typing to narrow)" : "");
         if (gone.length) parts.push(gone.length + " recently unavailable");
-        if (chanHidden) parts.push(chanHidden + " hidden by the " + (chanMode === "store" ? "In store" : "Online") + " filter");
         countEl.textContent = parts.join(" · ");
       };
       setCount(Math.min(hits.length, MAX_SHOWN));
