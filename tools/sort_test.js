@@ -1534,6 +1534,7 @@ function listRows(sel) {
       fx("ab-mkt", "Capital One", "Alibaba", "Marketplaces & Department Stores", "Up to 4% back", { activation: "none_shown", channel: "online" }),
       fx("am-usb", "U.S. Bank", "Zqamazon", "Marketplaces & Department Stores", "5% cash back"),
       fx("am-c1", "Capital One", "Zqamazon.com", "Marketplaces & Department Stores", "3% back", { activation: "none_shown", channel: "online" }),
+      fx("zsh-c1", "Capital One", "Zqshopx.com", "Clothing & Jewelry", "6% back", { activation: "none_shown", channel: "online" }),
       // Step 3A: a Custom Cash row whose total adds the planned restaurants 5% (conditional), and one in a category
       // the plan doesn't cover (its 1% base rate, certain).
       fx("cc-dine", "Citi Custom Cash", "Zqcc Bistro", "Dining", "5% Back", { activation: "needs_activation", channel: "none_shown" }),
@@ -1696,7 +1697,9 @@ function listRows(sel) {
     const abNames = await page.$$eval("#use .usemname, #use .useat", es => es.map(e => e.textContent.replace(/:\s*$/, "").replace(/^At /, "")).sort());
     ok(J(abNames) === J(["Ali Baba", "Alibaba"]), "s3a Ali Baba and Alibaba: two merchants in the answer card (" + J(abNames) + ")");
     // The "At <merchant>" lead follows the same identity: "alibaba" answered for the restaurant names it.
-    for (const [q, ch, want] of [["alibaba", "store", "At Ali Baba"], ["ali baba", "online", "At Alibaba"], ["ali baba", "store", null]]) {
+    // Ordinary names compare as in Step 2: "zqshopx" is not "Zqshopx.com" (lead shown), "zqshopx com" is (no lead).
+    for (const [q, ch, want] of [["alibaba", "store", "At Ali Baba"], ["ali baba", "online", "At Alibaba"], ["ali baba", "store", null],
+      ["zqshopx", null, "At Zqshopx.com"], ["zqshopx com", null, null], ["zqshopx.com", null, null]]) {
       await open(q, ch);
       const at = await page.$$eval("#use .useat", es => es.map(e => e.textContent));
       ok(J(at) === J(want ? [want] : []), "s3a \"" + q + "\" " + ch + ": lead " + J(at));

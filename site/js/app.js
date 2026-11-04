@@ -131,6 +131,9 @@
     var sp = spaced(s.replace(/\.(com|net|org)\b/gi, "")), k = sp.replace(/ /g, "");
     return NAME_EXCEPTIONS[k] ? sp.replace(/ /g, "_") : k;
   }
+  // A name as compared with what was typed (the "At <merchant>" leads): compact(), as in Step 2, so "jackery" is not
+  // "jackery.com"; only the named exception keeps its word breaks ("alibaba" is not "Ali Baba").
+  function typedForm(s) { var c = compact(s); return NAME_EXCEPTIONS[c] ? merchantKey(s) : c; }
 
   function todayISO() {
     var d = new Date(), p = function (n) { return String(n).padStart(2, "0"); };
@@ -1367,7 +1370,7 @@
     order.forEach(function (t) {
       t.lead = null;
       if (!byQuery || !t.names.length || t.cuisine) return;
-      var same = t.names.some(function (n) { return merchantKey(n) === merchantKey(query); });
+      var same = t.names.some(function (n) { return typedForm(n) === typedForm(query); });
       if (!same) t.lead = t.names[0] + (t.names.length > 1 ? " and " + (t.names.length - 1) + " more" : "");
     });
     // The everyday card (Smartly 4%) joins every row that has a bonus card, at its rank; bonus cards below it
@@ -2258,7 +2261,7 @@
     var condNote = null;
     if (per.length === 1) {
       var G = per[0].M, L = per[0].L, rowsBy = null, alt = null;
-      if (merchantKey(G.name) !== merchantKey(query)) useEl.appendChild(el("div", "useat", "At " + G.name));
+      if (typedForm(G.name) !== typedForm(query)) useEl.appendChild(el("div", "useat", "At " + G.name));
       if (G.offers.length && chanMode === "any") {
         // Any: In store and Online answered apart when they recommend different things; one answer when the same.
         var S = merchantLines(viewOf(G, "store"), today), O = merchantLines(viewOf(G, "online"), today);
