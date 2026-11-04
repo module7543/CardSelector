@@ -605,7 +605,7 @@ class RefreshTest(unittest.TestCase):
         p = self.t.csv("Capital One", lambda rows: [dict(r, merchant="eBay - La Habra") if r["merchant"] == "eBay" else r for r in rows])
         self.assertEqual(self.t.run("apply", "Capital One", [p], decisions={})[0], 2)
         pair = {"saved": "capital-one/ebay", "file": "eBay - La Habra", "bonus": "Spend $20, earn $10", "accept": True}
-        out, rep = self.apply_ok("Capital One", [p], decisions={"pairs": [pair]})
+        out, rep = self.apply_ok("Capital One", [p], decisions={"pairs": [pair], "owner_approved": ["location_pairs"]})
         self.assertEqual(self.t.offers()["capital-one/ebay"]["merchant"], "eBay - La Habra", out)
         self.assertEqual(rep["location_moves"], [], out)
         self.assertEqual([m["to"] for m in rep["location_held"]], ["eBay - La Habra"], out)
@@ -706,6 +706,75 @@ class RefreshTest(unittest.TestCase):
         self.assertEqual(rep["location_moves"], [], out)
         self.assertEqual(self.t.read("merchant-locations.json"), before)
 
+    def _accept_location_pair(self, card, sid, old, new, file_old):
+        self.t.change_offers(lambda by, d: by[sid].update(merchant=old))
+        p = self.t.csv(card, lambda rows: [dict(r, merchant=new) if r["merchant"] == file_old else r for r in rows])
+        code, out, rep = self.t.run("report", card, [p])
+        self.assertEqual([(x["saved"], x["file"]) for x in rep["proposals"]], [(sid, new)], out)
+        pair = {"saved": sid, "file": new, "bonus": rep["proposals"][0]["bonus"], "accept": True}
+        # deciding a location pair is the owner's call: refused until owner_approved names it
+        code, out, rep = self.t.run("report", card, [p], decisions={"pairs": [pair]})
+        self.assertIn("location_pairs", [st["key"] for st in rep["stops"]], out)
+        self.assertEqual(self.t.run("apply", card, [p], decisions={"pairs": [pair]})[0], 2)
+        self.apply_ok(card, [p], decisions={"pairs": [pair], "owner_approved": ["location_pairs"]})
+        return p
+
+    def test_chase_accepted_location_change_takes_the_file_name(self):
+        # Review 1A G1: the banner rule must not keep "X - LA" once the owner accepted "X - La Habra"
+        sid = "chase-freedom-flex/anantra-thai-restaurant"
+        self._accept_location_pair("Chase Freedom Flex", sid, "Anantra Thai - LA", "Anantra Thai - La Habra", "Anantra Thai Restaurant")
+        self.assertEqual(self.t.offers()[sid]["merchant"], "Anantra Thai - La Habra")
+
+    def test_chase_accepted_base_to_location_is_not_asked_again(self):
+        # Review 1A G2: accepted once, the next read of the same file matches it
+        sid = "chase-freedom-flex/anantra-thai-restaurant"
+        p = self._accept_location_pair("Chase Freedom Flex", sid, "Anantra Thai Restaurant", "Anantra Thai Restaurant - Encino",
+                                       "Anantra Thai Restaurant")
+        o = self.t.offers()[sid]
+        self.assertEqual((o["merchant"], o.get("aliases")), ("Anantra Thai Restaurant - Encino", None))
+        code, out, rep = self.t.run("report", "Chase Freedom Flex", [p])
+        self.assertEqual((rep["proposals"], rep["stops"]), ([], []), out)
+
+    def test_names_cut_at_the_base_still_pair_automatically(self):
+        # Review 1A G3-G3c: a visible cut right at the base is the same name, never a location change
+        for card, sid, old, file_old, new, rule in [
+                ("Capital One", "capital-one/ebay", "eBay - Newport Beach", "eBay", "eBay...", "truncated"),
+                ("Capital One", "capital-one/ebay", "eBay...", "eBay", "eBay - Newport Beach", "truncated"),
+                ("U.S. Bank", "us-bank/two-hands-corn-dogs", None, "Two Hands Corn Dogs - Little Tokyo", "Two Hands Corn Dogs -...", None)]:
+            with self.subTest(old=old or file_old, new=new):
+                t = Tree()
+                try:
+                    if old:
+                        t.change_offers(lambda by, d: by[sid].update(merchant=old))
+                    p = t.csv(card, lambda rows: [dict(r, merchant=new) if r["merchant"] == file_old else r for r in rows])
+                    code, out, rep = t.run("report", card, [p])
+                    self.assertEqual(rep["proposals"], [], out)
+                    if rule:
+                        self.assertEqual([(m["id"], m["rule"]) for m in rep["paired"] if m["id"] == sid], [(sid, rule)], out)
+                finally:
+                    t.close()
+
+    def test_rejected_location_pair_also_needs_the_owner(self):
+        self.t.change_offers(lambda by, d: by["capital-one/ebay"].update(merchant="eBay - LA"))
+        p = self.t.csv("Capital One", lambda rows: [dict(r, merchant="eBay - La Habra") if r["merchant"] == "eBay" else r for r in rows])
+        pair = {"saved": "capital-one/ebay", "file": "eBay - La Habra", "bonus": "Spend $20, earn $10", "accept": False}
+        dec = {"pairs": [pair], "categories": {"eBay - La Habra": "Marketplaces & Department Stores"}}
+        code, out, rep = self.t.run("report", "Capital One", [p], decisions=dec)
+        self.assertIn("rejected", next(st["text"] for st in rep["stops"] if st["key"] == "location_pairs"), out)
+        self.assertEqual(self.t.run("apply", "Capital One", [p], decisions=dec)[0], 2)
+        dec["owner_approved"] = ["location_pairs"]
+        self.apply_ok("Capital One", [p], decisions=dec)
+
+    def test_accepted_bare_domain_pair_keeps_its_alias_on_a_location_name(self):
+        # Review 1A nit: the base-alias rule drops only the old name, never the domain alias of a bare-domain pair
+        self.t.change_offers(lambda by, d: by["capital-one/ebay"].update(merchant="eBay - Newport Beach"))
+        p = self.t.csv("Capital One", lambda rows: [dict(r, merchant="ebay.com", merchant_tld="") if r["merchant"] == "eBay" else r for r in rows])
+        pair = {"saved": "capital-one/ebay", "file": "ebay.com", "bonus": "Spend $20, earn $10", "accept": True}
+        dec = {"pairs": [pair], "owner_approved": ["location_pairs"]}
+        out, rep = self.apply_ok("Capital One", [p], decisions=dec)
+        o = self.t.offers()["capital-one/ebay"]
+        self.assertEqual((o["merchant"], o.get("aliases")), ("eBay - Newport Beach", ["ebay.com"]), out)
+
     def test_visibly_cut_location_still_pairs_automatically(self):
         # "eBay - Newport Be..." on screen, "eBay - Newport Beach" now: the same place, completed (no location file needed)
         self.t.change_offers(lambda by, d: by["capital-one/ebay"].update(merchant="eBay - Newport Be..."))
@@ -749,9 +818,9 @@ class RefreshTest(unittest.TestCase):
             return rows
         p = self.t.csv("Capital One", fn)
         pair = {"saved": "capital-one/ebay", "file": "eBay - Irvine", "bonus": "Spend $20, earn $10", "accept": True}
-        code, out, rep = self.t.run("report", "Capital One", [p], decisions={"pairs": [pair]})
+        code, out, rep = self.t.run("report", "Capital One", [p], decisions={"pairs": [pair], "owner_approved": ["location_pairs"]})
         self.assertTrue(any(m["id"] == "capital-one/ebay" for m in rep["paired"]), out)
-        out, rep = self.apply_ok("Capital One", [p], decisions={"pairs": [pair]})
+        out, rep = self.apply_ok("Capital One", [p], decisions={"pairs": [pair], "owner_approved": ["location_pairs"]})
         self.assertEqual(self.t.read("merchant-locations.json"), before, out)
         self.assertEqual([m["why"] for m in rep["location_held"]], ["the location part changed (only a name cut off on screen and now complete is followed)"], out)
 
@@ -805,7 +874,7 @@ class RefreshTest(unittest.TestCase):
                     r["merchant"] = "eBay Outlet Store"
             return rows
         pair = {"saved": "capital-one/ebay", "file": "eBay Outlet Store", "bonus": "Spend $20, earn $10", "accept": True}
-        out, rep = self.apply_ok("Capital One", [self.t.csv("Capital One", fn)], decisions={"pairs": [pair]})
+        out, rep = self.apply_ok("Capital One", [self.t.csv("Capital One", fn)], decisions={"pairs": [pair], "owner_approved": ["location_pairs"]})
         self.assertEqual(self.t.read("merchant-locations.json"), before, "never rewritten into a member the validator would refuse")
         self.assertEqual([(m["to"], m["why"]) for m in rep["location_held"]], [("eBay Outlet Store", "the new name is not 'eBay - <location>'")], out)
         self.assertIn("is in no offer now", out)  # validate.py's note on the stale member
@@ -880,6 +949,7 @@ class RefreshTest(unittest.TestCase):
         self.assertIn("adds or drops the location", rep["proposals"][0]["why"], out)
         self.assertEqual([c["merchant"] for c in rep["location_candidates"]], ["Taqueria El Tapatio - Woodland Hills", "Subway - Woodland Hills"], out)
         dec["pairs"] = [{"saved": "citi-double-cash/subway", "file": "Subway - Woodland Hills", "bonus": "5% Back", "accept": True}]
+        dec["owner_approved"] = ["location_pairs"]
         out, rep = self.apply_ok("Citi Double Cash", [p], decisions=dec)
         by = self.t.offers()
         self.assertEqual(by["citi-double-cash/taqueria-el-tapatio"]["other_details"], [])
@@ -902,7 +972,7 @@ class RefreshTest(unittest.TestCase):
         self.assertEqual([(m["saved"], m["file"]) for m in rep["proposals"]],
                          [("citi-double-cash/taqueria-el-tapatio", "Taqueria El Tapatio - Woodland Hills")], out)
         pair = {"saved": "citi-double-cash/taqueria-el-tapatio", "file": "Taqueria El Tapatio - Woodland Hills", "bonus": "5% Back", "accept": True}
-        out, rep = self.apply_ok("Citi Double Cash", [p], decisions={"pairs": [pair]})
+        out, rep = self.apply_ok("Citi Double Cash", [p], decisions={"pairs": [pair], "owner_approved": ["location_pairs"]})
         t = self.t.offers()["citi-double-cash/taqueria-el-tapatio"]
         self.assertEqual((t["merchant"], t.get("aliases"), t["other_details"]), ("Taqueria El Tapatio - Woodland Hills", None, []))
 

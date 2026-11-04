@@ -22,7 +22,7 @@ The tool encodes the mechanical rules. Judgment stays with the session, through 
    "categories": {"<new merchant>": "<category>" or {"category": "...", "unsure": true}},
    "clashes": {"<merchant>": "<category>"},             set on every offer with that name, on every card
    "new_names": {"<file merchant>": {"merchant": "...", "aliases": [...]}},  a new offer saved under another name
-   "owner_approved": ["size_check", "missing", "new_share", "card_check", "parts"]}   only after the owner said go ahead
+   "owner_approved": ["size_check", "missing", "new_share", "card_check", "parts", "location_pairs"]}   only after the owner said go ahead
 report --template writes one with every open question set to null. A pair the tool did not propose can be added.
 
 Never stored: card or account numbers. Columns such as card / card_name / card_last4 are read only by the card
@@ -138,6 +138,8 @@ def location_change(a, b):
                     other = y[mb.end():]
                     break
             if other is None:
+                if truncated(y) and merchant_key(re.sub(r"\s*-\s*$", "", stem(y))) == bkey:
+                    return None  # cut off on screen at the base ("eBay...", "Two Hands Corn Dogs -..."): the same name
                 if merchant_key(y) == bkey:
                     other = ""
                 elif bw and words(y)[:len(bw)] == bw and len(words(y)) > len(bw):
@@ -1106,6 +1108,13 @@ def plan(card, paths, given_date, decisions=None, part=False, complete_parts=Fal
         claimed.add(sid)
         match[i] = (sid, "decided", "accepted in the decisions file")
     open_pairs = [(i, o, why) for i, o, why in open_pairs if i not in match and o["id"] not in claimed]
+    # A decided pair whose location changes (CLAUDE.md, Automatic vs proposed) is the owner's call, not the session's.
+    loc_decided = []
+    for (sid, fname, bkey), acc in decided.items():
+        o = view.get(sid)
+        inc = next((x for x in incs if compact(x.merchant) == fname and bonus_key(x.bonus) == bkey), None)
+        if acc is not None and o and inc and any(location_change(n, inc.merchant) for n in names(o)):
+            loc_decided.append(f"{o['merchant']!r} <- {inc.merchant!r} ({'accepted' if acc else 'rejected'})")
 
     # ---------- build the new data ----------
     new = copy.deepcopy(data)
@@ -1183,13 +1192,15 @@ def plan(card, paths, given_date, decisions=None, part=False, complete_parts=Fal
             eff = rule
             if rule == "decided":  # an accepted pair follows the same name rules as an automatic one
                 eff = "truncated" if rule_truncated(inc, v) else ("extends" if rule_extends(inc, v) else "decided")
+                if any(location_change(n, inc.merchant) for n in [v["merchant"]] + v.get("aliases", [])):
+                    eff = "decided"  # an accepted location change takes the place the file shows
             merchant, alias, drop = ad.pair_name(v, inc, eff)
             if rule == "decided" and alias is None and merchant == v["merchant"] and bare_domain(inc.merchant) \
                     and nkey(inc.merchant) != nkey(merchant):
                 alias = inc.merchant  # the saved name stays; the domain becomes an alias, so the next read matches it
         # The old name is the new name's base ("Subway" -> "Subway - Encino"): no alias. Search already finds it,
         # and the base as an alias would tie this location to the base merchant (and to its cuisine entry).
-        base_alias = bool(alias) and location_of_base(merchant, merchant_key(alias))
+        base_alias = bool(alias) and nkey(alias) == nkey(o["merchant"]) and location_of_base(merchant, merchant_key(alias))
         if base_alias:
             alias = None
         rename = None
@@ -1511,6 +1522,8 @@ def plan(card, paths, given_date, decisions=None, part=False, complete_parts=Fal
     stops = []
     if card_stop:
         stops.append(("card_check", card_stop))
+    if loc_decided:
+        stops.append(("location_pairs", f"{len(loc_decided)} location pair decision(s) are the owner's: " + "; ".join(loc_decided)))
     left_today = [o for o in mine if o["id"] not in claimed and o["status"] == "active" and o["last_read"] == read_date]
     if not part and not complete_parts and left_today and read_date not in batches:
         stops.append(("parts", f"{len(left_today)} offers not in this file were read on {read_date} by an earlier --part "
