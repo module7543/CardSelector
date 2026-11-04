@@ -51,11 +51,23 @@
     online: ["online", "in_store_and_online", "in_store_and_app"]
   };
   var chanMode = "any";
-  function chanOk(o) {
-    if (chanMode === "any") return true;
+  // Whether an offer is kept under a channel choice ("any", "store", "online"); none_shown stays under both.
+  function chanIn(mode, o) {
+    if (mode === "any") return true;
     var c = o.channel || "none_shown";
-    return c === "none_shown" || CHANNEL_OK[chanMode].indexOf(c) !== -1;
+    return c === "none_shown" || CHANNEL_OK[mode].indexOf(c) !== -1;
   }
+  function chanOk(o) { return chanIn(chanMode, o); }
+  // Known to work online (the Online choice's channels). none_shown is "channel not shown": never known online.
+  function knownOnline(o) { return CHANNEL_OK.online.indexOf(o.channel) !== -1; }
+  // Online shopping (a category rate for online purchases) counts at a merchant through its offers only when every
+  // offer an online purchase there could use (the ones the Online choice keeps) is known to work online. One offer
+  // with no channel shown blocks it; offers that work only in store don't, since they aren't for an online purchase.
+  function onlineByOffers(offers) {
+    var on = offers.filter(function (o) { return chanIn("online", o); });
+    return on.length > 0 && on.every(knownOnline);
+  }
+  function chanName(mode) { return mode === "store" ? "In store" : mode === "online" ? "Online" : "Any"; }
 
   // Activation: "any", "ready" (nothing to do first) or "needs". Shop-link offers stay under Any only,
   // because they need the issuer's "Shop now" link rather than an activation tap.
@@ -956,15 +968,22 @@
       var b = el("button", "cat", c[1]);
       b.type = "button";
       b.setAttribute("aria-pressed", String(c[0] === chanMode));
-      b.addEventListener("click", function () {
-        chanMode = c[0];
-        if (!wc) try { localStorage.setItem(CHANNEL_KEY, chanMode); } catch (e) {} // nothing picked in What changed is kept
-        renderChans();
-        renderCuisines();
-        render();
-      });
+      b.addEventListener("click", function () { setChan(c[0]); });
       chansEl.appendChild(b);
     });
+  }
+  // One channel setting for the Filters row and the answer card's selector (cardselector.channel). refocus: put
+  // focus back on the answer card's selector segment for the new value (the tapped control is drawn again).
+  function setChan(mode, refocus) {
+    chanMode = mode;
+    if (!wc) try { localStorage.setItem(CHANNEL_KEY, chanMode); } catch (e) {} // nothing picked in What changed is kept
+    renderChans();
+    renderCuisines();
+    render();
+    if (refocus) {
+      var b = useEl.querySelector(".chansel button[data-ch=\"" + mode + "\"]");
+      if (b) b.focus({ preventScroll: true });
+    }
   }
 
   // "Activation" buttons with how many of the current matches each keeps, and a note on shop-link offers.
@@ -1128,7 +1147,7 @@
               // A mapped app category, or (online shopping) an online-only offer.
               var byCat = cats.indexOf(o.category) !== -1 &&
                 !(o.category === "Dining" && (g.exclude_cuisines || []).indexOf(cuisineLabel(o)) !== -1);
-              var byCh = !!g.channel && o.channel === g.channel;
+              var byCh = !!g.channel && (g.channel === "online" ? knownOnline(o) : o.channel === g.channel);
               if (!byCat && !byCh) return;
               if (!byCat) chOnly = true;
               hit = strong = true;
@@ -1157,6 +1176,18 @@
         if (chOnly) t.chOnly = true;
         if (mncHit) t.mnc = true;
         if (kwAny && g.channel) t.chKw = true;
+        if (g.channel === "online") {
+          // Online shopping: counts for an online purchase through a keyword (a known online store), else only when
+          // every matched offer an online purchase could use is known online (onlineByOffers); unknown: how many of
+          // those show no channel.
+          t.online = true;
+          if (!t.chKw && byQuery) {
+            var mo = offersHit().filter(function (o) { return !excludedName(o, list); });
+            t.onlineOk = onlineByOffers(mo);
+            t.unknown = mo.filter(function (o) { return chanIn("online", o) && !knownOnline(o); }).length;
+          }
+          if (t.chKw) { t.onlineOk = true; t.unknown = 0; }
+        }
         if (strong) t.strong = true;
         t.weak = (t.weak || []).concat(weak);
         t.strongKws = (t.strongKws || []).concat(strongKws);
@@ -1219,11 +1250,28 @@
   // "Use: <card> <rate>": the highest rate among the green rows' cards and the everyday card. A card that is
   // not activated, or was dropped from a row by an exclusion, does not count; Citi Custom Cash is in a row only
   // for its planned category. Ties name every tied card, the everyday card first.
+  // Does a bonus row's topic count for the channel choice? Online shopping is for online purchases only: never in
+  // store, and online (or under Any) only when its rule passed (topicCountsOnline). Every other topic counts.
+  function topicCounts(t, mode) {
+    if (!t.online) return true;
+    return mode !== "store" && !!t.onlineOk;
+  }
+  // A top-category card (Citi Custom Cash): its rate is conditional (only if that category is the actual top one
+  // this cycle), so it never leads an answer and never counts as ready.
+  function isConditional(e) { return !!e && e.kind === "top_category"; }
+  // "only if restaurants is your actual top eligible category this cycle" (the CardSelector focus is only an assumption).
+  function condWhy(e) { return "only if " + e.planned + " is your actual top eligible category this cycle"; }
+  // "+1 pt", "+10 pts", "+1.25 pts": how much a better line adds over Ready now.
+  function gainText(d) { var x = Math.round(d * 100) / 100; return "+" + pct(x) + (x === 1 ? " pt" : " pts"); }
+
   function headline(rows, today) {
-    var ev = everyday(today), cands = [];
+    var ev = everyday(today), cands = [], offs = [], conds = [];
     rows.forEach(function (t) {
+      var counts = topicCounts(t, chanMode);
       t.items.forEach(function (it) {
-        if (it.everyday || it.e.activation === "not_confirmed") return;
+        if (it.everyday || !counts) return;
+        if (isConditional(it.e)) { conds.push({ e: it.e, g: it.g, rate: it.g._rate, t: t }); return; }
+        if (it.e.activation === "not_confirmed") { offs.push({ e: it.e, g: it.g, rate: it.g._rate, t: t }); return; }
         cands.push({ e: it.e, g: it.g, rate: it.g._rate, t: t });
       });
     });
@@ -1276,8 +1324,11 @@
     var online = function (c) { return !!(c.g && c.g.channel === "online"); };
     var names = wins.map(function (c) { return c.e.card + " " + pct(c.rate) + "%" + (online(c) ? " online" : ""); });
     var text = names.join(" or ");
-    var extra = (more > 0 ? ", +" + more + " more at " + pct(top) + "%" : "") + (also ? " (" + also + ")" : "");
-    if (wins.some(function (c) { return online(c) && c.t && c.t.chOnly && !c.t.chKw; })) {
+    var extra = (more > 0 ? ", +" + more + " more ready at " + pct(top) + "%" : "") + (also ? " (" + also + ")" : "");
+    // Under In store or Online the answer is already for that channel: no "online" word, no in-store fallback.
+    if (chanMode === "online") names = wins.map(function (c) { return c.e.card + " " + pct(c.rate) + "%"; });
+    text = names.join(" or ");
+    if (chanMode === "any" && wins.some(function (c) { return online(c) && c.t && c.t.chOnly && !c.t.chKw; })) {
       // Only rates with no "may not count" doubt, as in the per-merchant "else" fallback.
       var shop = cands.filter(function (c) { return !online(c) && !(c.t && c.t.mnc); });
       var stop = shop.length ? Math.max.apply(null, shop.map(function (c) { return c.rate; })) : null;
@@ -1288,19 +1339,66 @@
         extra += " · in store: " + sw.map(function (c) { return c.e.card + " " + pct(c.rate) + "%"; }).join(" or ");
       }
     }
-    return { lead: lead, text: text, extra: extra, likely: likely, notes: notes, top: top, first: wins[0].e.card };
+    // After activating: a bonus not activated yet, only when it beats the best ready rate ("+1 pt").
+    var after = null;
+    if (offs.length) {
+      var atop = Math.max.apply(null, offs.map(function (c) { return c.rate; }));
+      if (atop > top) {
+        var aw = [];
+        offs.filter(function (c) { return c.rate === atop; }).forEach(function (c) { if (!aw.some(function (x) { return x.e === c.e; })) aw.push(c); });
+        var by = aw.map(function (c) { return c.e.activate_by; }).filter(Boolean).sort()[0];
+        after = { text: aw.slice(0, 2).map(function (c) { return c.e.card + " " + pct(c.rate) + "%"; }).join(" or "), first: aw[0].e.card,
+          extra: (aw.length > 2 ? ", +" + (aw.length - 2) + " more at " + pct(atop) + "%" : "") + " (" + aw[0].t.name + (by ? ", activate by " + fmtDate(by) : "") + ")",
+          gain: gainText(atop - top), rate: atop };
+      }
+    }
+    // Citi Custom Cash: its own conditional line; "strong" when it would beat the ready answer.
+    var cond = null;
+    if (conds.length) {
+      var cb = conds.reduce(function (a, c) { return c.rate > a.rate ? c : a; });
+      cond = { e: cb.e, rate: cb.rate, strong: cb.rate > top, gain: cb.rate > top ? gainText(cb.rate - top) : null };
+    }
+    return { lead: lead, text: text, extra: extra, likely: likely, notes: notes, top: top, first: wins[0].e.card, after: after, cond: cond };
+  }
+  // No ready card at all (a card filter whose bonus is conditional): the conditional line alone.
+  function condOnly(rows) {
+    var best = null;
+    rows.forEach(function (t) {
+      if (!topicCounts(t, chanMode)) return;
+      t.items.forEach(function (it) {
+        if (!it.everyday && isConditional(it.e) && (!best || it.g._rate > best.rate)) best = { e: it.e, rate: it.g._rate };
+      });
+    });
+    return best;
+  }
+  // "Citi Custom Cash 5% · conditional · only if restaurants is your actual top eligible category this cycle · +1 pt"
+  // when it beats the ready answer (strong), else the short muted "Citi Custom Cash 5% only if ...".
+  // c: { e (the entry), rate, strong, gain, detail (the offer part, or null), act }.
+  function condLine(c) {
+    var d = el("div", c.strong ? "usecond strong" : "usenote usecond");
+    if (c.strong) {
+      useStrong(d, c.e.card + " " + pct(c.rate) + "%", c.e.card);
+      d.appendChild(el("span", "useextra", (c.detail ? " (" + c.detail + ")" : "") + " · conditional · " + condWhy(c.e) +
+        (c.act ? " · " + c.act : "")));
+      if (c.gain) d.appendChild(el("span", "usegain", c.gain));
+    } else {
+      d.textContent = c.e.card + " " + pct(c.rate) + "%" + (c.detail ? " (" + c.detail + ")" : "") + " " + condWhy(c.e) + (c.act ? ", " + c.act : "") + ".";
+    }
+    return d;
   }
 
-  // ctx: { query, hits } (every match in scope, before the Activation filter). A search matching 1 to 3
-  // merchants gets the per-merchant totals; anything else gets the category headline below.
+  // ctx: { query, hits (every live match in scope, before the Activation filter), any (the same whatever the channel
+  // choice: the answer filters by channel itself), groups (the bonus rows, for Card rates here) }. A search matching
+  // 1 to 3 merchants gets the per-merchant totals; anything else gets the category headline below.
   function renderHeadline(rows, today, show, ctx) {
     useEl.textContent = "";
     useEl.hidden = !show || !bonus;
     if (useEl.hidden) return;
-    if (ctx && renderMerchantHeadline(ctx.query, ctx.hits, today)) return;
+    var anyHits = ctx ? ctx.any || ctx.hits || [] : [];
+    if (ctx && renderMerchantHeadline(ctx.query, anyHits, today)) { ratesBox(ctx.groups || [], today); return; }
     // Nothing matched: no offer, no bonus keyword. Say so, and name the everyday card.
     var ev = everyday(today);
-    if (ctx && ev && compact(ctx.query) !== "" && !(ctx.hits || []).length && !rows.length) {
+    if (ctx && ev && compact(ctx.query) !== "" && !anyHits.length && !rows.length) {
       var nm = el("div", "usehead");
       nm.appendChild(document.createTextNode("No match. Your default: "));
       useStrong(nm, ev.card + " " + pct(ev.rate) + "%", ev.card);
@@ -1308,6 +1406,8 @@
       useEl.appendChild(nm);
       return;
     }
+    // The selector only when there are offers for it to filter (none for a keyword or category alone: Chipotle).
+    if (anyHits.length) useEl.appendChild(chanSel());
     var h = headline(rows, today);
     var head = el("div", "usehead");
     if (h) {
@@ -1318,10 +1418,12 @@
       // A bonus covers this but isn't activated yet (it doesn't count as a winner): say so, not "no match".
       var off = [];
       rows.forEach(function (t) {
+        if (!topicCounts(t, chanMode)) return;
         t.items.forEach(function (it) {
-          if (!it.everyday && it.e.activation === "not_confirmed" && !off.some(function (x) { return x.e === it.e; })) off.push(it);
+          if (!it.everyday && !isConditional(it.e) && it.e.activation === "not_confirmed" && !off.some(function (x) { return x.e === it.e; })) off.push(it);
         });
       });
+      var co = condOnly(rows);
       if (off.length) {
         head.appendChild(document.createTextNode("Bonus here needs activation: "));
         useStrong(head, off.map(function (it) { return it.e.card + " " + pct(it.g._rate) + "%"; }).join(", "), off[0].e.card);
@@ -1330,13 +1432,33 @@
           useEl.appendChild(el("div", "usenote", it.e.card + ": not activated" +
             (it.e.activate_by ? ", activate by " + fmtDate(it.e.activate_by) : "") + "."));
         });
+        if (co) useEl.appendChild(condLine({ e: co.e, rate: co.rate, strong: false }));
         useEl.appendChild(el("div", "usesub", "Merchant offers add on top of the card's normal earning. Check the offers below."));
+        if (ctx) ratesBox(ctx.groups || [], today);
+        return;
+      }
+      if (co) {
+        // Only a conditional rate (the card filter on Citi Custom Cash): never shown as the answer, only as itself.
+        useEl.appendChild(condLine({ e: co.e, rate: co.rate, strong: true }));
+        useEl.appendChild(el("div", "usesub", "Merchant offers add on top of the card's normal earning. Check the offers below."));
+        if (ctx) ratesBox(ctx.groups || [], today);
         return;
       }
       head.textContent = "No " + (card || "card") + " bonus category matches here.";
     }
     useEl.appendChild(head);
-    if (h && h.likely) head.appendChild(likelyTag());
+    var lastHead = head;
+    if (h && h.after) {
+      var ad = el("div", "usehead");
+      ad.appendChild(document.createTextNode("After activating: "));
+      useStrong(ad, h.after.text, h.after.first);
+      ad.appendChild(el("span", "useextra", h.after.extra));
+      ad.appendChild(el("span", "usegain", h.after.gain));
+      useEl.appendChild(ad);
+      lastHead = ad;
+    }
+    if (h && (h.likely || h.after)) lastHead.appendChild(likelyTag());
+    if (h && h.cond) useEl.appendChild(condLine(h.cond));
     if (h) h.notes.forEach(function (n) { useEl.appendChild(el("div", "usenote", n)); });
     // Broad matches: the best offer total among them, when it beats the line above.
     var tp = ctx ? topOffer(ctx.hits, today) : null;
@@ -1345,6 +1467,61 @@
         (tp.online ? ", online" : "") + (tp.ready ? "" : tp.add ? ", add to " + tp.C.name : ", after activating") + "."));
     }
     useEl.appendChild(el("div", "usesub", "Merchant offers add on top of the card's normal earning. Check the offers below."));
+    if (ctx) ratesBox(ctx.groups || [], today);
+  }
+
+  // "Card rates here": the bonus rows for what matched, folded into one disclosure at the bottom of the answer card,
+  // closed until opened (kept open across redraws of the same search and filters, ratesKey). The summary lists the
+  // topics that count for the channel choice with their best rate ("dining 5% · online shopping 5.25% online only"
+  // under Any); open, the rows as before (each card, its status, Matched, Likely, caveats), then "Not counted"
+  // for an online shopping rate the channel rule leaves out. groups: [{ label, rows }] as renderBonusRows takes.
+  var ratesOpen = false, ratesKey = "";
+  function ratesBox(groups, today) {
+    var kept = [], left = [], parts = [];
+    groups.forEach(function (grp) {
+      var rows = [];
+      grp.rows.forEach(function (t) {
+        if (topicCounts(t, chanMode)) {
+          rows.push(t);
+          var top = topicTop(t);
+          if (top) parts.push(t.name + " " + top + (t.online && chanMode === "any" ? " online only" : ""));
+        } else left.push(t);
+      });
+      rows.hints = grp.rows.hints || [];
+      kept.push({ label: grp.label, rows: rows });
+    });
+    var anyRows = kept.some(function (g) { return g.rows.length || g.rows.hints.length; });
+    if (!anyRows && !left.length) return;
+    var d = el("details", "rates");
+    d.open = ratesOpen;
+    d.addEventListener("toggle", function () { ratesOpen = d.open; });
+    var sum = el("summary", "ratessum");
+    sum.appendChild(el("span", "ratesh", "Card rates here"));
+    if (parts.length) sum.appendChild(el("span", "ratesl", " · " + parts.filter(function (p, i) { return parts.indexOf(p) === i; }).join(" · ")));
+    d.appendChild(sum);
+    if (anyRows) d.appendChild(renderBonusRows(kept));
+    if (left.length) {
+      var nc = el("div", "ratesnc");
+      nc.appendChild(el("div", "ratesnch", "Not counted"));
+      left.forEach(function (t) {
+        var cs = t.items.filter(function (it) { return !it.everyday; }).map(function (it) { return it.e.card + " " + pct(it.g._rate) + "%"; });
+        var why = chanMode === "store" ? "online purchases only" :
+          t.unknown ? "channel not shown on " + t.unknown + (t.unknown === 1 ? " offer" : " offers") + " here" : "no offer here is known to work online";
+        nc.appendChild(el("div", "bnote", cap(t.name) + (cs.length ? " (" + cs.join(", ") + ")" : "") + ": " + why + "."));
+      });
+      d.appendChild(nc);
+    }
+    useEl.appendChild(d);
+  }
+  // A row's best rate for the summary: what a usable card pays ("5%"); with none, the best rate marked
+  // "not activated" or "conditional"; nothing for a row with no card.
+  function topicTop(t) {
+    var cards = t.items.filter(function (it) { return !it.everyday; });
+    if (!cards.length) return null;
+    var use = cards.filter(function (it) { return !isConditional(it.e) && it.e.activation !== "not_confirmed"; });
+    if (use.length) return pct(Math.max.apply(null, use.map(function (it) { return it.g._rate; }))) + "%";
+    var b = cards.reduce(function (a, it) { return it.g._rate > a.g._rate ? it : a; });
+    return pct(b.g._rate) + "% " + (isConditional(b.e) ? "conditional" : "not activated");
   }
 
   // ---- Merchant totals for the "Use:" headline (data/cards.json) ----
@@ -1423,7 +1600,8 @@
     var list = g._list || null;
     if (list && list.ex.length && M.names.some(function (n) { return list.ex.some(function (x) { return n.c.indexOf(x.c) !== -1; }); })) return false;
     var cats = g.app_categories || [];
-    var byCat = cats.length && M.offers.some(function (o) {
+    // What the merchant is (a restaurant) comes from all its offers, whatever the channel choice left (M.all).
+    var byCat = cats.length && (M.all || M.offers).some(function (o) {
       if (cats.indexOf(o.category) === -1) return false;
       if (o.category !== "Dining") return true;
       var l = cuisineLabel(o);
@@ -1448,10 +1626,12 @@
   // online: the rate needs an online purchase (online shopping); viaChannel: it fits only because M's offers are
   // online-only (not a keyword), so M may have stores. inStore: what the card earns at the register.
   // sure: leave out rates whose keyword list says the merchant may not count (Shipt for grocery stores).
-  function rateAt(C, M, today, inStore, sure) {
-    var key = C.name + (inStore ? "|store" : "") + (sure ? "|sure" : "");
+  // split (the answer card): a top-category rate (Citi Custom Cash's planned 5%) is conditional, so it goes in cond
+  // instead of ready; without split (Best offer totals, Top offer) it counts as before.
+  function rateAt(C, M, today, inStore, sure, split) {
+    var key = C.name + (inStore ? "|store" : "") + (sure ? "|sure" : "") + (split ? "|split" : "");
     if (M.rates[key]) return M.rates[key];
-    var ready = { rate: boosted(C.base_rate, C.name), label: null, cat: false }, after = null;
+    var ready = { rate: boosted(C.base_rate, C.name), label: null, cat: false }, after = null, cond = null;
     var rec = function (g, fit, extra) {
       var r = { rate: g._rate, label: g.name, cat: true, g: g, mnc: mayNotCount(g, M),
         online: g.channel === "online", viaChannel: fit === "channel" };
@@ -1468,12 +1648,14 @@
         var fit = groupFits(g, M, inStore);
         if (!fit || (sure && mayNotCount(g, M))) return;
         var r = rec(g, fit, { e: e });
-        if (e.activation === "not_confirmed") { if (!after || r.rate > after.rate) after = r; }
+        if (split && isConditional(e)) { if (!cond || r.rate > cond.rate) cond = r; }
+        else if (e.activation === "not_confirmed") { if (!after || r.rate > after.rate) after = r; }
         else if (r.rate > ready.rate) ready = r;
       });
     });
     if (after && after.rate <= ready.rate) after = null;
-    return (M.rates[key] = { ready: ready, after: after });
+    if (cond && cond.rate <= ready.rate) cond = null;
+    return (M.rates[key] = { ready: ready, after: after, cond: cond });
   }
 
   // "25% back" -> pct; "Spend $20, earn $10" -> +$10 on $20+; "Save 20%" -> discount.
@@ -1574,20 +1756,32 @@
       order = order.filter(function (g) { return g.rank <= 1; });
     }
     kws.forEach(function (g) { if (order.length < 3) order.unshift(g); });
-    order.forEach(function (g) {
-      g.online = g.offers.length > 0 && g.offers.every(function (o) { return o.channel === "online"; });
-    });
     return order;
   }
 
-  // Candidates at one merchant: ready (nothing to do), after (activate / add to a card / shop link),
-  // deals (dollar offers) and discounts.
+  // One merchant as an answer for one channel choice ("any", "store", "online"): the offers that choice keeps
+  // (filtered before anything is worked out), all its offers for what the merchant is (M.all: a restaurant's dining
+  // rate), and whether online shopping counts through its offers (onlineByOffers: one test for Any and Online,
+  // never in store).
+  function viewOf(G, ch) {
+    return { key: G.key, name: G.name, names: G.names, all: G.offers, virtual: G.virtual, ch: ch, inStore: ch === "store",
+      offers: ch === "any" ? G.offers : G.offers.filter(function (o) { return chanIn(ch, o); }),
+      online: ch !== "store" && onlineByOffers(G.offers), rates: {} };
+  }
+
+  // Candidates at one merchant (one channel view): ready (nothing to do), after (activate / add to a card / shop
+  // link), deals (dollar offers), discounts, up to, and cond (a conditional top-category rate: Citi Custom Cash).
   function merchantTotals(M, today) {
-    var cards = payCards(), ready = [], after = [], deals = [], discounts = [], upto = [];
+    var cards = payCards(), ready = [], after = [], deals = [], discounts = [], upto = [], conds = [];
+    var at = function (C, inStore) { return rateAt(C, M, today, inStore === undefined ? M.inStore : inStore, false, true); };
+    var actText = function (state, C, needs) {
+      return state === "add" ? "add to " + C.name : state === "shop" ? "via the Shop now link" : needs && state === "needs" ? "after activating" : null;
+    };
     cards.forEach(function (C) {
-      var r = rateAt(C, M, today);
+      var r = at(C);
       ready.push({ C: C, total: r.ready.rate, base: r.ready });
       if (r.after) after.push({ C: C, total: r.after.rate, base: r.after, act: "activate " + pct(r.after.rate) + "% " + r.after.label });
+      if (r.cond) conds.push({ C: C, total: r.cond.rate, base: r.cond });
     });
     M.offers.forEach(function (o) {
       var L = cardsCfg.lists[o.card];
@@ -1599,27 +1793,36 @@
       var a = actOf(o);
       var state = L.activation === "add_to_card" ? "add" : a === "needs_activation" ? "needs" : a === "via_shop_link" ? "shop" : "ready";
       if (v.kind === "discount") { discounts.push({ o: o, L: L, state: state }); return; }
-      // The card in the list that earns most here.
-      var C = cs.reduce(function (x, c) { return rateAt(c, M, today).ready.rate > rateAt(x, M, today).ready.rate ? c : x; });
-      var base = rateAt(C, M, today).ready;
-      var cand = { C: C, base: base, o: o, v: v, L: L, state: state,
-        act: state === "add" ? "add to " + C.name : state === "shop" ? "via the Shop now link" : null };
+      // The card in the list that earns most here (ready rates only: a conditional rate never picks the card).
+      var C = cs.reduce(function (x, c) { return at(c).ready.rate > at(x).ready.rate ? c : x; });
+      var base = at(C).ready;
+      var cand = { C: C, base: base, o: o, v: v, L: L, state: state, act: actText(state, C) };
       // "Up to 20% back" never wins a line on its full rate: it gets its own "Up to:" line, below definite rates.
-      if (v.kind === "pct") { cand.total = base.rate + v.pct; (v.upTo ? upto : state === "ready" ? ready : after).push(cand); }
-      else { cand.value = v.min ? v.amt / v.min * 100 + base.rate : null; deals.push(cand); }
+      if (v.kind === "pct") {
+        cand.total = base.rate + v.pct;
+        (v.upTo ? upto : state === "ready" ? ready : after).push(cand);
+        // The same offer with a card's conditional rate (a Citi Custom Cash offer at a restaurant): conditional too.
+        if (!v.upTo) cs.forEach(function (c) {
+          var rc = at(c).cond;
+          if (rc) conds.push({ C: c, total: rc.rate + v.pct, base: rc, o: o, v: v, L: L, state: state, act: actText(state, c, true) });
+        });
+      } else { cand.value = v.min ? v.amt / v.min * 100 + base.rate : null; deals.push(cand); }
     });
     // The sure fallback for a hedged Ready now line: the best ready total with no "may not count" doubt.
     var sure = pick(ready.filter(function (c) { return !c.base.mnc; }));
-    // At the register: card rates without online shopping, plus ready percent offers that work in store; like the
-    // "else" fallback, only totals with no "may not count" doubt.
-    var store = cards.map(function (C) { var b = rateAt(C, M, today, true).ready; return { C: C, total: b.rate, base: b }; });
-    ready.forEach(function (c) {
-      if (!c.o || c.o.channel === "online" || c.v.upTo) return;
-      var b = rateAt(c.C, M, today, true).ready;
-      store.push({ C: c.C, total: b.rate + c.v.pct, base: b, o: c.o, v: c.v, L: c.L, state: c.state });
-    });
-    store = store.filter(function (c) { return !c.base.mnc; });
-    return { ready: pick(ready), after: pick(after), deals: deals, discounts: discounts, upto: pick(upto), sure: sure, store: pick(store) };
+    // Any only (a picked channel already answers for it): at the register, card rates without online shopping, plus
+    // ready percent offers that work in store; like the "else" fallback, only totals with no "may not count" doubt.
+    var store = null;
+    if (M.ch === "any") {
+      var st = cards.map(function (C) { var b = at(C, true).ready; return { C: C, total: b.rate, base: b }; });
+      ready.forEach(function (c) {
+        if (!c.o || c.o.channel === "online" || c.v.upTo) return;
+        var b = at(c.C, true).ready;
+        st.push({ C: c.C, total: b.rate + c.v.pct, base: b, o: c.o, v: c.v, L: c.L, state: c.state });
+      });
+      store = pick(st.filter(function (c) { return !c.base.mnc; }));
+    }
+    return { ready: pick(ready), after: pick(after), deals: deals, discounts: discounts, upto: pick(upto), sure: sure, store: store, cond: pick(conds) };
   }
 
   // Highest total first; Smartly wins a tie it is in, then candidates with nothing to do; one per card.
@@ -1654,14 +1857,16 @@
 
   // "Freedom Flex 15% or Freedom 15%" + "(5% dining + 10% Chase offer, first $60)".
   // A total that needs an online purchase says so: "Customized Cash 5.25% online" (online shopping rate, or an
-  // online-only offer).
+  // online-only offer), except once Online is picked (the answer is for an online purchase already).
   function needsOnline(c) { return !!(c.base && c.base.online) || !!(c.o && c.o.channel === "online"); }
-  function winText(p, today, mName) {
+  // A line built on an offer with no channel ends "channel not shown" once a channel is picked (In store or
+  // Online), so it is never read as known in store or online.
+  function unknownCh(c, M) { return M.ch !== "any" && !!c.o && (c.o.channel || "none_shown") === "none_shown"; }
+  function winText(p, today, M, isReady) {
     var w = p.wins, first = w[0], names, extra = [];
     var smartlyTie = first.C.name === "Smartly" && w.length > 1;
-    names = (smartlyTie ? [first] : w.slice(0, 2)).map(function (c) {
-      return c.C.name + " " + pct(c.total) + "%" + (needsOnline(c) ? " online" : "");
-    }).join(" or ");
+    var onl = function (c) { return M.ch !== "online" && needsOnline(c) ? " online" : ""; };
+    names = (smartlyTie ? [first] : w.slice(0, 2)).map(function (c) { return c.C.name + " " + pct(c.total) + "%" + onl(c); }).join(" or ");
     var more = smartlyTie ? 0 : w.length - 2;
     var b = first.base, parts = [];
     if (first.o) {
@@ -1671,119 +1876,215 @@
     } else if (b.label && !b.online) extra.push(b.label);
     // The rows keep the full "may not count" note; the line gets a short hedge.
     var mnc = w.slice(0, smartlyTie ? 1 : 2).filter(function (c) { return c.base.mnc; })[0];
-    if (mnc) extra.push("may not count for " + mName);
+    if (mnc) extra.push("may not count for " + M.name);
     if (first.act) extra.push(first.act);
     var n = offerNote(first, today);
-    if (n && !(n === "online" && needsOnline(first))) extra.push(n);
+    // The channel the answer is already for isn't repeated ("online" under Online, "in store" under In store).
+    if (n && !((n === "online" && (needsOnline(first) || M.ch === "online")) || (n === "in store" && M.ch === "store"))) extra.push(n);
+    var cns = unknownCh(first, M);
+    if (cns) extra.push("channel not shown");
     if (smartlyTie) w.slice(1).forEach(function (c) {
       extra.push(c.C.name + " also " + pct(c.total) + "%" + (c.base.g && c.base.g.rate_note ? ", " + c.base.g.rate_note : ""));
     });
-    return { mnc: !!mnc, names: names, first: first.C.name, more: more > 0 ? ", +" + more + " more at " + pct(p.total) + "%" : "",
+    // "+N more ready" counts only cards that pay now (a conditional rate is never among them).
+    return { mnc: !!mnc, cns: cns, names: names, first: first.C.name,
+      more: more > 0 ? ", +" + more + " more " + (isReady ? "ready " : "") + "at " + pct(p.total) + "%" : "",
       extra: extra.length ? " (" + extra.join(", ") + ")" : "", named: smartlyTie ? [first] : w.slice(0, 2) };
   }
 
   // { names: "Discover it +$15 on $40+" (bold, like the other lines' card and rate), extra: " (plus 5% ...)" }.
-  function dealText(d) {
+  function dealText(d, M) {
     var v = d.v;
     return {
       first: d.C.name,
       names: d.C.name + " +" + (v.upTo ? "up to " : "") + money(v.amt) + (v.min ? " on " + money(v.min) + "+" : "") +
-        (d.o.channel === "online" ? " online" : ""),
+        (d.o.channel === "online" && M.ch !== "online" ? " online" : ""),
       extra: " (plus " + pct(d.base.rate) + "%" + (d.base.label ? " " + d.base.label : "") +
         (d.base.mnc ? ", may not count for " + d.base.mnc : "") + ", " +
-        (d.act || (d.state === "needs" ? "needs activation" : "ready now")) + ")"
+        (d.act || (d.state === "needs" ? "needs activation" : "ready now")) + (unknownCh(d, M) ? ", channel not shown" : "") + ")",
+      cns: unknownCh(d, M)
     };
   }
 
-  // The lines for one merchant: up to two ("Ready now" and "After activating" or "Best deal"), plus notes.
+  // The lines for one merchant view: Ready now, then at most one of After activating, Best deal or Up to, plus
+  // Also (discounts) and the conditional Citi Custom Cash line. value: the best definite result (ready, after or
+  // best deal; never Up to or a conditional rate), to compare channels; sig: what the lines recommend.
   function merchantLines(M, today) {
-    var t = merchantTotals(M, today), out = { lines: [], named: [], also: [] };
+    var t = merchantTotals(M, today), out = { lines: [], named: [], also: [], cond: null };
     if (!t.ready) return null;
-    var r = winText(t.ready, today, M.name);
+    var r = winText(t.ready, today, M, true);
     // "(entertainment, may not count for StubHub) · else Smartly 4%" when the winner is in doubt.
     var orElse = "";
     if (r.mnc && t.sure && t.sure.total < t.ready.total) orElse = " · else " + t.sure.wins[0].C.name + " " + pct(t.sure.total) + "%";
-    // A winner that needs an online purchase, matched through online-only offers rather than a known online
-    // store (Target, Levain have shops): " · in store: Smartly 4%".
+    // Any only: a winner that needs an online purchase, matched through online-only offers rather than a known
+    // online store (Target, Levain have shops): " · in store: Smartly 4%".
     var store = "", w0 = t.ready.wins[0];
-    if (needsOnline(w0) && !(w0.base.online && !w0.base.viaChannel) && t.store && t.store.total < t.ready.total) {
+    if (t.store && needsOnline(w0) && !(w0.base.online && !w0.base.viaChannel) && t.store.total < t.ready.total) {
       var sw = t.store.wins, sTie = sw[0].C.name === "Smartly";
       store = " · in store: " + (sTie ? [sw[0]] : sw.slice(0, 2)).map(function (c) { return c.C.name + " " + pct(c.total) + "%"; }).join(" or ");
       out.named = out.named.concat(sTie ? [sw[0]] : sw.slice(0, 2));
     }
-    out.lines.push({ label: "Ready now", first: r.first, text: r.names, extra: r.more + r.extra + orElse + store, short: r.names, mnc: r.mnc, orElse: orElse, store: store });
+    out.lines.push({ label: "Ready now", first: r.first, text: r.names, extra: r.more + r.extra + orElse + store, short: r.names, mnc: r.mnc,
+      orElse: orElse, store: store, cns: r.cns, value: t.ready.total });
     out.named = out.named.concat(r.named);
     var best = t.ready.total, aft = t.after && t.after.total > best ? t.after : null;
     var deal = null;
     t.deals.forEach(function (d) { if (d.value !== null && (!deal || d.value > deal.value)) deal = d; });
     if (deal && deal.value > Math.max(best, aft ? aft.total : 0)) {
-      var dt = dealText(deal);
-      out.lines.push({ label: "Best deal", first: dt.first, text: dt.names, extra: dt.extra, short: dt.names });
+      var dt = dealText(deal, M);
+      out.lines.push({ label: "Best deal", first: dt.first, text: dt.names, extra: dt.extra, short: dt.names, cns: dt.cns, value: deal.value });
       out.named.push(deal);
     } else if (aft) {
-      var a = winText(aft, today, M.name);
-      out.lines.push({ label: "After activating", first: a.first, text: a.names, extra: a.more + a.extra, short: a.names, mnc: a.mnc });
+      // Activation is promoted only when it beats what is ready now (a tie isn't worth a step): "+1 pt".
+      var a = winText(aft, today, M);
+      out.lines.push({ label: "After activating", first: a.first, text: a.names, extra: a.more + a.extra, short: a.names, mnc: a.mnc,
+        cns: a.cns, gain: gainText(aft.total - best), value: aft.total });
       out.named = out.named.concat(a.named);
     } else if (t.upto && t.upto.total > best) {
       // Only when no definite second line: "Up to: Quicksilver 21.5% (1.5% + up to 20% Capital One offer, ...)".
-      var u = winText(t.upto, today, M.name);
-      out.lines.push({ label: "Up to", first: u.first, text: u.names, extra: u.more + u.extra, short: u.names.replace(/ (\d[\d.]*%)/g, " up to $1"), bare: true });
+      var u = winText(t.upto, today, M);
+      out.lines.push({ label: "Up to", first: u.first, text: u.names, extra: u.more + u.extra, short: u.names.replace(/ (\d[\d.]*%)/g, " up to $1"),
+        bare: true, cns: u.cns, value: null });
       out.named = out.named.concat(u.named);
     }
     t.discounts.forEach(function (x) {
       var ch = { in_store: "in store", online: "online" }[x.o.channel];
+      if ((ch === "in store" && M.ch === "store") || (ch === "online" && M.ch === "online")) ch = null;
+      if (unknownCh(x, M)) ch = "channel not shown";
       out.also.push(tidy(x.o.bonus) + (x.state === "shop" ? " via the Shop now link" : x.state === "needs" ? " after activating" : "") +
         " (" + x.L.label.replace(/ offer$/, "") + (ch ? ", " + ch : "") + ")");
     });
+    // Citi Custom Cash: its own line, never Ready now; "strong" (a separate alternative with its gain) when it
+    // would beat the ready answer.
+    if (t.cond) {
+      var c0 = t.cond.wins[0];
+      out.cond = { e: c0.base.e, rate: t.cond.total, strong: t.cond.total > best, gain: t.cond.total > best ? gainText(t.cond.total - best) : null,
+        detail: c0.o ? pct(c0.base.rate) + "% " + c0.base.label + " + " + pct(c0.v.pct) + "% " + c0.L.label : null,
+        act: [c0.act, unknownCh(c0, M) ? "channel not shown" : null].filter(Boolean).join(", ") || null };
+    }
+    out.value = Math.max.apply(null, out.lines.map(function (l) { return l.value === null ? -Infinity : l.value; }));
+    out.sig = out.lines.map(function (l) { return l.label + ":" + l.text; }).join("|");
     return out;
   }
+  // The line with the best definite result (Ready now on a tie).
+  function bestLine(L) {
+    return L.lines.reduce(function (a, l) { return l.value !== null && l.value > a.value ? l : a; }, L.lines[0]);
+  }
 
-  // Per-merchant headline when the matches are 1 to 3 merchants (not a cuisine search). Returns false when it
-  // doesn't apply, so the category headline is drawn instead.
+  // The three-way channel selector on the answer card (one setting with the Filters row: cardselector.channel).
+  // Tapping a segment picks it; tapping the picked one does nothing.
+  function chanSel() {
+    var g = el("div", "chansel");
+    g.setAttribute("role", "group");
+    g.setAttribute("aria-label", "Where you're paying");
+    CHANNELS.forEach(function (c) {
+      var b = el("button", null, c[1]);
+      b.type = "button";
+      b.setAttribute("data-ch", c[0]);
+      b.setAttribute("aria-pressed", String(c[0] === chanMode));
+      b.addEventListener("click", function () { if (chanMode !== c[0]) setChan(c[0], true); });
+      g.appendChild(b);
+    });
+    return g;
+  }
+  // Compact lines, as for 2 or 3 merchants: "Smartly 19% ready now · Freedom Flex 20% after activating +1 pt".
+  function compactLines(d, lines, noGain) {
+    lines.forEach(function (ln, i) {
+      if (i) d.appendChild(document.createTextNode(" · "));
+      useStrong(d, ln.short, ln.first);
+      if (!ln.bare) d.appendChild(el("span", "useextra", " " + ln.label.toLowerCase()));
+      if (ln.gain && !noGain) d.appendChild(el("span", "usegain", ln.gain));
+      if (ln.mnc) d.appendChild(el("span", "useextra", " (may not count)" + (ln.orElse || "")));
+      if (ln.cns) d.appendChild(el("span", "useextra", " (channel not shown)"));
+      if (ln.store) d.appendChild(el("span", "useextra", ln.store));
+    });
+  }
+  // One channel's answer as a button that picks that channel: the In store and Online rows under Any, or (alt) the
+  // other channel's better result under In store or Online ("Online: Discover it +$10 on $20+ best deal").
+  function chanRow(ch, L, alt) {
+    var b = el("button", alt ? "usechan usealt" : "usehead usechan");
+    b.type = "button";
+    b.setAttribute("data-ch", ch);
+    b.appendChild(el("span", "usechn", chanName(ch) + ": "));
+    compactLines(b, alt ? [bestLine(L)] : L.lines, alt);
+    b.appendChild(el("span", "sr-only", " (shows the " + chanName(ch).toLowerCase() + " answer)"));
+    b.addEventListener("click", function () { setChan(ch, true); });
+    return b;
+  }
+
+  // Per-merchant headline when the matches are 1 to 3 merchants (not a cuisine search). hits: every live match in
+  // scope whatever the channel choice (the merchants answered don't change with it; each answer filters its
+  // merchant's offers by the choice first). Returns false when it doesn't apply, so the category headline is drawn.
   function renderMerchantHeadline(query, hits, today) {
     if (!cardsCfg || compact(query) === "" || !hits || !hits.length || hits.viaCuisine) return false;
     var groups = merchantGroups(hits, query);
     if (!groups.length || groups.length > 3) return false;
-    var per = groups.map(function (M) { return { M: M, L: merchantLines(M, today) }; }).filter(function (x) { return x.L; });
+    // A merchant with no offer (a typed keyword: "shell") has nothing for the channel to filter.
+    var chOf = function (G) { return G.offers.length ? chanMode : "any"; };
+    var per = groups.map(function (G) { return { M: G, L: merchantLines(viewOf(G, chOf(G)), today) }; }).filter(function (x) { return x.L; });
     if (!per.length) return false;
     var named = [], likely = false, notes = [], last = null;
+    if (groups.some(function (G) { return G.offers.length; })) useEl.appendChild(chanSel());
+    var condNote = null;
     if (per.length === 1) {
-      var M = per[0].M, L = per[0].L;
-      if (compact(M.name) !== compact(query)) useEl.appendChild(el("div", "useat", "At " + M.name));
-      L.lines.forEach(function (ln) {
-        var d = el("div", "usehead");
-        d.appendChild(document.createTextNode(ln.label + ": "));
-        useStrong(d, ln.text, ln.first);
-        if (ln.extra) d.appendChild(el("span", "useextra", ln.extra));
-        useEl.appendChild(d);
-        last = d;
-      });
-      named = L.named;
+      var G = per[0].M, L = per[0].L, rowsBy = null, alt = null;
+      if (compact(G.name) !== compact(query)) useEl.appendChild(el("div", "useat", "At " + G.name));
+      if (G.offers.length && chanMode === "any") {
+        // Any: In store and Online answered apart when they recommend different things; one answer when the same.
+        var S = merchantLines(viewOf(G, "store"), today), O = merchantLines(viewOf(G, "online"), today);
+        if (S && O && S.sig !== O.sig) rowsBy = [["store", S], ["online", O]];
+      } else if (G.offers.length) {
+        // In store or Online: the other channel only when its best definite result is better.
+        var other = chanMode === "store" ? "online" : "store", OL = merchantLines(viewOf(G, other), today);
+        if (OL && OL.value > L.value + 1e-9) alt = [other, OL];
+      }
+      if (rowsBy) {
+        rowsBy.forEach(function (x) {
+          last = chanRow(x[0], x[1]);
+          useEl.appendChild(last);
+          named = named.concat(x[1].named);
+        });
+      } else {
+        L.lines.forEach(function (ln) {
+          var d = el("div", "usehead");
+          d.appendChild(document.createTextNode(ln.label + ": "));
+          useStrong(d, ln.text, ln.first);
+          if (ln.extra) d.appendChild(el("span", "useextra", ln.extra));
+          if (ln.gain) d.appendChild(el("span", "usegain", ln.gain));
+          useEl.appendChild(d);
+          last = d;
+        });
+        named = L.named;
+      }
+      if (L.cond) useEl.appendChild(condLine(L.cond));
+      if (alt) useEl.appendChild(chanRow(alt[0], alt[1], true));
       L.also.forEach(function (a) { notes.push("Also: " + a + "."); });
     } else {
       per.forEach(function (x) {
         var d = el("div", "usehead usem");
         d.appendChild(el("span", "usemname", x.M.name + ": "));
-        x.L.lines.forEach(function (ln, i) {
-          if (i) d.appendChild(document.createTextNode(" · "));
-          useStrong(d, ln.short, ln.first);
-          if (!ln.bare) d.appendChild(el("span", "useextra", " " + ln.label.toLowerCase()));
-          if (ln.mnc) d.appendChild(el("span", "useextra", " (may not count)" + (ln.orElse || "")));
-          if (ln.store) d.appendChild(el("span", "useextra", ln.store));
-        });
+        compactLines(d, x.L.lines);
+        // Citi Custom Cash beating that merchant's ready answer: named on its line as conditional.
+        if (x.L.cond && x.L.cond.strong) {
+          d.appendChild(document.createTextNode(" · "));
+          useStrong(d, x.L.cond.e.card + " " + pct(x.L.cond.rate) + "%", x.L.cond.e.card);
+          d.appendChild(el("span", "useextra", " conditional"));
+        }
+        if (x.L.cond) condNote = x.L.cond.e;
         useEl.appendChild(d);
         last = d;
         named = named.concat(x.L.named);
       });
     }
-    // The hedge whenever a category rate (quarterly, Custom Cash, standing 3%...) is in a named total.
+    // The hedge whenever a category rate (quarterly, standing 3%...) is in a named total.
     named.forEach(function (c) {
       if (c.base && c.base.cat) likely = true;
-      var n = c.base && c.base.e && c.base.e.likely_note;
+      var n = c.base && c.base.e && !isConditional(c.base.e) && c.base.e.likely_note;
       if (n) { n = c.C.name + ": " + n.replace(/^likely,\s*/, "") + "."; if (notes.indexOf(n) === -1) notes.push(n); }
       var bn = c.C && boostNote(c.C.name);
       if (bn && notes.indexOf(bn) === -1) notes.push(bn);
     });
+    if (condNote) notes.push(condNote.card + ": " + condWhy(condNote) + ".");
     if (likely && last) last.appendChild(likelyTag());
     notes.forEach(function (n) { useEl.appendChild(el("div", "usenote", n)); });
     return true;
@@ -1970,10 +2271,11 @@
         else setTimeout(function () { fitLine(line); }, 0);
         box.appendChild(row);
       });
-      // "Citi Custom Cash 5% here if you set your focus to select travel or select transit"
+      // "Citi Custom Cash 5% here only if select travel or select transit is your actual top eligible category this
+      // cycle (not your CardSelector focus)": the focus is only CardSelector's assumption, never a Citi setting.
       (rows.hints || []).forEach(function (h) {
-        box.appendChild(el("div", "bonusrow hint", h.entry.card + " " + pct(h.entry.rate) + "% here if you set your focus to " +
-          h.names.join(" or ")));
+        box.appendChild(el("div", "bonusrow hint", h.entry.card + " " + pct(h.entry.rate) + "% here only if " +
+          h.names.join(" or ") + " is your actual top eligible category this cycle (not your CardSelector focus)"));
       });
     });
     return box;
@@ -2027,15 +2329,16 @@
       head.appendChild(withDot(el("span", "bcard", e.card + ": "), e.card));
       var rate = function (r) { head.appendChild(el("span", "brate", pct(r) + "%")); };
       if (e.everyday) {
-        // "Smartly: Everyday default: 4% on everything"
-        head.appendChild(document.createTextNode("Everyday default: "));
+        // "Smartly: Everyday 4% · first $10,000 per billing cycle, some categories 2%" (its usual everyday rate).
+        head.appendChild(document.createTextNode("Everyday "));
         rate(e.rate);
-        head.appendChild(document.createTextNode(" on everything"));
+        if (e.strip_note) head.appendChild(document.createTextNode(" · " + e.strip_note));
         more.push(cap(e.categories_text));
       } else if (e.eligible) {
-        // "5% on top category, planned: restaurants" (signed in, the Focus picker below shows the plan).
+        // "5% on top category, CardSelector focus: restaurants" (signed in, the picker below shows it). The focus is
+        // CardSelector's assumption only; it elects nothing at Citi.
         rate(e.rate);
-        head.appendChild(document.createTextNode(" on top category" + (e.planned && !ed ? ", planned: " + e.planned : "")));
+        head.appendChild(document.createTextNode(" on top category" + (e.planned && !ed ? ", CardSelector focus: " + e.planned : "")));
         more.push(cap(e.categories_text.replace(/^on\s+/, "")) + ".");
       } else {
         // "5% grocery, dining, Red Cross"; "5.25% online shopping, 3.5% grocery & wholesale clubs".
@@ -2069,7 +2372,7 @@
         return it.name + (also.length ? " (also " + also.join(", ") + ")" : "");
       }).join(", "));
       // The everyday card is not listed under every category; one note instead.
-      if (e.eligible && ev && ev.rate < e.rate) more.push(ev.card + " earns " + pct(ev.rate) + "% everywhere, so only a " + pct(e.rate) + "% focus beats it.");
+      if (e.eligible && ev && ev.rate < e.rate) more.push(ev.card + "'s usual everyday rate is " + pct(ev.rate) + "%, so only a " + pct(e.rate) + "% " + e.card + " result normally beats it.");
       if (e.activation === "not_needed") more.push("No activation needed.");
       // Activation: the control follows the status ("⚠ Not activated … [Mark activated]", "Activated Undo").
       if (e.activation === "not_confirmed" || e.activation === "activated") {
@@ -2092,7 +2395,10 @@
         li.appendChild(st);
       }
       if (ed && e.eligible && e.planned) li.appendChild(focusPicker(e, "planned"));
-      if (ed && e.choices && e.choice) li.appendChild(focusPicker(e, "choice"));
+      if (ed && e.choices && e.choice) {
+        li.appendChild(focusPicker(e, "choice"));
+        li.appendChild(el("div", "bmeta bchoice", "Change it at Bank of America first, then here."));
+      }
       if (more.length) {
         var d = el("details", "bmore");
         d.appendChild(el("summary", null, "More details"));
@@ -2321,6 +2627,9 @@
     // A new search or filter ends the in-place rows and the extra pages of the last view.
     var view = JSON.stringify([query, category, card, cuisine, chanMode, actMode, sortMode, usedOn, wc && wc.tab]);
     if (view !== viewSig) { keep = {}; viewSig = view; shownBefore = 0; }
+    // Card rates here stays as opened while the search and filters stay (a channel change or a save keeps it).
+    var rk = JSON.stringify([query, category, card, cuisine, !!wc]);
+    if (rk !== ratesKey) { ratesOpen = false; ratesKey = rk; }
     // Any filter picked (In store / Online, Activation too) lists the offers it keeps, in pages.
     var narrowed = filtered || chanMode !== "any" || actMode !== "any";
     var cuis = category === "Dining" ? cuisine : null;
@@ -2329,6 +2638,11 @@
         (cuis === null || cuisineLabel(o) === cuis) && chanOk(o);
     };
     var inCat = function (o) { return inScope(o) && actOk(o); };
+    // The answer card works per channel itself, so it reads every channel (the same scope otherwise).
+    var inAnyChan = function (o) {
+      return (category === null || o.category === category) && (card === null || o.card === card) &&
+        (cuis === null || cuisineLabel(o) === cuis);
+    };
     // The Used filter keeps only the search, card and category (with its cuisine).
     var inUsedScope = function (o) {
       return (category === null || o.category === category) && (card === null || o.card === card) &&
@@ -2368,6 +2682,8 @@
       // marked used in this view stay in the list (dimmed), and in the sort's pool, so nothing moves.
       var hits = search(query, function (o) { return inScope(o) && (isLive(o, today) || (o.status === "used" && kept(o))); });
       var allHits = hits.filter(function (o) { return isLive(o, today); }); // the headline ignores the Activation filter
+      // The answer card's merchants and offers, whatever the channel choice (it filters them per channel itself).
+      var anyHits = chanMode === "any" ? allHits : search(query, function (o) { return inAnyChan(o) && isLive(o, today); });
       cmp = comparator(sortMode, query, hits);
       renderActs(actCounts(allHits));
       if (actMode !== "any") hits = hits.filter(actOk);
@@ -2393,9 +2709,9 @@
       // Bonus rows: from the search and from the category button, labelled apart when both are active.
       var qRows = bonusRows(query, today, "query"), bRows = bonusRows(query, today, "button");
       var both = hasQuery && category !== null;
-      // (A topic the search already shows is not repeated under the button: filtered below, after the headline.)
-      // The headline follows the search group when there is a search, else the category button's rows.
-      renderHeadline(hasQuery ? qRows : bRows, today, hasQuery || filtered, { query: query, hits: allHits });
+      // The headline follows the search group when there is a search, else the category button's rows. A topic
+      // the search already shows is not repeated under the button. The rows go in the card's "Card rates here".
+      var headRows = hasQuery ? qRows : bRows;
       if (both) {
         var shownTopics = qRows.map(function (t) { return t.name; });
         var keepHints = bRows.hints;
@@ -2403,12 +2719,12 @@
         bRows.hints = keepHints;
       }
       var anyBonus = qRows.length || bRows.length || bRows.hints.length;
-      if (anyBonus) main.appendChild(renderBonusRows([
+      renderHeadline(headRows, today, hasQuery || filtered, { query: query, hits: allHits, any: anyHits, groups: [
         { label: both ? "For “" + query.trim() + "”" : null, rows: qRows },
         { label: both ? "For " + category : null, rows: bRows }
-      ]));
+      ] });
       if (!hits.length && anyBonus) {
-        main.appendChild(el("p", "empty", "No merchant offers. Category bonuses above may apply."));
+        main.appendChild(el("p", "empty", "No merchant offers. Card rates above may apply."));
       } else if (!hits.length) {
         var p = el("p", "empty");
         p.appendChild(document.createTextNode("No active offers"));
@@ -2643,9 +2959,9 @@
   function findSpot(s) {
     var scope = s.at.oid ? main.querySelector("[data-oid=\"" + CSS.escape(s.at.oid) + "\"]") :
       s.at.eid ? blist.querySelector("[data-eid=\"" + CSS.escape(s.at.eid) + "\"]") :
-      s.at.lead != null ? Array.prototype.filter.call(main.querySelectorAll("details.bonusrow"), function (d) {
+      s.at.lead != null ? Array.prototype.filter.call(useEl.querySelectorAll("details.bonusrow"), function (d) {
         return d.querySelector(".bhead").textContent === s.at.lead;
-      })[0] || Array.prototype.filter.call(main.querySelectorAll("details.bonusrow"), function (d) {
+      })[0] || Array.prototype.filter.call(useEl.querySelectorAll("details.bonusrow"), function (d) {
         return d.getAttribute("data-topic") === s.at.topic;
       })[0] : s.at.id ? document.getElementById(s.at.id) : document;
     if (!scope) return null;
@@ -2658,7 +2974,7 @@
     // lead, else by topic when the lead changed: "Dining at <merchant>" names what matched), the strip's open
     // "More details" and an unsaved Focus or Choice pick (by entry).
     var ex = main.querySelector("details.expired"), exOpen = ex ? ex.open : null;
-    var rowsOpen = Array.prototype.map.call(main.querySelectorAll("details.bonusrow[open]"), function (d) {
+    var rowsOpen = Array.prototype.map.call(useEl.querySelectorAll("details.bonusrow[open]"), function (d) {
       return { lead: d.querySelector(".bhead").textContent, topic: d.getAttribute("data-topic") };
     });
     var moreOpen = Array.prototype.map.call(blist.querySelectorAll("li[data-eid] > details.bmore[open]"), function (d) { return d.parentNode.getAttribute("data-eid"); });
@@ -2672,7 +2988,7 @@
     renderCats(); renderCards(); renderStrip(); renderCuisines(); render();
     var ex2 = main.querySelector("details.expired");
     if (ex2 && exOpen !== null) ex2.open = exOpen;
-    var rowsNow = Array.prototype.slice.call(main.querySelectorAll("details.bonusrow"));
+    var rowsNow = Array.prototype.slice.call(useEl.querySelectorAll("details.bonusrow"));
     rowsOpen.forEach(function (r) {
       var d = rowsNow.filter(function (x) { return x.querySelector(".bhead").textContent === r.lead; })[0] ||
         rowsNow.filter(function (x) { return x.getAttribute("data-topic") === r.topic; })[0];
@@ -2865,7 +3181,7 @@
         Object.keys(it).forEach(function (k) { g[k] = it[k]; });
         g.name = it.topic || it.name;
         e.match = [g];
-        e.likely_note = "likely, only if " + e.planned + " is your top category this billing cycle";
+        e.likely_note = "conditional, " + condWhy(e);
       }
     }
     if (e.rate === undefined) e.rate = null;
@@ -2941,12 +3257,13 @@
     return rows;
   }
 
-  // Custom Cash focus, "Focus: [restaurants ▾]" (field "planned"), and Customized Cash choice, "Choice: [online
-  // shopping ▾]" (field "choice"); a small Save appears only once the value changes.
+  // Custom Cash, "CardSelector focus: [restaurants ▾]" (field "planned": CardSelector's assumption only, nothing
+  // changes at Citi), and Customized Cash choice, "Choice: [online shopping ▾]" (field "choice": a real Bank of
+  // America setting, changed there first); a small Save appears only once the value changes.
   function focusPicker(e, field) {
     var row = el("div", "bfocus");
     var id = field + "-" + compact(e.id), now = e[field];
-    var lab = el("label", "bmeta", field === "planned" ? "Focus:" : "Choice:");
+    var lab = el("label", "bmeta", field === "planned" ? "CardSelector focus:" : "Choice:");
     lab.htmlFor = id;
     row.appendChild(lab);
     var sel = el("select");

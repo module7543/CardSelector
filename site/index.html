@@ -146,6 +146,56 @@
   .usehead.usem { font-size: 16px; }
   .usehead .usemname { font-weight: 700; }
   .usesub { margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--line); font-size: 12.5px; color: var(--muted); }
+  /* Where you're paying: Any | In store | Online (one setting with the Filters row). */
+  .chansel { display: flex; margin: 0 0 10px; padding: 3px; gap: 3px; background: var(--surface); border: 1px solid var(--line); border-radius: 11px; }
+  .chansel button {
+    flex: 1; min-height: 38px; padding: 0 6px; font: inherit; font-size: 14px; font-weight: 600; color: var(--text);
+    background: transparent; border: 0; border-radius: 8px; cursor: pointer; -webkit-tap-highlight-color: transparent;
+  }
+  .chansel button[aria-pressed="true"] { background: var(--accent); color: var(--bg); }
+  .chansel button:focus-visible, .usechan:focus-visible, .rates > summary:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+  /* A channel's answer that picks that channel when tapped (the rows under Any, the better other channel). */
+  .usechan {
+    display: block; width: 100%; min-height: 44px; margin: 0; padding: 8px 10px; font: inherit; text-align: left; color: var(--text);
+    background: var(--surface); border: 1px solid var(--line); border-radius: 10px; cursor: pointer; -webkit-tap-highlight-color: transparent;
+  }
+  .usehead.usechan { font-size: 15px; }
+  .usehead.usechan + .usehead.usechan { margin-top: 6px; }
+  .usealt { margin-top: 8px; font-size: 14px; font-weight: 600; }
+  .usechan .usechn { font-weight: 700; }
+  .usealt strong { font-weight: 750; color: var(--bonus); }
+  .usealt .useextra { font-weight: 400; color: var(--muted); }
+  .usealt .idot { width: 8px; height: 8px; margin-right: 5px; }
+  /* "+1 pt": what a better line adds over Ready now. */
+  .usegain {
+    display: inline-block; margin-left: 6px; padding: 0 6px; line-height: 18px; font-size: 12px; font-weight: 700;
+    color: var(--bonus); background: var(--surface); border: 1px solid var(--bonus); border-radius: 9px; vertical-align: 1px;
+  }
+  /* Citi Custom Cash: conditional, never the answer; a separate alternative when it would beat it. */
+  .usecond.strong { margin-top: 6px; font-size: 15px; font-weight: 600; overflow-wrap: anywhere; }
+  .usecond.strong strong { font-weight: 750; color: var(--text); }
+  .usecond.strong .useextra { font-size: 13.5px; font-weight: 400; color: var(--muted); }
+  .usecond .idot { width: 8px; height: 8px; margin-right: 5px; opacity: .7; }
+  /* Card rates here: the bonus rows, folded at the bottom of the answer card. */
+  details.rates { margin-top: 8px; padding-top: 6px; border-top: 1px solid var(--line); }
+  .rates > summary {
+    display: flex; align-items: center; min-height: 40px; gap: 4px; list-style: none; cursor: pointer;
+    font-size: 13.5px; color: var(--muted); -webkit-tap-highlight-color: transparent;
+  }
+  .rates > summary::-webkit-details-marker { display: none; }
+  .rates > summary::marker { content: ""; }
+  .rates > summary::after {
+    content: ""; width: 7px; height: 7px; margin: -3px 4px 0 auto; flex: none;
+    border-right: 1.5px solid var(--muted); border-bottom: 1.5px solid var(--muted); transform: rotate(45deg);
+  }
+  .rates[open] > summary::after { margin-top: 3px; transform: rotate(-135deg); }
+  .rates .ratesh { font-weight: 700; color: var(--text); flex: none; }
+  .rates .ratesl { min-width: 0; overflow-wrap: anywhere; }
+  .rates .bonusrows { margin-top: 4px; }
+  .rates .bonusrow { background: var(--surface); }
+  .rates .bonusrow.hint { background: var(--neutral-bg); }
+  .ratesnc { margin-top: 8px; padding: 8px 14px; background: var(--neutral-bg); border-radius: 12px; font-size: 13px; }
+  .ratesnch { font-weight: 700; color: var(--neutral-text); }
 
   /* Filters: one summary button on phones, the full panel on wide screens. On phones the bonus strip, the
      Filters button and the open filters join into one panel (strip on top, square corners where they meet). */
