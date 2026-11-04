@@ -43,12 +43,12 @@
     {
       "card": "Citi Double Cash",
       "read_date": "2026-10-18",
-      "offers_found": 7
+      "offers_found": 8
     },
     {
       "card": "Citi Custom Cash",
       "read_date": "2026-10-18",
-      "offers_found": 4
+      "offers_found": 5
     }
   ],
   "offers": [
@@ -687,6 +687,25 @@
       "status_since": "2026-10-18"
     },
     {
+      "id": "citi-double-cash/taqueria-el-tapatio-woodland-hills",
+      "card": "Citi Double Cash",
+      "merchant": "Taqueria El Tapatio - Woodland Hills",
+      "category": "Dining",
+      "bonus": "5% Back",
+      "expires": "2026-12-02",
+      "expires_text": "38d left",
+      "activation": "needs_activation",
+      "channel": "none_shown",
+      "spend_cap": null,
+      "minimum_spend": null,
+      "fine_print": null,
+      "other_details": [],
+      "last_read": "2026-10-18",
+      "first_seen": "2026-10-18",
+      "status": "active",
+      "status_since": "2026-10-18"
+    },
+    {
       "id": "citi-double-cash/taqueria-el-tapatio",
       "card": "Citi Double Cash",
       "merchant": "Taqueria El Tapatio",
@@ -699,10 +718,7 @@
       "spend_cap": null,
       "minimum_spend": null,
       "fine_print": null,
-      "other_details": [
-        "2 locations listed",
-        "Location listed: Woodland Hills"
-      ],
+      "other_details": [],
       "last_read": "2026-10-18",
       "first_seen": "2026-10-18",
       "status": "active",
@@ -812,9 +828,9 @@
       "status_since": "2026-10-18"
     },
     {
-      "id": "citi-double-cash/subway",
+      "id": "citi-double-cash/subway-woodland-hills",
       "card": "Citi Double Cash",
-      "merchant": "Subway",
+      "merchant": "Subway - Woodland Hills",
       "category": "Dining",
       "bonus": "5% Back",
       "expires": "2026-12-02",
@@ -824,9 +840,26 @@
       "spend_cap": null,
       "minimum_spend": null,
       "fine_print": null,
-      "other_details": [
-        "Location listed: Woodland Hills"
-      ],
+      "other_details": [],
+      "last_read": "2026-10-18",
+      "first_seen": "2026-10-18",
+      "status": "active",
+      "status_since": "2026-10-18"
+    },
+    {
+      "id": "citi-custom-cash/taqueria-el-tapatio-woodland-hills",
+      "card": "Citi Custom Cash",
+      "merchant": "Taqueria El Tapatio - Woodland Hills",
+      "category": "Dining",
+      "bonus": "5% Back",
+      "expires": "2026-12-02",
+      "expires_text": "38d left",
+      "activation": "needs_activation",
+      "channel": "none_shown",
+      "spend_cap": null,
+      "minimum_spend": null,
+      "fine_print": null,
+      "other_details": [],
       "last_read": "2026-10-18",
       "first_seen": "2026-10-18",
       "status": "active",
@@ -845,10 +878,7 @@
       "spend_cap": null,
       "minimum_spend": null,
       "fine_print": null,
-      "other_details": [
-        "2 locations listed",
-        "Location listed: Woodland Hills"
-      ],
+      "other_details": [],
       "last_read": "2026-10-18",
       "first_seen": "2026-10-18",
       "status": "active",

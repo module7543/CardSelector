@@ -2,7 +2,7 @@
 """Checks for tools/refresh.py:  python3 tools/refresh_test.py
 
 Each check runs the tool in a throwaway copy of the repo layout: tools/ (refresh, validate, cuisines,
-fold_phone_edits) and site/data/ holding the fixture snapshot (tools/fixtures/offers.json, cuisines.json: 42 offers
+fold_phone_edits) and site/data/ holding the fixture snapshot (tools/fixtures/offers.json, cuisines.json: 45 offers
 copied from offers.json on 2026-10-20) plus the repo's cards.json, bonus-categories.json, card-links.json and
 merchant-locations.json (empty; checks that need groups write their own).
 The fixture CSVs (tools/fixtures/*.csv) are in each issuer's real column format and reproduce the snapshot when
@@ -429,7 +429,7 @@ class RefreshTest(unittest.TestCase):
     # --- checks that stop the run -------------------------------------------------------------------------------
 
     def test_size_check_refuses(self):
-        p = self.t.csv("Citi Double Cash", lambda rows: rows[:5])  # 4 of 7 offers (Taqueria's 2 rows are 1 offer)
+        p = self.t.csv("Citi Double Cash", lambda rows: rows[:5])  # 5 of 8 offers
         code, out, rep = self.t.run("report", "Citi Double Cash", [p])
         self.assertFalse(rep["size_check"]["pass"], out)
         self.assertIn("STOP", out)
@@ -438,7 +438,7 @@ class RefreshTest(unittest.TestCase):
         self.assertEqual(code, 2, out)
         self.assertEqual(self.t.read("offers.json"), before)
         self.apply_ok("Citi Double Cash", [p], decisions={"owner_approved": ["size_check"]})
-        self.assertEqual(self.t.offers()["citi-double-cash/subway"]["status"], "missing")
+        self.assertEqual(self.t.offers()["citi-double-cash/subway-woodland-hills"]["status"], "missing")
 
     def test_too_many_missing_stops(self):
         d = self.t.load()
@@ -598,12 +598,14 @@ class RefreshTest(unittest.TestCase):
         self.assertNotIn("Traceback", out)
 
     def test_renamed_location_member_extended_automatically_is_held(self):
-        # "eBay - LA" -> "eBay - La Habra" pairs automatically ("extends"); the approved member must not follow
+        # "eBay - LA" -> "eBay - La Habra" is proposed, never automatic; accepted, the approved member still stays
         self.t.change_offers(lambda by, d: by["capital-one/ebay"].update(merchant="eBay - LA"))
         self.t.write_json("merchant-locations.json", {"groups": {"eBay": ["eBay - LA"]}})
         before = self.t.read("merchant-locations.json")
         p = self.t.csv("Capital One", lambda rows: [dict(r, merchant="eBay - La Habra") if r["merchant"] == "eBay" else r for r in rows])
-        out, rep = self.apply_ok("Capital One", [p])
+        self.assertEqual(self.t.run("apply", "Capital One", [p], decisions={})[0], 2)
+        pair = {"saved": "capital-one/ebay", "file": "eBay - La Habra", "bonus": "Spend $20, earn $10", "accept": True}
+        out, rep = self.apply_ok("Capital One", [p], decisions={"pairs": [pair]})
         self.assertEqual(self.t.offers()["capital-one/ebay"]["merchant"], "eBay - La Habra", out)
         self.assertEqual(rep["location_moves"], [], out)
         self.assertEqual([m["to"] for m in rep["location_held"]], ["eBay - La Habra"], out)
@@ -625,6 +627,49 @@ class RefreshTest(unittest.TestCase):
         self.assertEqual([(m["to"], m["why"]) for m in rep["location_held"]],
                          [("eBay - Newport Beach", "another offer still has the old name (the approved member stays as it is)")], out)
         self.assertEqual(self.t.read("merchant-locations.json"), before)
+
+    def test_cut_off_member_completed_differently_on_another_offer_is_held(self):
+        # R10: an earlier read completed the approved cut-off name one way (now on another card's offer); this read
+        # completes it another way. The ambiguity is never settled automatically: the member stays as approved.
+        def setup(by, d):
+            by["capital-one/ebay"].update(merchant="eBay - Newport Be...")
+            boa = next(o for o in d["offers"] if o["card"] == "Bank of America")
+            boa.update(merchant="eBay - Newport Beach", category="Marketplaces & Department Stores")
+        self.t.change_offers(setup)
+        self.t.write_json("merchant-locations.json", {"groups": {"eBay": ["eBay - Newport Be..."]}})
+        before = self.t.read("merchant-locations.json")
+        p = self.t.csv("Capital One", lambda rows: [dict(r, merchant="eBay - Newport Bend") if r["merchant"] == "eBay" else r for r in rows])
+        out, rep = self.apply_ok("Capital One", [p])
+        self.assertEqual(self.t.offers()["capital-one/ebay"]["merchant"], "eBay - Newport Bend", out)  # a visible cut: the offer follows
+        self.assertEqual(rep["location_moves"], [], out)
+        self.assertEqual([(m["to"], m["why"]) for m in rep["location_held"]],
+                         [("eBay - Newport Bend", "another offer completes the cut-off name differently ('eBay - Newport Beach')")], out)
+        self.assertEqual(self.t.read("merchant-locations.json"), before)
+
+    def test_location_style_names_with_a_different_location_never_pair_automatically(self):
+        for old, new in [("eBay - LA", "eBay - La Habra"), ("eBay - West", "eBay - West Hollywood"), ("eBay - North", "eBay - Northridge")]:
+            with self.subTest(old=old, new=new):
+                t = Tree()
+                try:
+                    t.change_offers(lambda by, d: by["capital-one/ebay"].update(merchant=old))
+                    p = t.csv("Capital One", lambda rows: [dict(r, merchant=new) if r["merchant"] == "eBay" else r for r in rows])
+                    code, out, rep = t.run("report", "Capital One", [p])
+                    self.assertEqual(code, 0, out)
+                    self.assertNotIn("capital-one/ebay", [m["id"] for m in rep["paired"]], out)
+                    self.assertEqual([(m["saved"], m["file"]) for m in rep["proposals"]], [("capital-one/ebay", new)], out)
+                    self.assertIn("never automatic", rep["proposals"][0]["why"], out)
+                    code, out, _ = t.run("apply", "Capital One", [p], decisions={})
+                    self.assertEqual(code, 2, out)  # waits for the decision
+                finally:
+                    t.close()
+
+    def test_visibly_cut_location_still_pairs_automatically(self):
+        # "eBay - Newport Be..." on screen, "eBay - Newport Beach" now: the same place, completed (no location file needed)
+        self.t.change_offers(lambda by, d: by["capital-one/ebay"].update(merchant="eBay - Newport Be..."))
+        p = self.t.csv("Capital One", lambda rows: [dict(r, merchant="eBay - Newport Beach") if r["merchant"] == "eBay" else r for r in rows])
+        code, out, rep = self.t.run("report", "Capital One", [p])
+        self.assertEqual([(m["id"], m["rule"]) for m in rep["paired"] if m["id"] == "capital-one/ebay"], [("capital-one/ebay", "truncated")], out)
+        self.assertEqual(rep["proposals"], [], out)
 
     def test_cut_off_member_completed_two_ways_is_held(self):
         def two(by, d):
@@ -687,7 +732,8 @@ class RefreshTest(unittest.TestCase):
                 if r["merchant"] == "eBay":
                     r["merchant"] = "eBay - Outlet Store"
             return rows
-        code, out, rep = self.t.run("report", "Capital One", [self.t.csv("Capital One", fn)])
+        pair = {"saved": "capital-one/ebay", "file": "eBay - Outlet Store", "bonus": "Spend $20, earn $10", "accept": True}
+        code, out, rep = self.t.run("report", "Capital One", [self.t.csv("Capital One", fn)], decisions={"pairs": [pair]})
         self.assertEqual(code, 0, out)
         self.assertIn("capital-one/ebay", [r["id"] for r in rep["renames"]], out)
         self.assertEqual(rep["location_candidates"], [], out)
@@ -721,8 +767,8 @@ class RefreshTest(unittest.TestCase):
         self.assertIn("is in no offer now", out)  # validate.py's note on the stale member
 
     def test_location_file_put_back_when_validate_fails(self):
-        self.t.change_offers(lambda by, d: by["capital-one/ebay"].update(merchant="eBay - Outlet"))
-        self.t.write_json("merchant-locations.json", {"groups": {"eBay": ["eBay - Outlet"]}})
+        self.t.change_offers(lambda by, d: by["capital-one/ebay"].update(merchant="eBay - Outlet St..."))
+        self.t.write_json("merchant-locations.json", {"groups": {"eBay": ["eBay - Outlet St..."]}})
         before = self.t.read("merchant-locations.json")
         cards = self.t.load("cards.json")
         cards["offer_lists"].pop("Citi Custom Cash")
@@ -734,7 +780,66 @@ class RefreshTest(unittest.TestCase):
             return rows
         code, out, _ = self.t.run("apply", "Capital One", [self.t.csv("Capital One", fn)], decisions={})
         self.assertNotEqual(code, 0, out)
+        self.assertIn("validate.py failed", out)
         self.assertEqual(self.t.read("merchant-locations.json"), before, out)
+
+    def test_citi_restaurant_location_kept_whole_and_reported(self):
+        # R5: a new Citi RN- row "Subway - Encino" is saved under its full name and listed for the owner, never
+        # stripped to "Subway" or merged into another location
+        p = self.t.csv("Citi Double Cash", lambda rows: rows + [dict(next(r for r in rows if r["offer_id"] == "RN-90008"),
+                                                                     offer_id="RN-99998", merchant="Subway - Encino", bonus="7% Back")])
+        dec = {"categories": {"Subway - Encino": "Dining"}}
+        code, out, rep = self.t.run("report", "Citi Double Cash", [p], decisions=dec)
+        self.assertEqual(code, 0, out)
+        self.assertEqual([m["merchant"] for m in rep["new"]], ["Subway - Encino"], out)
+        self.assertEqual({c["merchant"]: c["matches"] for c in rep["location_candidates"]},
+                         {"Subway - Encino": "another location-style name 'Subway - Woodland Hills'"}, out)
+        out, rep = self.apply_ok("Citi Double Cash", [p], decisions=dec)
+        by = self.t.offers()
+        self.assertEqual(by["citi-double-cash/subway-encino"]["merchant"], "Subway - Encino")
+        self.assertFalse(any(t.startswith("Location") for t in by["citi-double-cash/subway-encino"]["other_details"]))
+        self.assertEqual(self.t.load("merchant-locations.json"), {"groups": {}})
+
+    def test_citi_same_name_rows_are_one_offer_and_locations_stay_apart(self):
+        # Two tiles under one name and bonus are one offer ("2 locations listed"); a " - <place>" row stays its own.
+        def fn(rows):
+            t = next(r for r in rows if r["offer_id"] == "RN-90002")
+            return rows + [dict(t, offer_id="RN-99997")]
+        code, out, rep = self.t.run("report", "Citi Double Cash", [self.t.csv("Citi Double Cash", fn)])
+        self.assertEqual(code, 0, out)
+        self.assertEqual(rep["new"], [], out)
+        self.apply_ok("Citi Double Cash", [self.t.csv("Citi Double Cash", fn)])
+        by = self.t.offers()
+        self.assertIn("2 locations listed", by["citi-double-cash/taqueria-el-tapatio"]["other_details"])
+        self.assertEqual(by["citi-double-cash/taqueria-el-tapatio-woodland-hills"]["merchant"], "Taqueria El Tapatio - Woodland Hills")
+
+    def test_citi_records_from_the_old_location_rule_are_restored_on_the_next_read(self):
+        # Saved as the old rule made them: Taqueria El Tapatio (2 rows merged, location in a note), Subway (location
+        # stripped). The next read keeps each row's full name and drops the old notes.
+        def old(by, d):
+            d["offers"] = [o for o in d["offers"] if not o["id"].endswith("/taqueria-el-tapatio-woodland-hills")]
+            for t in d["offers"]:
+                if t["id"].endswith("/taqueria-el-tapatio"):
+                    t["other_details"] = ["2 locations listed", "Location listed: Woodland Hills"]
+            s = next(o for o in d["offers"] if o["id"] == "citi-double-cash/subway-woodland-hills")
+            s.update(id="citi-double-cash/subway", merchant="Subway", other_details=["Location listed: Woodland Hills"])
+        self.t.change_offers(old)
+        cj = self.t.load("cuisines.json")
+        cj["merchants"].pop("Subway - Woodland Hills")  # as in the real data: only the stripped name had an entry
+        (self.t.data / "cuisines.json").write_text(json.dumps(cj, indent=2, ensure_ascii=False) + "\n")
+        p = self.t.csv("Citi Double Cash")
+        dec = {"categories": {"Taqueria El Tapatio - Woodland Hills": "Dining"}}
+        code, out, rep = self.t.run("report", "Citi Double Cash", [p], decisions=dec)
+        self.assertEqual(code, 0, out)
+        self.assertEqual([m["merchant"] for m in rep["new"]], ["Taqueria El Tapatio - Woodland Hills"], out)
+        self.assertEqual([(r["id"], r["to"]) for r in rep["renames"]], [("citi-double-cash/subway", "Subway - Woodland Hills")], out)
+        self.assertEqual([c["merchant"] for c in rep["location_candidates"]], ["Taqueria El Tapatio - Woodland Hills"], out)
+        self.apply_ok("Citi Double Cash", [p], decisions=dec)
+        by = self.t.offers()
+        self.assertEqual(by["citi-double-cash/taqueria-el-tapatio"]["other_details"], [])
+        self.assertEqual((by["citi-double-cash/subway"]["merchant"], by["citi-double-cash/subway"]["other_details"]),
+                         ("Subway - Woodland Hills", []))
+        self.assertEqual(self.t.load("merchant-locations.json"), {"groups": {}})
 
     def test_validate_failure_puts_files_back(self):
         cards = self.t.load("cards.json")
@@ -1255,8 +1360,7 @@ class RefreshTest(unittest.TestCase):
         # Read 2026-11-01: BestBuy and Splash (estimated end 10-30) are gone; the rest count down to their same end.
         from datetime import date
         ends = {o["merchant"]: o["expires"] for o in self.t.offers().values() if o["card"] == "Citi Double Cash"}
-        ends.update({"oribe.com": ends["Oribe Hair Care"], "Splash": ends["Splash Wines"], "Kickin KAsian Encino": ends["Kickin KAsian - Encino"],
-                     "Subway - Woodland Hills": ends["Subway"], "Taqueria El Tapatio - Woodland Hills": ends["Taqueria El Tapatio"]})
+        ends.update({"oribe.com": ends["Oribe Hair Care"], "Splash": ends["Splash Wines"], "Kickin KAsian Encino": ends["Kickin KAsian - Encino"]})
         def fix(r):
             if r["source_tab"] == "Redeemed":
                 return r
@@ -1264,12 +1368,11 @@ class RefreshTest(unittest.TestCase):
             return dict(r, expiration=f"{left}d left")
         p = self.later_read("Citi Double Cash", "2026-11-01",
                             lambda r: r["source_tab"] == "Redeemed" or ends[{"oribe.com": "Oribe Hair Care", "Splash": "Splash Wines",
-                                "Kickin KAsian Encino": "Kickin KAsian - Encino", "Subway - Woodland Hills": "Subway",
-                                "Taqueria El Tapatio - Woodland Hills": "Taqueria El Tapatio"}.get(r["merchant"], r["merchant"])] >= "2026-11-01", fix)
+                                "Kickin KAsian Encino": "Kickin KAsian - Encino"}.get(r["merchant"], r["merchant"])] >= "2026-11-01", fix)
         code, out, rep = self.t.run("report", "Citi Double Cash", [p], read_date=None)
         self.assertEqual(rep["missing"], [], out)
         self.assertEqual(sorted(m["id"] for m in rep["expired_absent"]), ["citi-double-cash/bestbuy", "citi-double-cash/splash-wines"], out)
-        self.assertEqual((rep["size_check"]["batch"], rep["size_check"]["prior_active"], rep["changes"]["fields"].get("expires", 0)), (5, 5, 0), out)
+        self.assertEqual((rep["size_check"]["batch"], rep["size_check"]["prior_active"], rep["changes"]["fields"].get("expires", 0)), (6, 6, 0), out)
         self.apply_ok("Citi Double Cash", [p], read_date=None, dec_date="2026-11-01")
         self.assertEqual(self.t.offers()["citi-double-cash/bestbuy"]["status"], "expired")
 
@@ -1390,9 +1493,10 @@ class RefreshTest(unittest.TestCase):
         self.assertEqual(len(rep["expired_absent"]), 4)
 
     def test_review_N3_used_offers_since_the_last_read_lower_the_base(self):
-        # Citi Double Cash: 5 of 7 offers marked used after the last full read (2026-10-18); a complete read lists 2.
-        used = ("citi-double-cash/taqueria-el-tapatio", "citi-double-cash/oribe-hair-care", "citi-double-cash/lyft",
-                "citi-double-cash/kickin-kasian-encino", "citi-double-cash/subway")
+        # Citi Double Cash: 6 of 8 offers marked used after the last full read (2026-10-18); a complete read lists 2.
+        used = ("citi-double-cash/taqueria-el-tapatio", "citi-double-cash/taqueria-el-tapatio-woodland-hills",
+                "citi-double-cash/oribe-hair-care", "citi-double-cash/lyft", "citi-double-cash/kickin-kasian-encino",
+                "citi-double-cash/subway-woodland-hills")
         def fn(by, d):
             for i in used:
                 by[i]["status"], by[i]["status_since"] = "used", "2026-10-20"
