@@ -599,10 +599,11 @@ class Hub {
     const names = await page.$$eval("#use .usemname, #use .useat", es => es.map(e => e.textContent.replace(/:\s*$/, "").replace(/^At /, "")).sort());
     return { names: JSON.stringify(names), n: await page.evaluate(() => window.__locations), rows: rows.filter(r => !r.gone).length };
   };
-  await fresh({ over: { "data/offers.json": locOffers } });
+  const noGroups = '{ "groups": {} }\n'; // this section's own starting state, whatever groups are deployed
+  await fresh({ over: { "data/offers.json": locOffers, "data/merchant-locations.json": noGroups } });
   st = await copy();
   let lv = await locView();
-  ok(st.locs === read("data/merchant-locations.json").toString(), "the saved set holds merchant-locations.json as deployed (" + JSON.stringify(st.locs) + ")");
+  ok(st.locs === noGroups, "the saved set holds merchant-locations.json as deployed (" + JSON.stringify(st.locs) + ")");
   ok(lv.names === TWO && lv.n === 0 && lv.rows === 2, "empty locations file: Zqxloc Pizza and its - Newport Beach name are two merchants (" + lv.names + ")");
   const sw13 = await page.evaluate(() => window.__swaps || 0);
   site.publish({ "data/merchant-locations.json": grouping });

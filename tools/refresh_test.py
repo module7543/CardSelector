@@ -3,8 +3,8 @@
 
 Each check runs the tool in a throwaway copy of the repo layout: tools/ (refresh, validate, cuisines,
 fold_phone_edits) and site/data/ holding the fixture snapshot (tools/fixtures/offers.json, cuisines.json: 45 offers
-copied from offers.json on 2026-10-20) plus the repo's cards.json, bonus-categories.json, card-links.json and
-merchant-locations.json (empty; checks that need groups write their own).
+copied from offers.json on 2026-10-20) plus the repo's cards.json, bonus-categories.json and card-links.json, and
+an empty merchant-locations.json of its own (checks that need groups write theirs).
 The fixture CSVs (tools/fixtures/*.csv) are in each issuer's real column format and reproduce the snapshot when
 read on 2026-10-25 (Citi countdowns and Chase end timestamps are set for that date). Checks change a copy of a
 CSV or of the snapshot, run report / apply, and compare. The repo's own data is never touched.
@@ -34,9 +34,10 @@ class Tree:
             shutil.copy(REPO / "tools" / f, self.root / "tools" / f)
         for f in ("offers.json", "cuisines.json"):
             shutil.copy(FIX / f, data / f)
-        for f in ("cards.json", "bonus-categories.json", "card-links.json", "merchant-locations.json"):
+        for f in ("cards.json", "bonus-categories.json", "card-links.json"):
             shutil.copy(REPO / "site/data" / f, data / f)
         self.data = data
+        self.write_json("merchant-locations.json", {"groups": {}})  # its own, whatever groups are deployed
         self.write_json("phone-edits.json", edits or {})
 
     def close(self):
