@@ -80,7 +80,8 @@ const label = r => r.merchant + " | " + r.card + " | " + r.bonus;
   })));
   // Merchants the per-merchant "Use:" headline names (none for the category headline).
   const useNames = () => page.$$eval("#use .usemname, #use .useat", es => es.map(e => e.textContent.replace(/:\s*$/, "").replace(/^At /, "")).sort());
-  const useText = () => page.$eval("#use", e => e.hidden ? "" : e.innerText);
+  // The answer card's text, without its Any / In store / Online selector and its Card rates here disclosure.
+  const useText = () => page.$eval("#use", e => e.hidden ? "" : [...e.children].filter(c => !c.matches(".chansel, details.rates")).map(c => c.innerText).join("\n"));
   const moreAll = async () => { for (;;) { const b = page.locator("#main > button.more:visible"); if (!(await b.count())) return; await b.click(); } };
   // Fresh page, Best offer unless told otherwise, then the filters and the search.
   const setup = async (q, o = {}) => {
@@ -241,9 +242,16 @@ const label = r => r.merchant + " | " + r.card + " | " + r.bonus;
   }
   await page.unroute("**/data/offers.json");
 
+  // Bonus rows sit in the answer card's "Card rates here", which starts collapsed; opened, they work as before.
+  const openRates = async () => {
+    const st = await page.evaluate(() => { const d = document.querySelector("#use details.rates"); return d ? d.open : null; });
+    if (st === false) await page.click("#use details.rates > summary");
+    await page.waitForTimeout(50);
+    return st;
+  };
   // Bonus rows open and close, closed on every render. Closed, one line of whole entries then "+N" for the rest
   // (entries left off plus the ones below the everyday rate); open, every entry on its own line, then the notes.
-  const bonusRows = () => page.$$eval("#main .bonusrows > details.bonusrow", ds => ds.map(d => {
+  const bonusRows = () => page.$$eval("#use .bonusrows > details.bonusrow", ds => ds.map(d => {
     const line = d.querySelector(".bline"), lr = line.getBoundingClientRect();
     const shown = [...line.querySelectorAll(".bent")].filter(e => getComputedStyle(e).display !== "none");
     const more = line.querySelector(".bplus"), moreOn = getComputedStyle(more).display !== "none";
@@ -260,8 +268,10 @@ const label = r => r.merchant + " | " + r.card + " | " + r.bonus;
     for (const [q, o] of [["round table"], ["pizza"], ["shell"], ["costco gas"], ["", { cat: "Dining" }], ["", { cat: "Travel" }]]) {
       await setup(q, o);
       await page.waitForTimeout(100);
-      const br = await bonusRows();
       const name = (q || o.cat) + " @" + w;
+      const was = await openRates();
+      if (was !== null) ok(was === false, name + ": Card rates here starts collapsed");
+      const br = await bonusRows();
       if (!br.length) { skip(name + ": no bonus row"); continue; }
       seen.push(name);
       ok(br.every(r => !r.open && r.bodyHidden), name + ": " + br.length + " bonus row(s) render closed");
@@ -270,16 +280,16 @@ const label = r => r.merchant + " | " + r.card + " | " + r.bonus;
         name + ": +N counts every entry not on the line (" + br.map(r => r.shown + " shown +" + r.n + " of " + r.total).join("; ") + ")");
       ok(br.every(r => r.sumH >= 44 && Math.abs(r.sumW - r.rowW) <= 1 && r.rowW <= w - 32), name + ": summary is a full-width 44px+ tap target (" + br.map(r => r.sumW + "x" + r.sumH).join("; ") + ")");
       if (q === "round table" || o) {
-        await page.locator("#main details.bonusrow > summary").first().click();
-        const op = await page.$eval("#main details.bonusrow", d => ({ open: d.open,
+        await page.locator("#use details.bonusrow > summary").first().click();
+        const op = await page.$eval("#use details.bonusrow", d => ({ open: d.open,
           lis: [...d.querySelectorAll(".blist > li")].map(li => li.checkVisibility() ? li.textContent : null),
           notes: [...d.querySelectorAll(".bnote")].map(n => n.checkVisibility() ? n.textContent : null),
           lineHidden: !d.querySelector(".bline").checkVisibility() }));
         ok(op.open && op.lineHidden && op.lis.length === br[0].total && op.lis.every(Boolean) && op.notes.length && op.notes.every(Boolean) &&
           op.notes.some(n => /^Likely, not certain/.test(n)),
           name + ": opening the first row shows all " + op.lis.length + " entries and " + op.notes.length + " notes, line 2 hidden");
-        await page.locator("#main details.bonusrow > summary").first().click();
-        ok(!(await page.$eval("#main details.bonusrow", d => d.open)), name + ": tapping again closes it");
+        await page.locator("#use details.bonusrow > summary").first().click();
+        ok(!(await page.$eval("#use details.bonusrow", d => d.open)), name + ": tapping again closes it");
       }
     }
     ok(seen.length >= 4, "bonus rows checked at " + w + "px (" + seen.join(", ") + ")");
@@ -287,8 +297,9 @@ const label = r => r.merchant + " | " + r.card + " | " + r.bonus;
   await page.setViewportSize({ width: 390, height: 844 });
   // The round table row squeezed to 150px refits and still shows only whole names.
   await setup("round table");
+  await openRates();
   const fitNarrow = await page.evaluate(() => {
-    const d = document.querySelector("#main details.bonusrow"); d.parentNode.style.width = "150px";
+    const d = document.querySelector("#use details.bonusrow"); d.parentNode.style.width = "150px";
     return new Promise(r => requestAnimationFrame(() => requestAnimationFrame(() => {
       const line = d.querySelector(".bline"), lr = line.getBoundingClientRect();
       const shown = [...line.querySelectorAll(".bent")].filter(e => getComputedStyle(e).display !== "none");
@@ -450,8 +461,9 @@ const label = r => r.merchant + " | " + r.card + " | " + r.bonus;
       open: [...document.querySelectorAll("li.offer button.toggle[aria-expanded=true]")].map(b => b.closest("li").querySelector(".merchant").textContent),
       filters: document.getElementById("filters").classList.contains("open"), strip: document.getElementById("bstrip").open,
       more: [...document.querySelectorAll("#blist li[data-eid] > details.bmore[open]")].map(d => d.parentNode.getAttribute("data-eid")),
-      rows: [...document.querySelectorAll("#main details.bonusrow[open]")].map(d => d.getAttribute("data-topic")),
-      leads: [...document.querySelectorAll("#main details.bonusrow[open] .bhead")].map(h => h.textContent),
+      rates: (document.querySelector("#use details.rates") || {}).open,
+      rows: [...document.querySelectorAll("#use details.bonusrow[open]")].map(d => d.getAttribute("data-topic")),
+      leads: [...document.querySelectorAll("#use details.bonusrow[open] .bhead")].map(h => h.textContent),
       expired: (document.querySelector("#main details.expired") || {}).open,
       fresh: document.getElementById("foot").open, edit: document.getElementById("editmode").open,
       gone: [...document.querySelectorAll("#main details.expired li.offer .merchant")].map(e => e.textContent),
@@ -482,7 +494,8 @@ const label = r => r.merchant + " | " + r.card + " | " + r.bonus;
     await page.locator("li.offer:has(.merchant:text-is('Zzday Ends Tomorrow')) button.toggle").first().click();
     await page.click("#bstrip > summary");
     await page.locator("#blist li[data-eid='citi-custom-cash/standing'] > details.bmore > summary").click();
-    await page.locator("#main details.bonusrow > summary").first().click();
+    await page.click("#use details.rates > summary");
+    await page.locator("#use details.bonusrow > summary").first().click();
     await page.locator("#main details.expired > summary").click(); // closed (it opens under a search)
     await page.evaluate(() => { document.getElementById("foot").open = true; document.getElementById("editmode").open = true; });
     await page.evaluate(() => { const q = document.getElementById("q"); q.setSelectionRange(2, 2); });
@@ -490,7 +503,7 @@ const label = r => r.merchant + " | " + r.card + " | " + r.bonus;
     await page.evaluate(() => window.scrollTo(0, Math.min(700, document.documentElement.scrollHeight - innerHeight)));
     await page.clock.pauseAt(new Date(2026, 9, 21, 23, 59, 50));
   };
-  const sameState = (a, b) => ["q", "caret", "focus", "cats", "cards", "cuis", "chans", "acts", "sort", "open", "filters", "strip", "more", "rows", "expired", "fresh", "edit"]
+  const sameState = (a, b) => ["q", "caret", "focus", "cats", "cards", "cuis", "chans", "acts", "sort", "open", "filters", "strip", "more", "rates", "rows", "expired", "fresh", "edit"]
     .filter(k => JSON.stringify(a[k]) !== JSON.stringify(b[k]));
   for (const how of ["midnight timer", "hidden across midnight, visibilitychange", "bfcache pageshow"]) {
     const ctx = await dayCtx(2026, 9, 21);
@@ -616,7 +629,7 @@ const label = r => r.merchant + " | " + r.card + " | " + r.bonus;
     d.entries.forEach(e => { if (FORCE.has(e.card)) e.activation = "not_confirmed"; });
     await route.fulfill({ json: d });
   });
-  const marks = () => page.$$eval("#main details.bonusrow .bent", (es, force) => {
+  const marks = () => page.$$eval("#use details.bonusrow .bent", (es, force) => {
     const ref = document.querySelector("#bsum .bwarn"), rs = ref && getComputedStyle(ref);
     return es.map(e => {
       const mk = e.querySelector(".bwarnmk"), ms = mk && getComputedStyle(mk), sr = e.querySelector(".sr-only:last-child");
@@ -632,6 +645,7 @@ const label = r => r.merchant + " | " + r.card + " | " + r.bonus;
       await setup(q, o);
       await page.waitForTimeout(100);
       const name = (q || o.cat) + " @" + w + ", not activated";
+      await openRates();
       const mm = await marks(), br = await bonusRows();
       if (!br.length) { skip(name + ": no bonus row"); continue; }
       warned += mm.filter(m => m.mk).length;
@@ -651,7 +665,8 @@ const label = r => r.merchant + " | " + r.card + " | " + r.bonus;
     await setup(q, o);
     await page.waitForTimeout(100);
     const name = (q || o.cat) + ", caveat line";
-    const cv = await page.$$eval("#main details.bonusrow", ds => ds.map(d => {
+    await openRates();
+    const cv = await page.$$eval("#use details.bonusrow", ds => ds.map(d => {
       const c = d.querySelector(".bcav"), notes = [...d.querySelectorAll(".bnote")].map(n => n.textContent);
       const own = notes.filter(n => !/^Matched: |^Likely, not certain/.test(n));
       if (!c) return { none: true, own: own.length };
@@ -667,8 +682,8 @@ const label = r => r.merchant + " | " + r.card + " | " + r.bonus;
     ok(withC.every(x => Math.abs(x.h - 18) < 0.5 && x.rects === 1 && x.white === "nowrap" && x.ell === "ellipsis" && x.inside && x.sumH >= 44),
       name + ": one 18px line, cut with an ellipsis inside the summary, summary 44px+ (" + withC.map(x => x.h + "px, " + x.sumH + "px").join("; ") + ")");
     const i = cv.findIndex(x => !x.none);
-    await page.locator("#main details.bonusrow > summary").nth(i).click();
-    const op = await page.$eval("#main", (m, i) => {
+    await page.locator("#use details.bonusrow > summary").nth(i).click();
+    const op = await page.$eval("#use", (m, i) => {
       const d = m.querySelectorAll("details.bonusrow")[i];
       return { open: d.open, cav: d.querySelector(".bcav").checkVisibility(), notes: [...d.querySelectorAll(".bnote")].map(n => n.checkVisibility() && n.getClientRects().length > 0 ? n.textContent : null) };
     }, i);
@@ -743,7 +758,7 @@ const label = r => r.merchant + " | " + r.card + " | " + r.bonus;
         groups, rows: [...document.querySelectorAll("#main li.offer")].map(li => li.querySelector(".merchant").textContent + " | " + li.querySelector(".mcard").textContent +
           (li.querySelector(".dropped") ? " | " + li.querySelector(".dropped").textContent : "")),
         headline: !document.getElementById("use").hidden, strip: document.getElementById("bstrip").checkVisibility(),
-        bonusRows: document.querySelectorAll("#main .bonusrows").length, expired: document.querySelectorAll("#main details.expired").length
+        bonusRows: document.querySelectorAll(".bonusrows").length, expired: document.querySelectorAll("#main details.expired").length
       };
     });
     await wcLoad();
@@ -1011,8 +1026,10 @@ const label = r => r.merchant + " | " + r.card + " | " + r.bonus;
       .filter({ has: page.locator(".bonus", { hasText: /^20%/ }) }).locator("button.toggle").click();
     const terms = await page.$eval("#main li.offer button.toggle[aria-expanded=true]", b => b.closest("li").innerText);
     ok(/Zq Newport Beach terms only/.test(terms), "locations: the grouped offer's details show its own terms");
-    ok(/Ready now: /.test(g.nb.text) && JSON.stringify(g.nb.names) === JSON.stringify(["Round Table Pizza"]), "locations: \"newport\" names the group's merchant (" + g.nb.names.join(", ") + ")");
-    ok(!g.zq.names.length && /^Ready now: /.test(g.zq.text) && g.zq.rows[0].merchant !== "Zqlocal Shop" && grouped(g.zq.rows.map(r => Object.assign({}, r, { merchant: r.merchant.replace(/^Zqloc - .*$/, "Zqloc") })), "zqloc"),
+    // (Step 2: under Any, an answer whose In store and Online results differ shows two channel rows instead.)
+    const answered = t => /Ready now: |^In store: /m.test(t);
+    ok(answered(g.nb.text) && JSON.stringify(g.nb.names) === JSON.stringify(["Round Table Pizza"]), "locations: \"newport\" names the group's merchant (" + g.nb.names.join(", ") + ")");
+    ok(!g.zq.names.length && answered(g.zq.text) && g.zq.rows[0].merchant !== "Zqlocal Shop" && grouped(g.zq.rows.map(r => Object.assign({}, r, { merchant: r.merchant.replace(/^Zqloc - .*$/, "Zqloc") })), "zqloc"),
       "locations: the four Zqloc members are one merchant: its headline, and its offers first in Best offer (" + g.zq.rows.map(r => r.merchant).join(", ") + ")");
     ok(/^Top offer: Round Table Pizza \d/.test(g.top.top), "locations: Top offer names the group (" + g.top.top + ")");
 
@@ -1027,6 +1044,296 @@ const label = r => r.merchant + " | " + r.card + " | " + r.bonus;
     await page.unroute("**/data/offers.json");
     await page.unroute("**/data/phone-edits.json");
     await page.unroute("**/data/merchant-locations.json");
+  }
+
+  // Step 2, the channel-aware answer card, on fixed fixture offers (offers.json replaced by these only) with a fixed
+  // clock (noon, Nov 4, 2026: the Q4 bonuses are live). The bonus file is the real one, with activations changed per
+  // case; the locations file is a fixture except in the check on the real one at the end.
+  {
+    const ctx2 = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: "block" });
+    page = await ctx2.newPage();
+    const errs = [];
+    page.on("pageerror", e => errs.push(e.message));
+    await page.clock.install({ time: new Date(2026, 10, 4, 12, 0, 0) });
+    const real = JSON.parse(fs.readFileSync(path.join(SITE, "data/offers.json")));
+    const fx = (id, card, merchant, category, bonus, extra) => Object.assign({ id: "test/s2-" + id, card, merchant, category, bonus,
+      expires: null, expires_text: null, activation: "already_activated", channel: "in_store", spend_cap: null, minimum_spend: null,
+      fine_print: null, other_details: [], last_read: "2026-10-18", first_seen: "2026-10-18", status: "active", status_since: "2026-10-18" }, extra || {});
+    const FX = [
+      // La Colombe: Chase 15% online x2 (needs activation), U.S. Bank 15% in store and 15% online.
+      fx("lc-flex", "Chase Freedom Flex", "La Colombe", "Dining", "15% cash back", { activation: "needs_activation", channel: "online", expires: "2026-11-29" }),
+      fx("lc-free", "Chase Freedom", "La Colombe", "Dining", "15% cash back", { activation: "needs_activation", channel: "online", expires: "2026-11-29" }),
+      fx("lc-usb", "U.S. Bank", "La Colombe", "Dining", "15% cash back", { channel: "in_store", expires: "2026-11-27" }),
+      fx("lc-usb-2", "U.S. Bank", "La Colombe", "Dining", "15% cash back", { channel: "online", expires: "2026-11-29" }),
+      // Coffee Bean & Tea Leaf: Chase 10% max $2 with no channel shown x2, Capital One $10 on $20+ online.
+      fx("cb-flex", "Chase Freedom Flex", "Coffee Bean & Tea Leaf", "Dining", "10% cash back", { activation: "needs_activation", channel: "none_shown",
+        fine_print: "Earn 10% cash back with a $2 cash back maximum." }),
+      fx("cb-free", "Chase Freedom", "Coffee Bean & Tea Leaf", "Dining", "10% cash back", { activation: "needs_activation", channel: "none_shown",
+        fine_print: "Earn 10% cash back with a $2 cash back maximum." }),
+      fx("cb-c1", "Capital One", "Coffee Bean & Tea Leaf", "Dining", "Spend $20, earn $10", { activation: "none_shown", channel: "online" }),
+      // A Dining merchant with only a dollar offer that has no minimum (it stays in the rows, never a percent).
+      fx("zd-c1", "Capital One", "Zqdine Grill", "Dining", "$5 back", { activation: "none_shown", channel: "none_shown" }),
+      // An "Up to" offer: never wins on its maximum.
+      fx("zu-c1", "Capital One", "Zqupto Gadgets", "Electronics & Software", "Up to 20% back", { activation: "none_shown", channel: "online" }),
+      // Identity: three JetBlue merchants (an alias never merges), two KitchenAid merchants (no " - " grouping).
+      fx("jb", "Citi Double Cash", "JetBlue", "Travel", "$50 Back", { activation: "needs_activation", channel: "none_shown" }),
+      fx("jb-points", "Citi Double Cash", "JetBlue TrueBlue Points", "Travel", "5% Back", { activation: "needs_activation", channel: "none_shown", aliases: ["JetBlue"] }),
+      fx("jb-vac", "Citi Double Cash", "jetBlue Vacations", "Travel", "4% Back", { activation: "needs_activation", channel: "none_shown" }),
+      fx("ka-major", "Capital One", "KitchenAid - Major Appliances", "Home & Garden", "5% back", { activation: "none_shown", channel: "online" }),
+      fx("ka-counter", "Capital One", "KitchenAid - Countertop Appliances", "Home & Garden", "3% back", { activation: "none_shown", channel: "online" }),
+      // Round Table Pizza with an approved location member (Newport Beach), each offer its own record and terms.
+      fx("rt-flex", "Chase Freedom Flex", "Round Table Pizza", "Dining", "10% cash back", { activation: "needs_activation", channel: "none_shown" }),
+      fx("rt-usb", "U.S. Bank", "Round Table Pizza", "Dining", "6% cash back"),
+      fx("rt-nb", "Bank of America", "Round Table Pizza - Newport Beach", "Dining", "20% Cash back", { fine_print: "Zq Newport Beach terms only" }),
+      fx("rt-nb-2", "Bank of America", "Round Table Pizza - Newport Beach", "Dining", "$5 Cash back"),
+      // Review round 1. Online shopping at Zqalpha (all known online) is not blocked by another merchant's offer
+      // with no channel (Zqalphabet Toys, matched by the same query).
+      fx("za-c1", "Capital One", "Zqalpha", "Electronics & Software", "3% back", { activation: "none_shown", channel: "online" }),
+      fx("zab-flex", "Chase Freedom Flex", "Zqalphabet Toys", "Pets & Baby", "5% cash back", { activation: "needs_activation", channel: "none_shown" }),
+      // The merchants answered follow the channel's matches: under In store only Zqbook Shop has an offer.
+      fx("zb-c1", "Capital One", "Zqbook Outlet", "Clothing & Jewelry", "5% back", { activation: "none_shown", channel: "online" }),
+      fx("zb-usb", "U.S. Bank", "Zqbook Shop", "Clothing & Jewelry", "5% cash back", { channel: "in_store" }),
+      // Only online offers: under In store the answer falls back to the merchant's offers in every channel.
+      fx("zw-c1", "Capital One", "Zqweb Cafe", "Dining", "11% back", { activation: "none_shown", channel: "online" }),
+      // A cuisine search ("burmese", the real cuisines.json detail) in both channels.
+      fx("bu-usb", "U.S. Bank", "Irrawaddy Taste of Burma", "Dining", "5% cash back", { channel: "in_store" }),
+      fx("bu-c1", "Capital One", "Irrawaddy Taste of Burma", "Dining", "5% back", { activation: "none_shown", channel: "online" }),
+      // A Citi Custom Cash offer that leads Top offer under the Dining button (with its planned 5%).
+      fx("zcc", "Citi Custom Cash", "Zqcc Diner", "Dining", "25% Back", { channel: "none_shown" }),
+      // Review round 2. One merchant across every channel stays the merchant under each (store-only partial names).
+      fx("zk-c1", "Capital One", "Zqknown Shop", "Clothing & Jewelry", "10% back", { activation: "none_shown", channel: "online" }),
+      ...["abc", "xyz", "mno", "pqr"].map((x, i) => fx("zk-" + x, "U.S. Bank", "Zqknown" + x + " Store", "Clothing & Jewelry", (2 + i) + "% cash back")),
+      // Two merchants, different online shopping verdicts.
+      fx("zt-c1", "Capital One", "Zqtory", "Clothing & Jewelry", "3% back", { activation: "none_shown", channel: "online" }),
+      fx("zt-flex", "Chase Freedom Flex", "Zqtory Outlet", "Clothing & Jewelry", "5% cash back", { activation: "needs_activation", channel: "none_shown" }),
+      // A typed keyword with no offer of its own (Amazon) next to a merchant with an in-store offer.
+      fx("amf", "U.S. Bank", "Amazon Fresh", "Groceries & Food Delivery", "5% cash back", { channel: "in_store" })
+    ];
+    let BONUS = null; // entries' card -> activation (or "ended"), applied to the real bonus file
+    const realBonus = JSON.parse(fs.readFileSync(path.join(SITE, "data/bonus-categories.json")));
+    await page.route("**/data/offers.json", r => r.fulfill({ json: Object.assign({}, real, { offers: FX }) }));
+    await page.route("**/data/phone-edits.json", r => r.fulfill({ json: {} }));
+    await page.route("**/data/merchant-locations.json", r => r.fulfill({ json: { groups: { "Round Table Pizza": ["Round Table Pizza - Newport Beach"] } } }));
+    await page.route("**/data/bonus-categories.json", r => {
+      const d = JSON.parse(JSON.stringify(realBonus));
+      d.entries.forEach(e => {
+        const b = BONUS && BONUS[e.card];
+        if (b === "ended") { e.start = "2026-07-01"; e.end = "2026-09-30"; } else if (b) e.activation = b;
+      });
+      return r.fulfill({ json: d });
+    });
+    const open = async (q, chan, bonusSet) => {
+      BONUS = bonusSet || null;
+      await page.goto(base);
+      await page.evaluate(c => { try { localStorage.clear(); if (c) localStorage.setItem("cardselector.channel", c); } catch (e) {} }, chan || null);
+      await page.goto(base);
+      await page.waitForFunction(() => window.__cardsReady && window.__bonusReady && document.querySelectorAll("#cards button").length > 1);
+      await page.fill("#q", q);
+      await page.waitForTimeout(150);
+      return ans();
+    };
+    const ans = () => page.evaluate(() => {
+      const u = document.getElementById("use"), sel = u.querySelector(".chansel"), d = u.querySelector("details.rates");
+      return {
+        sel: sel ? [...sel.querySelectorAll("button")].map(b => b.textContent + (b.getAttribute("aria-pressed") === "true" ? "*" : "")).join(" | ") : null,
+        heads: [...u.querySelectorAll(":scope > .usehead:not(.usechan)")].map(e => e.innerText),
+        chanRows: [...u.querySelectorAll(":scope > button.usechan:not(.usealt)")].map(b => b.innerText),
+        alt: (u.querySelector(":scope > .usealt") || {}).innerText || null,
+        cond: [...u.querySelectorAll(":scope > .usecond")].map(e => (e.classList.contains("strong") ? "STRONG " : "muted ") + e.innerText),
+        names: [...u.querySelectorAll(".usemname, .useat")].map(e => e.textContent.replace(/:\s*$/, "").replace(/^At /, "")),
+        rates: d ? { open: d.open, sum: d.querySelector("summary").innerText.replace(/\s+/g, " "), nc: (d.querySelector(".ratesnc") || {}).textContent || "",
+          rows: d.querySelectorAll(".bonusrow").length } : null,
+        text: [...u.children].filter(c => !c.matches(".chansel, details.rates")).map(c => c.innerText).join("\n"),
+        rows: [...document.querySelectorAll("#main > ul.results > li.offer")].map(li => li.getAttribute("data-oid").replace(/^test\/s2-/, "")),
+        rowText: [...document.querySelectorAll("#main > ul.results > li.offer")].map(li => li.innerText),
+        stored: (() => { try { return localStorage.getItem("cardselector.channel"); } catch (e) { return "?"; } })(),
+        filterChan: [...document.querySelectorAll("#chans button[aria-pressed=true]")].map(b => b.textContent).join()
+      };
+    });
+    const J = x => JSON.stringify(x);
+
+    // La Colombe, In store: Smartly 19% ready; only the in-store offer listed; online-only offers hidden; Online is better.
+    let a = await open("la colombe", "store");
+    ok(a.sel === "Any | In store* | Online", "s2 La Colombe in store: the selector shows In store picked (" + a.sel + ")");
+    ok(/^Ready now: Smartly 19%/.test(a.heads[0]) && a.heads.length === 1, "s2 La Colombe in store: Ready now Smartly 19%, no second line (" + J(a.heads) + ")");
+    ok(J(a.rows) === J(["lc-usb"]), "s2 La Colombe in store: only the in-store offer is listed, online-only ones hidden (" + J(a.rows) + ")");
+    ok(!/channel not shown/.test(a.text), "s2 La Colombe in store: nothing called channel not shown (none is)");
+    ok(/^Online: Freedom Flex 20% or Freedom 20% after activating/.test(a.alt || ""), "s2 La Colombe in store: the better Online answer is offered (" + a.alt + ")");
+    ok(a.rates && !a.rates.open && /dining 5%/.test(a.rates.sum) && !/online shopping/.test(a.rates.sum), "s2 La Colombe in store: Card rates collapsed, dining only (" + J(a.rates) + ")");
+    await page.click("#use .usealt");
+    a = await ans();
+    ok(a.sel === "Any | In store | Online*" && a.stored === "online" && a.filterChan === "Online", "s2 tapping the alternate line picks Online (selector, Filters row and storage) (" + J([a.sel, a.stored, a.filterChan]) + ")");
+    ok(await page.evaluate(() => document.activeElement && document.activeElement.matches(".chansel button[data-ch=online]")), "s2 focus goes to the picked selector segment");
+
+    // La Colombe, Online: Smartly 19% ready, After activating Flex / Freedom 20% +1 pt; online shopping counts (all known online).
+    a = await open("la colombe", "online");
+    ok(/^Ready now: Smartly 19%/.test(a.heads[0]), "s2 La Colombe online: Ready now Smartly 19% (" + a.heads[0] + ")");
+    ok(/^After activating: Freedom Flex 20% or Freedom 20%.*\+1 pt/.test(a.heads[1] || ""), "s2 La Colombe online: After activating 20% with +1 pt (" + a.heads[1] + ")");
+    ok(J(a.rows.slice().sort()) === J(["lc-flex", "lc-free", "lc-usb-2"]), "s2 La Colombe online: the three online offers (" + J(a.rows) + ")");
+    ok(/online shopping 5\.25%/.test(a.rates.sum) && !/online only/.test(a.rates.sum) && !a.rates.nc, "s2 La Colombe online: online shopping counted (" + a.rates.sum + ")");
+    ok(!a.alt, "s2 La Colombe online: no alternate line (In store is not better)");
+
+    // La Colombe, Any: an In store row and an Online row, each that channel's answer; all four records listed.
+    a = await open("la colombe", null);
+    ok(a.sel === "Any* | In store | Online", "s2 La Colombe any: Any picked by default (" + a.sel + ")");
+    ok(a.chanRows.length === 2 && /^In store: Smartly 19% ready now/.test(a.chanRows[0]) && !/after activating/.test(a.chanRows[0]) &&
+      /^Online: Smartly 19% ready now · Freedom Flex 20% or Freedom 20% after activating\s*\+1 pt/.test(a.chanRows[1]),
+      "s2 La Colombe any: In store and Online rows, not conflated (" + J(a.chanRows) + ")");
+    ok(J(a.rows.slice().sort()) === J(["lc-flex", "lc-free", "lc-usb", "lc-usb-2"]), "s2 La Colombe any: all four offers stay their own records (" + J(a.rows) + ")");
+    ok(/online shopping 5\.25% online only/.test(a.rates.sum), "s2 La Colombe any: Card rates qualifies online shopping as online only (" + a.rates.sum + ")");
+    await page.click("#use details.rates > summary");
+    let st = await ans();
+    ok(st.rates.open && st.rates.rows >= 2, "s2 Card rates here opens in place (" + J(st.rates) + ")");
+    await page.click("#use details.rates > summary");
+    ok(!(await ans()).rates.open, "s2 Card rates here closes again");
+    await page.click("#use button.usechan[data-ch=store]");
+    a = await ans();
+    ok(a.sel === "Any | In store* | Online" && a.stored === "store" && J(a.rows) === J(["lc-usb"]), "s2 tapping the In store row picks In store (" + J([a.sel, a.stored, a.rows]) + ")");
+    // Remembered across opens.
+    await page.goto(base);
+    await page.waitForFunction(() => window.__cardsReady && window.__bonusReady && document.querySelectorAll("#cards button").length > 1);
+    await page.fill("#q", "la colombe");
+    await page.waitForTimeout(150);
+    a = await ans();
+    ok(a.sel === "Any | In store* | Online" && a.filterChan === "In store", "s2 the channel is remembered across page opens (" + J([a.sel, a.filterChan]) + ")");
+    await page.click("#use .chansel button[data-ch=any]");
+    ok((await ans()).stored === "any", "s2 a selector segment picks that channel (Any)");
+
+    // Coffee Bean & Tea Leaf, Online: Chase rows survive as channel not shown; Capital One's online offer is the best
+    // deal; online shopping not inferred while offers with no channel remain.
+    a = await open("coffee bean", "online");
+    ok(J(a.rows.slice().sort()) === J(["cb-c1", "cb-flex", "cb-free"]), "s2 Coffee Bean online: Chase rows survive with Capital One (" + J(a.rows) + ")");
+    ok(a.rowText.filter(t => /channel not shown/i.test(t)).length === 2, "s2 Coffee Bean online: the two Chase rows say channel not shown");
+    ok(/^Ready now: Freedom Flex 5% or Freedom 5%, \+1 more ready at 5%/.test(a.heads[0]), "s2 Coffee Bean online: Ready now Freedom Flex / Freedom 5%, +1 more ready (Discover it) (" + a.heads[0] + ")");
+    ok(/^Best deal: Discover it \+\$10 on \$20\+/.test(a.heads[1] || ""), "s2 Coffee Bean online: Best deal Discover it +$10 on $20+ (" + a.heads[1] + ")");
+    ok(!/online shopping/.test(a.rates.sum) && /Online shopping.*channel not shown on 2 offers/.test(a.rates.nc), "s2 Coffee Bean online: online shopping Not counted, channel not shown (" + J(a.rates) + ")");
+    ok(!/Customized Cash/.test(a.text), "s2 Coffee Bean online: no online shopping rate in the answer");
+
+    // Coffee Bean, In store: Capital One hidden; the Chase activation answer says channel not shown.
+    a = await open("coffee bean", "store");
+    ok(J(a.rows.slice().sort()) === J(["cb-flex", "cb-free"]), "s2 Coffee Bean in store: the online-only Capital One offer is hidden (" + J(a.rows) + ")");
+    ok(/^After activating: Freedom Flex 15% or Freedom 15% \(5% dining \+ 10% Chase offer, first \$20, channel not shown\)\s*\+10 pts/.test(a.heads[1] || ""),
+      "s2 Coffee Bean in store: After activating 15% +10 pts, channel not shown (" + a.heads[1] + ")");
+    ok(!/in store/i.test(a.heads.join(" ")), "s2 Coffee Bean in store: the Chase answer is never called in store (" + J(a.heads) + ")");
+    ok(/^Online: Discover it \+\$10 on \$20\+ best deal/.test(a.alt || ""), "s2 Coffee Bean in store: the better Online deal is offered (" + a.alt + ")");
+
+    // Chipotle: no offers (a dining keyword only): no selector; "+1 more ready" (Discover it), not +2; Custom Cash apart.
+    a = await open("chipotle", null);
+    ok(a.sel === null, "s2 Chipotle: no channel selector with no offers to filter");
+    ok(/^Use: Freedom Flex 5% or Freedom 5%, \+1 more ready at 5%/.test(a.heads[0]), "s2 Chipotle: +1 more ready at 5%, not +2 (" + a.heads[0] + ")");
+    ok(a.cond.length === 1 && /^muted Citi Custom Cash 5% only if restaurants is your actual top eligible category this cycle/.test(a.cond[0]),
+      "s2 Chipotle: Custom Cash on its own conditional line (" + J(a.cond) + ")");
+
+    // Custom Cash with no ready 5% (Flex, Freedom and Discover it ended): Smartly 4% is the answer, Custom Cash a
+    // separate conditional alternative, +1 pt, never Ready now and never in "+N more ready".
+    const ENDED = { "Freedom Flex": "ended", "Freedom": "ended", "Discover it": "ended" };
+    a = await open("chipotle", null, ENDED);
+    ok(/^Use: Smartly 4%/.test(a.heads[0]) && !/more ready/.test(a.heads[0]) && !/Custom Cash/.test(a.heads[0]), "s2 no ready 5%, Chipotle: Use Smartly 4% (" + a.heads[0] + ")");
+    ok(a.cond.length === 1 && /^STRONG Citi Custom Cash 5% · conditional · only if restaurants is your actual top eligible category this cycle\s*\+1 pt/.test(a.cond[0]),
+      "s2 no ready 5%, Chipotle: Custom Cash 5% conditional alternative, +1 pt (" + J(a.cond) + ")");
+    a = await open("zqdine", null, ENDED);
+    ok(/^Ready now: Smartly 4%/.test(a.heads[0]) && !/Custom Cash/.test(a.heads[0]) && !/more ready/.test(a.heads[0]), "s2 no ready 5%, Zqdine Grill: Ready now Smartly 4% (" + a.heads[0] + ")");
+    ok(a.cond.length === 1 && /^STRONG Citi Custom Cash 5% · conditional · only if restaurants .* this cycle\s*\+1 pt/.test(a.cond[0]), "s2 no ready 5%, Zqdine Grill: conditional Custom Cash +1 pt (" + J(a.cond) + ")");
+    ok(!/Best deal/.test(a.text) && J(a.rows) === J(["zd-c1"]), "s2 a dollar offer with no minimum stays in the rows (" + J(a.heads) + ")");
+    ok(!/everywhere|on everything/.test(await page.evaluate(() => document.body.innerText)), "s2 Smartly is never \"4% everywhere\" or \"4% on everything\"");
+
+    // Activation: only when it beats what is ready now. Freedom on, Flex off: Freedom leads, no prompt for a tie.
+    a = await open("ralphs", null, { "Freedom Flex": "not_confirmed" });
+    ok(/^Use: Freedom 5%/.test(a.heads[0]) && !a.heads.some(h => /^After activating/.test(h)), "s2 Flex off, Freedom on: Freedom 5%, no activation prompt (" + J(a.heads) + ")");
+    // Both Chase cards off: Smartly 4% ready, then the 5% activation opportunity, +1 pt.
+    a = await open("ralphs", null, { "Freedom Flex": "not_confirmed", "Freedom": "not_confirmed" });
+    ok(/^Use: Smartly 4%/.test(a.heads[0]) && /^After activating: Freedom Flex 5% or Freedom 5% \(grocery stores, activate by .*\)\s*\+1 pt/.test(a.heads[1] || ""),
+      "s2 both Chase off: Smartly 4%, then After activating 5% +1 pt (" + J(a.heads) + ")");
+    // The same at a merchant: Zqdine Grill with Chase and Discover it off.
+    a = await open("zqdine", null, { "Freedom Flex": "not_confirmed", "Freedom": "not_confirmed", "Discover it": "not_confirmed" });
+    ok(/^Ready now: Smartly 4%/.test(a.heads[0]) && /^After activating: .*5%.*\+1 pt/.test(a.heads[1] || "") && /^STRONG Citi Custom Cash 5%/.test(a.cond[0] || ""),
+      "s2 Zqdine Grill, quarterly bonuses off: Smartly 4%, activation +1 pt, Custom Cash conditional (" + J([a.heads, a.cond]) + ")");
+    // With Flex off and Freedom on, the merchant answer has no activation line for the tie.
+    a = await open("zqdine", null, { "Freedom Flex": "not_confirmed" });
+    ok(/^Ready now: Freedom 5%/.test(a.heads[0]) && !a.heads.some(h => /^After activating/.test(h)), "s2 Zqdine Grill, Flex off: Freedom 5% ready, no prompt (" + J(a.heads) + ")");
+
+    // Smartly wins a tie it is in (shell: Costco Visa 4% gas noted after it).
+    a = await open("shell", null);
+    ok(/^(Ready now|Use): Smartly 4% \(Costco Visa also 4%/.test(a.heads[0] || ""), "s2 shell: Smartly wins the 4% tie (" + a.heads[0] + ")");
+    // Up to: the maximum never wins as if certain; Ready now uses the card rate alone.
+    a = await open("zqupto", "online");
+    ok(/^Ready now: Customized Cash 5\.25%/.test(a.heads[0]) && /^Up to: Quicksilver 21\.5%/.test(a.heads[1] || ""), "s2 Up to: its own line under Ready now (" + J(a.heads) + ")");
+
+    // Identity: JetBlue x3 and KitchenAid x2 stay separate answer targets; the Citi $50 (no minimum) stays in the rows.
+    a = await open("jetblue", null);
+    ok(J(a.names.slice().sort()) === J(["JetBlue", "JetBlue TrueBlue Points", "jetBlue Vacations"]), "s2 jetblue: three merchants, the alias merges nothing (" + J(a.names) + ")");
+    ok(!/\$50/.test(a.text), "s2 jetblue: the $50 offer with no minimum is not turned into a rate (" + a.text.split("\n").join(" / ") + ")");
+    a = await open("kitchenaid", "online");
+    ok(J(a.names.slice().sort()) === J(["KitchenAid - Countertop Appliances", "KitchenAid - Major Appliances"]), "s2 kitchenaid: two merchants, no dash grouping (" + J(a.names) + ")");
+    // An approved location group is one merchant; every offer keeps its own row and terms.
+    a = await open("round table", "store");
+    ok(J(a.names) === J(["Round Table Pizza"]) && /^Ready now: /.test(a.heads[0]), "s2 round table: the approved group is one merchant answer (" + J([a.names, a.heads]) + ")");
+    ok(J(a.rows.slice().sort()) === J(["rt-flex", "rt-nb", "rt-nb-2", "rt-usb"]), "s2 round table: four separate records listed (" + J(a.rows) + ")");
+    ok(/Unlimited Cash 22\.63%/.test(a.heads[0]), "s2 round table in store: the Newport Beach member's 20% offer answers for the group (" + a.heads[0] + ")");
+    // Review round 1 fixes.
+    a = await open("zqalpha", "online");
+    ok(J(a.names) === J([]) && /^Ready now: Customized Cash 5\.25%/.test(a.heads[0]) && /online shopping 5\.25%/.test(a.rates.sum) && !a.rates.nc,
+      "s2 r1 the answer and Card rates agree: online shopping counted at Zqalpha, not blocked by Zqalphabet Toys (" + J([a.heads[0], a.rates]) + ")");
+    a = await open("netflix", "store");
+    ok(a.sel === null && /^Use: Customized Cash 5\.25% online/.test(a.heads[0] || "") && !a.rates.nc,
+      "s2 r1 no offers, no selector: a remembered In store changes nothing (" + J([a.heads[0], a.rates]) + ")");
+    a = await open("zqbook", null);
+    ok(J(a.names.slice().sort()) === J(["Zqbook Outlet", "Zqbook Shop"]), "s2 r1 zqbook any: both merchants (" + J(a.names) + ")");
+    a = await open("zqbook", "store");
+    ok(J(a.names) === J(["Zqbook Shop"]) && J(a.rows) === J(["zb-usb"]), "s2 r1 zqbook in store: the answer names the merchant the list shows (" + J([a.names, a.rows]) + ")");
+    a = await open("zqweb", "store");
+    ok(J(a.names) === J(["Zqweb Cafe"]) && /^Ready now: /.test(a.heads[0] || "") && /^Online: /.test(a.alt || "") && !a.rows.length,
+      "s2 r1 zqweb in store: no in-store offer, still answered, with the Online line (" + J([a.heads, a.alt]) + ")");
+    a = await open("zqweb", null);
+    ok(a.chanRows.length === 2 && /add to Discover it/.test(a.chanRows[1]) && !/after activating/.test(a.chanRows[1]),
+      "s2 r1 compact rows keep \"add to <card>\", not \"after activating\" (" + J(a.chanRows) + ")");
+    a = await open("la colombe", null);
+    ok(!/Likely/.test(a.chanRows[0]) && /Likely/.test(a.chanRows[1]), "s2 r1 Likely only on the row whose total has a category rate (" + J(a.chanRows) + ")");
+    // (Review round 2: as on main, a match through a cuisine detail doesn't stop the merchant answer; the same
+    // shape under every channel.)
+    for (const ch of [null, "store", "online"]) {
+      a = await open("burmese", ch);
+      ok(J(a.names) === J(["Irrawaddy Taste of Burma"]), "s2 r2 burmese answers its one merchant under " + (ch || "any") + " (" + J([a.names, a.heads[0]]) + ")");
+    }
+    a = await open("zqknown", "store");
+    ok(J(a.names) === J(["Zqknown Shop"]) && /^Online: /.test(a.alt || ""), "s2 r2 one merchant under Any stays the merchant in store, with its Online line (" + J([a.names, a.alt]) + ")");
+    a = await open("zqtory", "online");
+    ok(J(a.names.slice().sort()) === J(["Zqtory", "Zqtory Outlet"]) && /online shopping 5\.25%/.test(a.rates.sum) &&
+      /Online shopping at Zqtory Outlet: channel not shown on 1 offer\./.test(a.rates.nc), "s2 r2 mixed verdicts: counted at Zqtory, Not counted at Zqtory Outlet (" + J(a.rates) + ")");
+    a = await open("amazon", "store");
+    ok(a.sel && !/Customized Cash/.test(a.text) && !/online shopping/.test(a.rates.sum), "s2 r2 with the selector showing, the keyword merchant follows In store too (" + J([a.text, a.rates]) + ")");
+    a = await open("ralphs", null, { "Freedom Flex": "not_confirmed", "Freedom": "not_confirmed" });
+    ok(/grocery stores 3\.5% \(5% not activated, below Smartly 4%\)/.test(a.rates.sum), "s2 r1 Card rates summary qualifies a rate below the answer (" + a.rates.sum + ")");
+    await open("", null);
+    if (await page.locator("#ftoggle").isVisible()) await page.click("#ftoggle");
+    await page.locator("#cats button", { hasText: /^Dining/ }).first().click();
+    await page.waitForTimeout(150);
+    const top = await page.$eval("#use .usetop", e => e.textContent).catch(() => "");
+    ok(/^Top offer: Zqcc Diner 30% with Citi Custom Cash, conditional: only if restaurants is your actual top eligible category this cycle\.$/.test(top),
+      "s2 r1 Top offer says when its total is conditional (" + top + ")");
+    ok(!errs.length, "s2: no page errors (" + errs.join("; ") + ")");
+
+    // The real merchant-locations.json (52 groups when this was written) with the real offers: it loads, and a
+    // grouped name with live offers on more than one member is one answer, every record still its own row.
+    await page.unroute("**/data/offers.json");
+    await page.unroute("**/data/merchant-locations.json");
+    await page.unroute("**/data/bonus-categories.json");
+    const locs = JSON.parse(fs.readFileSync(path.join(SITE, "data/merchant-locations.json"))).groups;
+    const nMembers = Object.values(locs).reduce((n, l) => n + l.length, 0);
+    const live = real.offers.filter(o => o.status === "active" && !(o.expires && o.expires < "2026-11-04"));
+    const key = s => s.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/\.(com|net|org)\b/gi, "").toLowerCase().replace(/[^a-z0-9]+/g, "");
+    const pickG = Object.keys(locs).find(g => { const ms = new Set(locs[g].map(key).concat([key(g)])); return new Set(live.filter(o => ms.has(key(o.merchant))).map(o => key(o.merchant))).size >= 2; });
+    a = await open(pickG ? pickG : "zzqx", null);
+    const nLoc = await page.evaluate(() => window.__locations);
+    ok(nLoc === nMembers && nMembers > 0, "s2 real locations file: " + nLoc + " approved members loaded (file has " + Object.keys(locs).length + " groups, " + nMembers + " members)");
+    if (!pickG) skip("s2 real locations file: no group with live offers on two names");
+    else {
+      const want = live.filter(o => new Set(locs[pickG].map(key).concat([key(pickG)])).has(key(o.merchant))).length;
+      ok(!a.names.some(n => n !== pickG) && /Ready now: |^In store: |^Use/m.test(a.text) && a.rows.length >= want,
+        "s2 real locations file: \"" + pickG + "\" is one answer (" + (J(a.names) || "[]") + "), its " + want + " offers all listed (" + a.rows.length + " rows)");
+    }
+    await ctx2.close();
+    page = mainPage;
   }
 
   // Search box shadow: off at the top, on once scrolled, off again back at the top.
