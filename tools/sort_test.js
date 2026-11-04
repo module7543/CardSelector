@@ -1523,7 +1523,11 @@ function listRows(sel) {
       fx("zg-exp", "U.S. Bank", "Zqgone Deli", "Dining", "5% cash back", { status: "expired", expires: "2026-10-30", status_since: "2026-10-31" }),
       fx("zg-past", "Chase Freedom", "Zqgone Deli", "Dining", "6% cash back", { activation: "needs_activation", channel: "none_shown", expires: "2026-11-01" }),
       fx("zg-used", "U.S. Bank", "Zqgone Deli", "Dining", "9% cash back", { status: "used", status_since: "2026-11-02", other_details: ["Used on Smartly"] }),
-      fx("zg-live", "Capital One", "Zqgone Deli", "Dining", "3% back", { activation: "none_shown", channel: "online" })
+      fx("zg-live", "Capital One", "Zqgone Deli", "Dining", "3% back", { activation: "none_shown", channel: "online" }),
+      // Review round 1: an approved group whose base row sorts first and whose member has more rows than the base.
+      fx("zgr-base", "U.S. Bank", "Zqgroup Diner", "Clothing & Jewelry", "30% cash back"),
+      fx("zgr-n1", "U.S. Bank", "Zqgroup Diner - North Hills", "Clothing & Jewelry", "10% cash back"),
+      fx("zgr-n2", "U.S. Bank", "Zqgroup Diner - North Hills", "Clothing & Jewelry", "8% cash back")
     ];
     // Paging: 65 merchants, the 60th (the last on the first page) with 8 offers, its 7 weaker ones below the best of
     // the 5 merchants after it.
@@ -1532,7 +1536,7 @@ function listRows(sel) {
       FX.push(fx("zp-" + i, "U.S. Bank", m, "Clothing & Jewelry", (100 - i) + "% cash back"));
       if (i === 60) for (let k = 1; k <= 7; k++) FX.push(fx("zp-60-" + k, "U.S. Bank", m, "Clothing & Jewelry", k + "% cash back"));
     }
-    const LOCS = { groups: { "Round Table Pizza": ["Round Table Pizza - Newport Beach"] } };
+    const LOCS = { groups: { "Round Table Pizza": ["Round Table Pizza - Newport Beach"], "Zqgroup Diner": ["Zqgroup Diner - North Hills"] } };
     await page.route("**/data/offers.json", r => r.fulfill({ json: Object.assign({}, real, { offers: FX }) }));
     await page.route("**/data/phone-edits.json", r => r.fulfill({ json: {} }));
     await page.route("**/data/merchant-locations.json", r => r.fulfill({ json: LOCS }));
@@ -1665,6 +1669,14 @@ function listRows(sel) {
     v = await open("zqsort", null, "best");
     ok(J(v.mcs[0].rows.map(r => r.big)) === J(["34%", "5%"]) && v.mcs[1].rows[0].big === "16%",
       "s3 sort best: Alpha's 5% row stays in its container above Bravo's 16% (a container ranks by its best row) (" + J(v.mcs.map(m => m.rows.map(r => r.big))) + ")");
+
+    // Review round 1: the group's name heads its container whichever row comes first (the base under most sorts, the
+    // member under Z to A), even when a member has more rows; only the member rows are tagged.
+    for (const mode of ["best", "az", "za", "newest", "oldest", "expiring"]) {
+      v = await open("zqgroup", null, mode);
+      ok(J(v.mcs.map(m => [m.name, m.rows.map(r => r.id + (r.loc ? "@" + r.loc : ""))])) === J([["Zqgroup Diner", mode === "za" ? ["zgr-n1@North Hills", "zgr-n2@North Hills", "zgr-base"] : ["zgr-base", "zgr-n1@North Hills", "zgr-n2@North Hills"]]]),
+        "s3 r1 group name heads its container under " + mode + " (base first, member with more rows) (" + J(v.mcs.map(m => [m.name, m.rows.map(r => r.id + (r.loc ? "@" + r.loc : ""))])) + ")");
+    }
 
     // Paging: 60 containers on the first page, the 60th whole (8 rows); Show more adds the last 5 whole; every
     // record once. The count line still counts offers.

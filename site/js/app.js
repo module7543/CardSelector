@@ -251,16 +251,17 @@
   // merchantKey() gives it, so "KitchenAid - Major Appliances" and "KitchenAid - Countertop Appliances" are two
   // merchants. Nothing groups because of " - ", aliases or a shared word. Only an owner-approved location variant
   // listed in data/merchant-locations.json joins its group (locations: merchantKey(member) -> the group).
-  var locations = Object.create(null);
+  var locations = Object.create(null), groupNames = Object.create(null); // groupNames: group key -> its name
   // Reads merchant-locations.json ({ "groups": { "<base>": ["<base> - <location>", ...] } }). Anything missing or
   // not in that shape, a member listed twice or also a group name, or one that isn't "<base> - <suffix>": no
   // location merges at all (tools/validate.py refuses such a file before it can deploy).
   function useLocations(j) {
-    var map = Object.create(null), bases = Object.create(null);
+    var map = Object.create(null), bases = Object.create(null), names = Object.create(null);
     var okay = !!j && typeof j === "object" && !Array.isArray(j) && !!j.groups && typeof j.groups === "object" && !Array.isArray(j.groups);
     if (okay) okay = Object.keys(j.groups).every(function (name) {
       var key = merchantKey(name), list = j.groups[name];
       bases[key] = 1;
+      names[key] = name;
       return !!key && Array.isArray(list) && list.length > 0 && list.every(function (m) {
         var k = typeof m === "string" ? merchantKey(m) : "", suffix = k ? locationOfBase(m, key) : null;
         if (!k || k === key || k in map || !suffix) return false;
@@ -269,6 +270,7 @@
       });
     }) && !Object.keys(map).some(function (k) { return k in bases; });
     locations = okay ? map : Object.create(null);
+    groupNames = okay ? names : Object.create(null);
     window.__locations = Object.keys(locations).length; // tools/offline_test.js, tools/sort_test.js
   }
   // "<base> - <suffix>": some " - " in the member splits it into the base (same merchantKey) and a non-empty
@@ -817,7 +819,7 @@
       if (!c) { c = by[k] = { key: k, rows: [], at: out.length }; out.push(c); }
       c.rows.push(o);
     });
-    out.forEach(function (c) { c.name = mcName(c.rows); });
+    out.forEach(function (c) { c.name = mcName(c.rows, c.key); });
     if (mode === "az" || mode === "za") {
       var dir = mode === "az" ? 1 : -1;
       out.sort(function (a, b) {
@@ -826,11 +828,10 @@
     }
     return out;
   }
-  // The name a container shows: an approved group's name, else the spelling most of its rows use ("Amazon" over
-  // "Amazon.com"; a tie takes the first A to Z).
-  function mcName(rows) {
-    var g = locationOf(rows[0]);
-    if (g) return g.name;
+  // The name a container shows: an approved group's name (whichever of its rows comes first, the base or a member),
+  // else the spelling most of its rows use ("Amazon" over "Amazon.com"; a tie takes the first A to Z).
+  function mcName(rows, key) {
+    if (groupNames[key]) return groupNames[key];
     var n = {};
     rows.forEach(function (o) { n[o.merchant] = (n[o.merchant] || 0) + 1; });
     return Object.keys(n).sort(function (a, b) { return (n[b] - n[a]) || collator.compare(a, b) || (a < b ? -1 : 1); })[0];
