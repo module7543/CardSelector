@@ -1499,21 +1499,36 @@
   // for an online shopping rate the channel rule leaves out. groups: [{ label, rows }] as renderBonusRows takes.
   var ratesOpen = false, ratesKey = "";
   function ratesBox(groups, today, mode, answered) {
-    var kept = [], left = [], parts = [];
+    var kept = [], left = [], parts = [], mixed = [], ev = everyday(today), belowAll = true;
     groups.forEach(function (grp) {
       var rows = [];
       grp.rows.forEach(function (t) {
         if (topicCounts(t, mode, answered)) {
           rows.push(t);
           var top = topicTop(t, today);
-          if (top) parts.push(t.name + " " + top + (t.online && mode === "any" ? " online only" : ""));
+          if (top) {
+            parts.push({ t: t.name + " " + top.text + (t.online && mode === "any" ? " online only" : ""), below: top.below });
+            if (!top.below) belowAll = false;
+          }
+          // 2 or 3 merchants with different verdicts: the ones online shopping doesn't count at, by name.
+          if (t.online && !t.chKw && answered && answered.length > 1) answered.forEach(function (G) {
+            if (!onlineByOffers(G.offers)) mixed.push({ t: t, G: G });
+          });
         } else left.push(t);
       });
       rows.hints = grp.rows.hints || [];
       kept.push({ label: grp.label, rows: rows });
     });
     var anyRows = kept.some(function (g) { return g.rows.length || g.rows.hints.length; });
-    if (!anyRows && !left.length) return;
+    if (!anyRows && !left.length && !mixed.length) return;
+    // "below Smartly 4%" once at the end when every rate listed is under it ("costco"), else on each that is.
+    var one = parts.length > 1 && belowAll && ev;
+    parts = parts.map(function (p) {
+      if (!p.below || one) return p.t;
+      var b = "below " + ev.card + " " + pct(ev.rate) + "%";
+      return /\)$/.test(p.t) ? p.t.replace(/\)$/, ", " + b + ")") : p.t + " (" + b + ")";
+    })
+      .concat(one ? ["all below " + ev.card + " " + pct(ev.rate) + "%"] : []);
     var d = el("details", "rates");
     d.open = ratesOpen;
     d.addEventListener("toggle", function () { ratesOpen = d.open; });
@@ -1522,9 +1537,12 @@
     if (parts.length) sum.appendChild(el("span", "ratesl", " · " + parts.filter(function (p, i) { return parts.indexOf(p) === i; }).join(" · ")));
     d.appendChild(sum);
     if (anyRows) d.appendChild(renderBonusRows(kept));
-    if (left.length) {
+    if (left.length || mixed.length) {
       var nc = el("div", "ratesnc");
       nc.appendChild(el("div", "ratesnch", "Not counted"));
+      mixed.forEach(function (x) {
+        nc.appendChild(el("div", "bnote", cap(x.t.name) + " at " + x.G.name + ": " + notCountedWhy(x.t, mode, [x.G]).replace(/ at .*$/, "") + "."));
+      });
       left.forEach(function (t) {
         var cs = t.items.filter(function (it) { return !it.everyday; }).map(function (it) { return it.e.card + " " + pct(it.g._rate) + "%"; });
         var why = notCountedWhy(t, mode, answered);
@@ -1544,11 +1562,9 @@
     var use = cards.filter(function (it) { return !isConditional(it.e) && it.e.activation !== "not_confirmed"; });
     var other = cards.filter(function (it) { return use.indexOf(it) === -1; });
     var hi = other.length ? other.reduce(function (a, it) { return it.g._rate > a.g._rate ? it : a; }) : null;
-    if (!use.length) return tag(hi);
-    var top = Math.max.apply(null, use.map(function (it) { return it.g._rate; })), ev = everyday(today), q = [];
-    if (hi && hi.g._rate > top) q.push(tag(hi));
-    if (ev && top < ev.rate) q.push("below " + ev.card + " " + pct(ev.rate) + "%");
-    return pct(top) + "%" + (q.length ? " (" + q.join(", ") + ")" : "");
+    if (!use.length) return { text: tag(hi), below: false };
+    var top = Math.max.apply(null, use.map(function (it) { return it.g._rate; })), ev = everyday(today);
+    return { text: pct(top) + "%" + (hi && hi.g._rate > top ? " (" + tag(hi) + ")" : ""), below: !!ev && top < ev.rate };
   }
 
   // ---- Merchant totals for the "Use:" headline (data/cards.json) ----
@@ -2050,9 +2066,13 @@
   // Returns { groups, mode } (the merchants answered and the channel they were answered for), or null when it
   // doesn't apply, so the category headline is drawn.
   function renderMerchantHeadline(query, hits, anyHits, today) {
-    var src = hits && hits.length ? hits : anyHits;
-    if (!cardsCfg || compact(query) === "" || !src || !src.length || src.viaCuisine) return null;
-    var groups = merchantGroups(src, query);
+    // (Like main, a match through a cuisine detail doesn't stop the merchant answer: "taco" still answers Taco
+    // Bell. The same in every channel.)
+    if (!cardsCfg || compact(query) === "" || !anyHits || !anyHits.length) return null;
+    // One merchant across every channel (its In store and Online rows, its other-channel line) stays the merchant
+    // under each channel; otherwise the channel's own matches pick them ("book" in store: what the list shows).
+    var groups = merchantGroups(anyHits, query);
+    if (groups.length !== 1 && hits && hits.length && hits !== anyHits) groups = merchantGroups(hits, query);
     if (!groups.length || groups.length > 3) return null;
     groups.forEach(function (G) {
       G.offers = anyHits.filter(function (o) { return containerKey(o) === G.key; });
@@ -2061,11 +2081,12 @@
       G.names = []; G.seen = {};
       G.offers.forEach(function (o) { containerNames(o).forEach(function (n) { if (!G.seen[n.c]) { G.seen[n.c] = 1; G.names.push(n); } }); });
     });
-    // A merchant with no offer (a typed keyword: "shell") has nothing for the channel to filter.
-    var chOf = function (G) { return G.offers.length ? chanMode : "any"; };
+    // With no offer at all there is no selector and the channel changes nothing ("netflix": any). With the selector
+    // showing, every merchant answered follows it, a typed keyword with no offer of its own ("amazon") too.
+    var withOffers = groups.some(function (G) { return G.offers.length; });
+    var chOf = function () { return withOffers ? chanMode : "any"; };
     var per = groups.map(function (G) { return { M: G, L: merchantLines(viewOf(G, chOf(G)), today) }; }).filter(function (x) { return x.L; });
     if (!per.length) return null;
-    var withOffers = groups.some(function (G) { return G.offers.length; });
     var named = [], likely = false, notes = [], last = null;
     if (withOffers) useEl.appendChild(chanSel());
     var condNote = null;
@@ -2728,7 +2749,6 @@
       // marked used in this view stay in the list (dimmed), and in the sort's pool, so nothing moves.
       var hits = search(query, function (o) { return inScope(o) && (isLive(o, today) || (o.status === "used" && kept(o))); });
       var allHits = hits.filter(function (o) { return isLive(o, today); }); // the headline ignores the Activation filter
-      allHits.viaCuisine = hits.viaCuisine; // a cuisine search ("persian") gets the category headline
       // The answer card's merchants and offers, whatever the channel choice (it filters them per channel itself).
       var anyHits = chanMode === "any" ? allHits : search(query, function (o) { return inAnyChan(o) && isLive(o, today); });
       cmp = comparator(sortMode, query, hits);

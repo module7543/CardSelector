@@ -1099,7 +1099,15 @@ const label = r => r.merchant + " | " + r.card + " | " + r.bonus;
       fx("bu-usb", "U.S. Bank", "Irrawaddy Taste of Burma", "Dining", "5% cash back", { channel: "in_store" }),
       fx("bu-c1", "Capital One", "Irrawaddy Taste of Burma", "Dining", "5% back", { activation: "none_shown", channel: "online" }),
       // A Citi Custom Cash offer that leads Top offer under the Dining button (with its planned 5%).
-      fx("zcc", "Citi Custom Cash", "Zqcc Diner", "Dining", "25% Back", { channel: "none_shown" })
+      fx("zcc", "Citi Custom Cash", "Zqcc Diner", "Dining", "25% Back", { channel: "none_shown" }),
+      // Review round 2. One merchant across every channel stays the merchant under each (store-only partial names).
+      fx("zk-c1", "Capital One", "Zqknown Shop", "Clothing & Jewelry", "10% back", { activation: "none_shown", channel: "online" }),
+      ...["abc", "xyz", "mno", "pqr"].map((x, i) => fx("zk-" + x, "U.S. Bank", "Zqknown" + x + " Store", "Clothing & Jewelry", (2 + i) + "% cash back")),
+      // Two merchants, different online shopping verdicts.
+      fx("zt-c1", "Capital One", "Zqtory", "Clothing & Jewelry", "3% back", { activation: "none_shown", channel: "online" }),
+      fx("zt-flex", "Chase Freedom Flex", "Zqtory Outlet", "Clothing & Jewelry", "5% cash back", { activation: "needs_activation", channel: "none_shown" }),
+      // A typed keyword with no offer of its own (Amazon) next to a merchant with an in-store offer.
+      fx("amf", "U.S. Bank", "Amazon Fresh", "Groceries & Food Delivery", "5% cash back", { channel: "in_store" })
     ];
     let BONUS = null; // entries' card -> activation (or "ended"), applied to the real bonus file
     const realBonus = JSON.parse(fs.readFileSync(path.join(SITE, "data/bonus-categories.json")));
@@ -1281,10 +1289,19 @@ const label = r => r.merchant + " | " + r.card + " | " + r.bonus;
       "s2 r1 compact rows keep \"add to <card>\", not \"after activating\" (" + J(a.chanRows) + ")");
     a = await open("la colombe", null);
     ok(!/Likely/.test(a.chanRows[0]) && /Likely/.test(a.chanRows[1]), "s2 r1 Likely only on the row whose total has a category rate (" + J(a.chanRows) + ")");
+    // (Review round 2: as on main, a match through a cuisine detail doesn't stop the merchant answer; the same
+    // shape under every channel.)
     for (const ch of [null, "store", "online"]) {
       a = await open("burmese", ch);
-      ok(!a.names.length && /^Use: /.test(a.heads[0] || ""), "s2 r1 burmese (a cuisine search) gets the category headline under " + (ch || "any") + " (" + J([a.names, a.heads[0]]) + ")");
+      ok(J(a.names) === J(["Irrawaddy Taste of Burma"]), "s2 r2 burmese answers its one merchant under " + (ch || "any") + " (" + J([a.names, a.heads[0]]) + ")");
     }
+    a = await open("zqknown", "store");
+    ok(J(a.names) === J(["Zqknown Shop"]) && /^Online: /.test(a.alt || ""), "s2 r2 one merchant under Any stays the merchant in store, with its Online line (" + J([a.names, a.alt]) + ")");
+    a = await open("zqtory", "online");
+    ok(J(a.names.slice().sort()) === J(["Zqtory", "Zqtory Outlet"]) && /online shopping 5\.25%/.test(a.rates.sum) &&
+      /Online shopping at Zqtory Outlet: channel not shown on 1 offer\./.test(a.rates.nc), "s2 r2 mixed verdicts: counted at Zqtory, Not counted at Zqtory Outlet (" + J(a.rates) + ")");
+    a = await open("amazon", "store");
+    ok(a.sel && !/Customized Cash/.test(a.text) && !/online shopping/.test(a.rates.sum), "s2 r2 with the selector showing, the keyword merchant follows In store too (" + J([a.text, a.rates]) + ")");
     a = await open("ralphs", null, { "Freedom Flex": "not_confirmed", "Freedom": "not_confirmed" });
     ok(/grocery stores 3\.5% \(5% not activated, below Smartly 4%\)/.test(a.rates.sum), "s2 r1 Card rates summary qualifies a rate below the answer (" + a.rates.sum + ")");
     await open("", null);
