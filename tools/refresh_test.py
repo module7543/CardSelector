@@ -754,6 +754,23 @@ class RefreshTest(unittest.TestCase):
                 finally:
                     t.close()
 
+    def test_accepted_location_change_with_a_cut_file_name_is_settled(self):
+        # Review 1A H8: "eBay - LA" accepted as the file's "eBay - La Ha...": the offer shows the new place and the
+        # next read of the same file asks nothing
+        p = self._accept_location_pair("Capital One", "capital-one/ebay", "eBay - LA", "eBay - La Ha...", "eBay")
+        o = self.t.offers()["capital-one/ebay"]
+        self.assertEqual((o["merchant"], o.get("aliases")), ("eBay - La Ha...", ["eBay - LA"]))
+        code, out, rep = self.t.run("report", "Capital One", [p])
+        self.assertEqual((rep["proposals"], rep["stops"]), ([], []), out)
+
+    def test_cut_right_after_the_dash_is_the_same_name(self):
+        # Review 1A H3: "eBay - ..." on screen against the saved "eBay - Newport Beach"
+        self.t.change_offers(lambda by, d: by["capital-one/ebay"].update(merchant="eBay - Newport Beach"))
+        p = self.t.csv("Capital One", lambda rows: [dict(r, merchant="eBay - ...") if r["merchant"] == "eBay" else r for r in rows])
+        code, out, rep = self.t.run("report", "Capital One", [p])
+        self.assertEqual(rep["proposals"], [], out)
+        self.assertEqual([(m["id"], m["rule"]) for m in rep["paired"] if m["id"] == "capital-one/ebay"], [("capital-one/ebay", "truncated")], out)
+
     def test_rejected_location_pair_also_needs_the_owner(self):
         self.t.change_offers(lambda by, d: by["capital-one/ebay"].update(merchant="eBay - LA"))
         p = self.t.csv("Capital One", lambda rows: [dict(r, merchant="eBay - La Habra") if r["merchant"] == "eBay" else r for r in rows])

@@ -146,6 +146,8 @@ def location_change(a, b):
                     other = " ".join(words(y)[len(bw):])
             if other is None:
                 continue
+            if other and not compact(other) and truncated(other):
+                return None  # "X - ...": cut off on screen right after the base
             if other and same(loc, other):
                 return None
             return (f"location-style names on one base with different locations ({loc!r} / {other!r}): never automatic"
@@ -1192,9 +1194,13 @@ def plan(card, paths, given_date, decisions=None, part=False, complete_parts=Fal
             eff = rule
             if rule == "decided":  # an accepted pair follows the same name rules as an automatic one
                 eff = "truncated" if rule_truncated(inc, v) else ("extends" if rule_extends(inc, v) else "decided")
-                if any(location_change(n, inc.merchant) for n in [v["merchant"]] + v.get("aliases", [])):
-                    eff = "decided"  # an accepted location change takes the place the file shows
-            merchant, alias, drop = ad.pair_name(v, inc, eff)
+                if not bare_domain(inc.merchant) and any(location_change(n, inc.merchant) for n in [v["merchant"]] + v.get("aliases", [])):
+                    eff = "location"  # (a bare lowercase domain keeps the saved name, as for any pair)
+            merchant, alias, drop = ad.pair_name(v, inc, "decided" if eff == "location" else eff)
+            if eff == "location":
+                # an accepted location change takes the place the file shows, even cut off ("X - La Ha..."), with
+                # the old name as an alias; a later read completes a visible cut as usual
+                merchant, alias = inc.merchant, v["merchant"]
             if rule == "decided" and alias is None and merchant == v["merchant"] and bare_domain(inc.merchant) \
                     and nkey(inc.merchant) != nkey(merchant):
                 alias = inc.merchant  # the saved name stays; the domain becomes an alias, so the next read matches it
