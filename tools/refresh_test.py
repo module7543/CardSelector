@@ -763,6 +763,15 @@ class RefreshTest(unittest.TestCase):
         code, out, rep = self.t.run("report", "Capital One", [p])
         self.assertEqual((rep["proposals"], rep["stops"]), ([], []), out)
 
+    def test_later_read_completes_an_accepted_cut_location_automatically(self):
+        # Review 1A H9: accepted "eBay - LA" -> "eBay - La Ha..." (old name kept as an alias); the next read shows
+        # "eBay - La Habra": a visible cut completed, automatic; the old alias doesn't reopen it
+        p = self._accept_location_pair("Capital One", "capital-one/ebay", "eBay - LA", "eBay - La Ha...", "eBay")
+        p2 = self.t.csv("Capital One", lambda rows: [dict(r, merchant="eBay - La Habra") if r["merchant"] == "eBay" else r for r in rows])
+        code, out, rep = self.t.run("report", "Capital One", [p2])
+        self.assertEqual([(m["id"], m["rule"]) for m in rep["paired"] if m["id"] == "capital-one/ebay"], [("capital-one/ebay", "truncated")], out)
+        self.assertEqual((rep["proposals"], rep["stops"]), ([], []), out)
+
     def test_cut_right_after_the_dash_is_the_same_name(self):
         # Review 1A H3: "eBay - ..." on screen against the saved "eBay - Newport Beach"
         self.t.change_offers(lambda by, d: by["capital-one/ebay"].update(merchant="eBay - Newport Beach"))

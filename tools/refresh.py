@@ -1007,8 +1007,8 @@ def plan(card, paths, given_date, decisions=None, part=False, complete_parts=Fal
                     continue
                 if any(nkey(n) in file_names for n in names(o)):
                     continue
-                if any(location_change(n, incs[i].merchant) for n in names(o)):
-                    continue  # a location changes between any of the offer's names and the file's: proposed (step 4)
+                if location_change(o["merchant"], incs[i].merchant):
+                    continue  # the location changes between the offer's name and the file's: proposed (step 4)
                 why = fn(incs[i], o)
                 if why:
                     found.setdefault(i, []).append((o, why))
@@ -1115,7 +1115,7 @@ def plan(card, paths, given_date, decisions=None, part=False, complete_parts=Fal
     for (sid, fname, bkey), acc in decided.items():
         o = view.get(sid)
         inc = next((x for x in incs if compact(x.merchant) == fname and bonus_key(x.bonus) == bkey), None)
-        if acc is not None and o and inc and any(location_change(n, inc.merchant) for n in names(o)):
+        if acc is not None and o and inc and location_change(o["merchant"], inc.merchant):
             loc_decided.append(f"{o['merchant']!r} <- {inc.merchant!r} ({'accepted' if acc else 'rejected'})")
 
     # ---------- build the new data ----------
@@ -1194,7 +1194,7 @@ def plan(card, paths, given_date, decisions=None, part=False, complete_parts=Fal
             eff = rule
             if rule == "decided":  # an accepted pair follows the same name rules as an automatic one
                 eff = "truncated" if rule_truncated(inc, v) else ("extends" if rule_extends(inc, v) else "decided")
-                if not bare_domain(inc.merchant) and any(location_change(n, inc.merchant) for n in [v["merchant"]] + v.get("aliases", [])):
+                if not bare_domain(inc.merchant) and location_change(v["merchant"], inc.merchant):
                     eff = "location"  # (a bare lowercase domain keeps the saved name, as for any pair)
             merchant, alias, drop = ad.pair_name(v, inc, "decided" if eff == "location" else eff)
             if eff == "location":
