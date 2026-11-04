@@ -155,6 +155,24 @@ def location_change(a, b):
     return None
 
 
+def shares_base(a, b):
+    """Some ' - ' in either name gives a base the other name has (equal, or its first words)."""
+    for x, y in ((a or "", b or ""), (b or "", a or "")):
+        for m in re.finditer(r"\s+-\s+", x):
+            bk, bw = merchant_key(x[:m.start()]), words(x[:m.start()])
+            if bk and (merchant_key(re.split(r"\s+-\s+", y)[0]) == bk or (bw and words(y)[:len(bw)] == bw)
+                       or (truncated(y) and merchant_key(re.sub(r"\s*-\s*$", "", stem(y))) == bk)):
+                return True
+    return False
+
+
+def offer_location_change(o, name):
+    """The current name decides when it shares a base with the file's name; otherwise any alias that does."""
+    if shares_base(o["merchant"], name):
+        return location_change(o["merchant"], name)
+    return next((r for a in o.get("aliases", []) for r in [location_change(a, name)] if r), None)
+
+
 def words(s):
     return re.findall(r"[a-z0-9]+", deaccent(s or "").lower().replace("'", "").replace("’", ""))
 
@@ -1007,7 +1025,7 @@ def plan(card, paths, given_date, decisions=None, part=False, complete_parts=Fal
                     continue
                 if any(nkey(n) in file_names for n in names(o)):
                     continue
-                if location_change(o["merchant"], incs[i].merchant):
+                if offer_location_change(o, incs[i].merchant):
                     continue  # the location changes between the offer's name and the file's: proposed (step 4)
                 why = fn(incs[i], o)
                 if why:
@@ -1072,14 +1090,14 @@ def plan(card, paths, given_date, decisions=None, part=False, complete_parts=Fal
                 for fn_name, fn in rules:
                     if fn(inc, o):
                         score, w = 1.0, fn(inc, o) + " (several candidates, so not automatic)"
-                lc = location_change(n, inc.merchant)
-                if lc:
-                    score, w = 1.0, lc
                 if inc.tld and compact(domain_base(inc.tld)) and len(compact(domain_base(inc.tld))) >= 4 and \
                         (compact(domain_base(inc.tld)) in b or b in compact(domain_base(inc.tld))) and score < 0.9:
                     score, w = 0.9, f"the file's merchant_tld {inc.tld} is close to {n!r}"
                 if score > best:
                     best, why = score, w
+            lc = offer_location_change(o, inc.merchant)  # a location change on this offer: the reason, always shown
+            if lc:
+                best, why = 1.0, lc
             if best >= 0.8:
                 scored.append((best, o, why))
         for best, o, why in sorted(scored, key=lambda x: -x[0])[:3]:
@@ -1115,7 +1133,7 @@ def plan(card, paths, given_date, decisions=None, part=False, complete_parts=Fal
     for (sid, fname, bkey), acc in decided.items():
         o = view.get(sid)
         inc = next((x for x in incs if compact(x.merchant) == fname and bonus_key(x.bonus) == bkey), None)
-        if acc is not None and o and inc and location_change(o["merchant"], inc.merchant):
+        if acc is not None and o and inc and offer_location_change(o, inc.merchant):
             loc_decided.append(f"{o['merchant']!r} <- {inc.merchant!r} ({'accepted' if acc else 'rejected'})")
 
     # ---------- build the new data ----------
@@ -1194,7 +1212,7 @@ def plan(card, paths, given_date, decisions=None, part=False, complete_parts=Fal
             eff = rule
             if rule == "decided":  # an accepted pair follows the same name rules as an automatic one
                 eff = "truncated" if rule_truncated(inc, v) else ("extends" if rule_extends(inc, v) else "decided")
-                if not bare_domain(inc.merchant) and location_change(v["merchant"], inc.merchant):
+                if not bare_domain(inc.merchant) and offer_location_change(v, inc.merchant):
                     eff = "location"  # (a bare lowercase domain keeps the saved name, as for any pair)
             merchant, alias, drop = ad.pair_name(v, inc, "decided" if eff == "location" else eff)
             if eff == "location":

@@ -772,6 +772,25 @@ class RefreshTest(unittest.TestCase):
         self.assertEqual([(m["id"], m["rule"]) for m in rep["paired"] if m["id"] == "capital-one/ebay"], [("capital-one/ebay", "truncated")], out)
         self.assertEqual((rep["proposals"], rep["stops"]), ([], []), out)
 
+    def test_alias_place_counts_when_the_current_name_has_another_base(self):
+        # Review 1A J1-J3: the current name shares no base with the file's name, an alias does ("Marketplace by
+        # eBay" / "The eBay - LA" with alias "eBay - LA"; the real "The Langham - New York" with alias "Langham
+        # Hotels - New York"): the alias decides, so a changed place is proposed, never automatic
+        for merchant, alias, new in [("Marketplace by eBay", "eBay - LA", "eBay - La Habra"),
+                                     ("The eBay - LA", "eBay - LA", "eBay - La Habra"),
+                                     ("The Langham - New York", "Langham Hotels - New York", "Langham Hotels - New York, Fifth Avenue")]:
+            with self.subTest(merchant=merchant, new=new):
+                t = Tree()
+                try:
+                    t.change_offers(lambda by, d: by["capital-one/ebay"].update(merchant=merchant, aliases=[alias]))
+                    p = t.csv("Capital One", lambda rows: [dict(r, merchant=new) if r["merchant"] == "eBay" else r for r in rows])
+                    code, out, rep = t.run("report", "Capital One", [p])
+                    self.assertNotIn("capital-one/ebay", [m["id"] for m in rep["paired"]], out)
+                    self.assertEqual([(m["saved"], m["file"]) for m in rep["proposals"]], [("capital-one/ebay", new)], out)
+                    self.assertIn("never automatic", rep["proposals"][0]["why"], out)
+                finally:
+                    t.close()
+
     def test_cut_right_after_the_dash_is_the_same_name(self):
         # Review 1A H3: "eBay - ..." on screen against the saved "eBay - Newport Beach"
         self.t.change_offers(lambda by, d: by["capital-one/ebay"].update(merchant="eBay - Newport Beach"))
