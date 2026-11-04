@@ -2673,7 +2673,7 @@
     return (last === e.end ? "Q" + q + " · through " : "Through ") + tileDate(e.end);
   }
   // A date that stays on one line in a tile ("Dec 15").
-  function tileDate(iso) { return fmtDate(iso).replace(/ /g, " "); }
+  function tileDate(iso) { return fmtDate(iso).replace(/ /g, "\u00a0"); }
   // "Incl. 75% Preferred Rewards (50% after Dec 15)": the boost in the leading rate r, worded as the bonus rows
   // ("incl. 75% Preferred Rewards") and the boost note ("50% after Dec 15") word it. The percent is the one the
   // rate was worked out with (a bonus group's rate is boosted when the file is readied), so the note always
