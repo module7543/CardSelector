@@ -1367,7 +1367,7 @@
     order.forEach(function (t) {
       t.lead = null;
       if (!byQuery || !t.names.length || t.cuisine) return;
-      var same = t.names.some(function (n) { return compact(n) === qc || merchantKey(n) === merchantKey(query); });
+      var same = t.names.some(function (n) { return merchantKey(n) === merchantKey(query); });
       if (!same) t.lead = t.names[0] + (t.names.length > 1 ? " and " + (t.names.length - 1) + " more" : "");
     });
     // The everyday card (Smartly 4%) joins every row that has a bonus card, at its rank; bonus cards below it
@@ -2258,7 +2258,7 @@
     var condNote = null;
     if (per.length === 1) {
       var G = per[0].M, L = per[0].L, rowsBy = null, alt = null;
-      if (compact(G.name) !== compact(query)) useEl.appendChild(el("div", "useat", "At " + G.name));
+      if (merchantKey(G.name) !== merchantKey(query)) useEl.appendChild(el("div", "useat", "At " + G.name));
       if (G.offers.length && chanMode === "any") {
         // Any: In store and Online answered apart when they recommend different things; one answer when the same.
         var S = merchantLines(viewOf(G, "store"), today), O = merchantLines(viewOf(G, "online"), today);

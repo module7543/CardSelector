@@ -1695,6 +1695,12 @@ function listRows(sel) {
       "s3a Ali Baba and Alibaba: two containers (" + J(ids(v)) + ")");
     const abNames = await page.$$eval("#use .usemname, #use .useat", es => es.map(e => e.textContent.replace(/:\s*$/, "").replace(/^At /, "")).sort());
     ok(J(abNames) === J(["Ali Baba", "Alibaba"]), "s3a Ali Baba and Alibaba: two merchants in the answer card (" + J(abNames) + ")");
+    // The "At <merchant>" lead follows the same identity: "alibaba" answered for the restaurant names it.
+    for (const [q, ch, want] of [["alibaba", "store", "At Ali Baba"], ["ali baba", "online", "At Alibaba"], ["ali baba", "store", null]]) {
+      await open(q, ch);
+      const at = await page.$$eval("#use .useat", es => es.map(e => e.textContent));
+      ok(J(at) === J(want ? [want] : []), "s3a \"" + q + "\" " + ch + ": lead " + J(at));
+    }
     v = await open("zqamazon", null);
     ok(J(ids(v)) === J(["Zqamazon: am-usb am-c1"]) && v.mcs[0].sub === "Marketplaces & Department Stores · 2 offers",
       "s3a Zqamazon and Zqamazon.com: one container, as before (" + J(ids(v)) + ")");
@@ -1810,7 +1816,9 @@ function listRows(sel) {
       // Step 3A: a gone Ali Baba (restaurant) is still on U.S. Bank (same name, other case), not on Capital One's Alibaba.
       wx("gone-aliba", "Bank of America", "Ali Baba", "2026-10-18", "missing", "2026-10-31", null, { activation: "auto_enrolled", channel: "in_store" }),
       wx("usb-aliba", "U.S. Bank", "ALI BABA", "2026-10-18", "active", "2026-10-18", null, { activation: "already_activated", channel: "in_store" }),
-      wx("c1-alibaba", "Capital One", "Alibaba", "2026-10-18", "active", "2026-10-18", null, { category: "Marketplaces & Department Stores", activation: "none_shown", channel: "online" })
+      wx("c1-alibaba", "Capital One", "Alibaba", "2026-10-18", "active", "2026-10-18", null, { category: "Marketplaces & Department Stores", activation: "none_shown", channel: "online" }),
+      // And the reverse: a gone Alibaba (marketplace) is still on Capital One, not on U.S. Bank's ALI BABA.
+      wx("gone-alibaba", "Bank of America", "Alibaba", "2026-10-18", "missing", "2026-10-31", null, { category: "Marketplaces & Department Stores", activation: "auto_enrolled", channel: "online" })
     ];
     const real = JSON.parse(fs.readFileSync(path.join(SITE, "data/offers.json")));
     await page.route("**/data/offers.json", r => r.fulfill({ json: { categories: real.categories, batches: BATCHES, offers: OFF } }));
@@ -1844,7 +1852,9 @@ function listRows(sel) {
     if ((await page.getAttribute("#ftoggle", "aria-expanded")) !== "true") await page.click("#ftoggle");
     await page.locator("#cards button", { hasText: /^All cards/ }).click();
     w = await wv();
-    ok(J(w.tabs) === J(["New 3", "Gone 5"]), "s3 what changed All cards: counts are offer counts (" + J(w.tabs) + ")");
+    ok(J(w.tabs) === J(["New 3", "Gone 6"]), "s3 what changed All cards: counts are offer counts (" + J(w.tabs) + ")");
+    ok(w.still["gone-alibaba"] === "Still on Capital One" && w.mcs.some(m => /: Alibaba \[gone-alibaba\]$/.test(m)),
+      "s3a what changed: a gone Alibaba is still on Capital One, not on U.S. Bank's ALI BABA (" + J([w.still["gone-alibaba"], w.mcs]) + ")");
     ok(w.still["gone-aliba"] === "Still on U.S. Bank" && w.mcs.some(m => /: Ali Baba \[gone-aliba\]$/.test(m)),
       "s3a what changed: a gone Ali Baba is still on U.S. Bank (ALI BABA), not on Capital One's Alibaba (" + J([w.still["gone-aliba"], w.mcs]) + ")");
     await page.locator("#wctabs button", { hasText: /^New/ }).click();

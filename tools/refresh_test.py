@@ -1959,6 +1959,18 @@ class ValidateLocationsTest(unittest.TestCase):
                 self.assertEqual(code, 1, out)
                 self.assertIn(msg, out)
 
+    def test_alibaba_exception_matches_the_page(self):
+        # Step 3A: the page's merchantKey() keeps "Ali Baba" (restaurant) and "Alibaba" (marketplace) apart, so a
+        # member on the other spelling is not a location of the group (the page would refuse the whole file).
+        for groups in [{"Ali Baba": ["AliBaba - Irvine"]}, {"Alibaba": ["Ali Baba - Irvine"]}]:
+            with self.subTest(groups=groups):
+                code, out = self.validate({"groups": groups})
+                self.assertEqual(code, 1, out)
+                self.assertIn("is not '" + next(iter(groups)) + " - <location>'", out)
+        code, out = self.validate({"groups": {"Ali Baba": ["ALI BABA - Irvine"], "Alibaba": ["Alibaba.com - US"]}})
+        self.assertEqual(code, 0, out)  # two groups, two names; case and .com still ignored within each
+        self.assertIn("2 approved location variants in 2 groups", out)
+
     def test_absent_member_only_warns(self):
         code, out = self.validate({"groups": {"CVS": ["CVS - Pasadena"], "Round Table Pizza": ["Round Table Pizza - Newport Beach"]}})
         self.assertEqual(code, 0, out)

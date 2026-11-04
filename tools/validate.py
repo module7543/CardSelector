@@ -395,8 +395,13 @@ if EDITS.exists():
 # The only thing that merges two merchant names on the page (CLAUDE.md, Phone page, Merchant identity). Always
 # deployed, even empty: the saved copy needs every data file it lists.
 def merchant_key(s):
-    """The page's merchantKey(): compact() after dropping .com / .net / .org."""
-    return compact(re.sub(r"\.(com|net|org)\b", "", s, flags=re.I | re.A))
+    """The page's merchantKey(): compact() after dropping .com / .net / .org, except that a name in
+    CATEGORY_EXCEPTIONS (Alibaba the marketplace, Ali Baba the restaurant) keeps its word breaks ("ali_baba")."""
+    s = re.sub(r"\.(com|net|org)\b", "", s, flags=re.I | re.A)
+    k = compact(s)
+    if k not in CATEGORY_EXCEPTIONS: return k
+    s = "".join(c for c in unicodedata.normalize("NFD", s) if not unicodedata.combining(c))
+    return "_".join(re.sub(r"[^a-z0-9]+", " ", s.lower()).split())
 
 def location_of_base(member, base_key):
     """'<base> - <suffix>': some ' - ' splits the member into the base (same merchant_key) and a non-empty suffix."""
