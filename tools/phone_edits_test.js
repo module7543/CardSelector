@@ -733,11 +733,22 @@ async function browser() {
       text: li.innerText.replace(/\s+/g, " ")
     })));
   };
-  const snapshot = async q => ({ rows: await search(q), use: await page.$eval("#use", e => e.hidden ? "" : e.innerText), count: await page.$eval("#count", e => e.innerText).catch(() => "") });
+  // The answer card for the offer's own channel (Step 2: under Any a merchant whose In store and Online answers differ
+  // shows two compact rows; a picked channel shows the full lines these checks read), without the selector and the
+  // Card rates here disclosure. Picking it here is not remembered: load() clears storage.
+  const useOf = async o => {
+    const ch = o.channel === "online" ? "online" : "store", b = page.locator("#use .chansel button[data-ch=" + ch + "]");
+    if (await b.count() && (await b.getAttribute("aria-pressed")) !== "true") { await b.click(); await page.waitForTimeout(100); }
+    const t = await page.$eval("#use", e => e.hidden ? "" : [...e.children].filter(c => !c.matches(".chansel, details.rates")).map(c => c.innerText).join("\n"));
+    const any = page.locator("#use .chansel button[data-ch=any]");
+    if (await any.count() && (await any.getAttribute("aria-pressed")) !== "true") { await any.click(); await page.waitForTimeout(100); } // back to Any for the next search
+    return t;
+  };
+  const snapshot = async (q, o) => ({ rows: await search(q), use: await useOf(o), count: await page.$eval("#count", e => e.innerText).catch(() => "") });
   const testEdits = { [ID.usbank]: { status: "used", status_since: today, used_on: "Smartly" }, [ID.chase]: { activation: "already_activated" } };
   const U = byId[ID.usbank], C = byId[ID.chase];
   const rowOf = (o, rows) => rows.find(r => r.id === o.merchant + " | " + ROW_CARD(o.card) && !r.gone);
-  const both = async () => ({ u: await snapshot(U.merchant), c: await snapshot(C.merchant) });
+  const both = async () => ({ u: await snapshot(U.merchant, U), c: await snapshot(C.merchant, C) });
 
   await load({ status: 200, body: "{}\n" });
   const empty = await both();
