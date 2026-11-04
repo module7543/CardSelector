@@ -105,18 +105,17 @@ def location_suffix(name, base_key):
     return None
 
 
-def same_place(a, b):
-    """Two location suffixes name the same place: the shorter one's words start the longer one ('Newport' /
-    'Newport Beach'); a cut-off last word counts only when the name shows the cut ('Newport Be...'). 'LA' is not
-    'Lakewood'."""
-    def starts(s, t):  # place s starts place t
-        x, y = words(s), words(t)
-        if not x or len(x) > len(y):
-            return False
-        if y[:len(x)] == x:
-            return True
-        return bool(re.search(r"(\.\.\.|…)\s*$", s)) and y[:len(x) - 1] == x[:-1] and y[len(x) - 1].startswith(x[-1])
-    return bool(a and b) and (starts(a, b) or starts(b, a))
+def same_place(old, new):
+    """A renamed member's location is still the approved one: the same once case and punctuation are ignored, or
+    the old one was cut off on screen ('Newport Be...') and the new one completes it. Anything else, even an
+    extension by whole words ('LA' -> 'La Habra', 'North' -> 'North Hollywood'), is held for the owner."""
+    if not old or not new:
+        return False
+    if compact(old) == compact(new):
+        return True
+    x, y = words(old), words(new)
+    cut = re.search(r"(\.\.\.|…)\s*$", old)
+    return bool(cut and x) and len(x) <= len(y) and y[:len(x) - 1] == x[:-1] and y[len(x) - 1].startswith(x[-1])
 
 
 def words(s):
@@ -1386,7 +1385,7 @@ def plan(card, paths, given_date, decisions=None, part=False, complete_parts=Fal
         elif not location_of_base(r["to"], merchant_key(base)):
             why = f"the new name is not '{base} - <location>'"
         elif not same_place(location_suffix(member, merchant_key(base)), location_suffix(r["to"], merchant_key(base))):
-            why = "the location part changed (only an extended or shortened location is followed)"
+            why = "the location part changed (only a name cut off on screen and now complete is followed)"
         else:
             why = None
         if why:

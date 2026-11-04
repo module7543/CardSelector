@@ -597,6 +597,18 @@ class RefreshTest(unittest.TestCase):
         self.assertIn("merchant-locations.json is not valid JSON", out)
         self.assertNotIn("Traceback", out)
 
+    def test_renamed_location_member_extended_automatically_is_held(self):
+        # "eBay - LA" -> "eBay - La Habra" pairs automatically ("extends"); the approved member must not follow
+        self.t.change_offers(lambda by, d: by["capital-one/ebay"].update(merchant="eBay - LA"))
+        self.t.write_json("merchant-locations.json", {"groups": {"eBay": ["eBay - LA"]}})
+        before = self.t.read("merchant-locations.json")
+        p = self.t.csv("Capital One", lambda rows: [dict(r, merchant="eBay - La Habra") if r["merchant"] == "eBay" else r for r in rows])
+        out, rep = self.apply_ok("Capital One", [p])
+        self.assertEqual(self.t.offers()["capital-one/ebay"]["merchant"], "eBay - La Habra", out)
+        self.assertEqual(rep["location_moves"], [], out)
+        self.assertEqual([m["to"] for m in rep["location_held"]], ["eBay - La Habra"], out)
+        self.assertEqual(self.t.read("merchant-locations.json"), before)
+
     def test_renamed_location_member_to_another_place_is_held(self):
         self.t.change_offers(lambda by, d: by["capital-one/ebay"].update(merchant="eBay - Outlet"))
         self.t.write_json("merchant-locations.json", {"groups": {"eBay": ["eBay - Outlet"]}})
@@ -612,19 +624,20 @@ class RefreshTest(unittest.TestCase):
         self.assertTrue(any(m["id"] == "capital-one/ebay" for m in rep["paired"]), out)
         out, rep = self.apply_ok("Capital One", [p], decisions={"pairs": [pair]})
         self.assertEqual(self.t.read("merchant-locations.json"), before, out)
-        self.assertEqual([m["why"] for m in rep["location_held"]], ["the location part changed (only an extended or shortened location is followed)"], out)
+        self.assertEqual([m["why"] for m in rep["location_held"]], ["the location part changed (only a name cut off on screen and now complete is followed)"], out)
 
     def test_same_place_by_whole_words(self):
         import importlib.util
         spec = importlib.util.spec_from_file_location("refresh_sp", self.t.root / "tools/refresh.py")
         m = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(m)
-        for a, b, want in [("Newport Beach", "newport beach", True), ("Newport", "Newport Beach", True),
-                           ("Newport Be...", "Newport Beach", True), ("Newport Be", "Newport Beach", False),
-                           ("LA", "Lakewood", False), ("North", "Northridge", False), ("Irvine", "Newport Beach", False)]:
+        for a, b, want in [("Newport Beach", "newport beach", True), ("Newport Be...", "Newport Beach", True),
+                           ("Newport Be…", "Newport Beach", True), ("Newport", "Newport Beach", False),
+                           ("Newport Be", "Newport Beach", False), ("Newport Beach", "Newport Be...", False),
+                           ("LA", "Lakewood", False), ("LA", "La Habra", False), ("North", "North Hollywood", False),
+                           ("North", "Northridge", False), ("Irvine", "Newport Beach", False)]:
             with self.subTest(a=a, b=b):
                 self.assertEqual(m.same_place(a, b), want)
-                self.assertEqual(m.same_place(b, a), want)
 
     def test_rename_is_not_a_candidate_of_its_own_old_name(self):
         self.t.change_offers(lambda by, d: by["capital-one/ebay"].update(merchant="eBay - Outlet"))
@@ -639,8 +652,8 @@ class RefreshTest(unittest.TestCase):
         self.assertEqual(rep["location_candidates"], [], out)
 
     def test_renamed_location_member_follows_in_the_same_run(self):
-        self.t.change_offers(lambda by, d: by["capital-one/ebay"].update(merchant="eBay - Outlet"))
-        self.t.write_json("merchant-locations.json", {"groups": {"eBay": ["eBay - Outlet"]}})
+        self.t.change_offers(lambda by, d: by["capital-one/ebay"].update(merchant="eBay - Outlet St..."))
+        self.t.write_json("merchant-locations.json", {"groups": {"eBay": ["eBay - Outlet St..."]}})
         def fn(rows):
             for r in rows:
                 if r["merchant"] == "eBay":
@@ -649,7 +662,7 @@ class RefreshTest(unittest.TestCase):
         out, rep = self.apply_ok("Capital One", [self.t.csv("Capital One", fn)])
         self.assertEqual(self.t.offers()["capital-one/ebay"]["merchant"], "eBay - Outlet Store")
         self.assertEqual(self.t.load("merchant-locations.json"), {"groups": {"eBay": ["eBay - Outlet Store"]}}, out)
-        self.assertEqual([(m["from"], m["to"], m["how"]) for m in rep["location_moves"]], [("eBay - Outlet", "eBay - Outlet Store", "move")])
+        self.assertEqual([(m["from"], m["to"], m["how"]) for m in rep["location_moves"]], [("eBay - Outlet St...", "eBay - Outlet Store", "move")])
         self.assertEqual(rep["location_candidates"], [], "an approved member's rename is not a new candidate")
 
     def test_renamed_location_member_that_no_longer_fits_is_held(self):
