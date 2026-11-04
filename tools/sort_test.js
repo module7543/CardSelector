@@ -906,7 +906,7 @@ const label = r => r.merchant + " | " + r.card + " | " + r.bonus;
     await page.selectOption("#sort", "newest");
     await page.locator("#chans button", { hasText: /^In store/ }).click();
     // Every test offer is online: the count line says how many the In store choice hides, as on the main list.
-    ok((await page.textContent("#count")) === "4 hidden by the In store filter", "what changed: the count line names what the In store filter hides (\"" + (await page.textContent("#count")) + "\")");
+    ok((await page.textContent("#count")) === "0 new offers shown for In store · 4 online only hidden", "what changed: the count line names what the In store filter hides (\"" + (await page.textContent("#count")) + "\")");
     await page.fill("#q", "kilo");
     const stIn = await stored();
     await page.click("#wcback");
@@ -1107,7 +1107,19 @@ const label = r => r.merchant + " | " + r.card + " | " + r.bonus;
       fx("zt-c1", "Capital One", "Zqtory", "Clothing & Jewelry", "3% back", { activation: "none_shown", channel: "online" }),
       fx("zt-flex", "Chase Freedom Flex", "Zqtory Outlet", "Clothing & Jewelry", "5% cash back", { activation: "needs_activation", channel: "none_shown" }),
       // A typed keyword with no offer of its own (Amazon) next to a merchant with an in-store offer.
-      fx("amf", "U.S. Bank", "Amazon Fresh", "Groceries & Food Delivery", "5% cash back", { channel: "in_store" })
+      fx("amf", "U.S. Bank", "Amazon Fresh", "Groceries & Food Delivery", "5% cash back", { channel: "in_store" }),
+      // Step 2A. Online shopping through offers needs channel "online": combined channels don't prove it.
+      fx("zo-c1", "Capital One", "Zqonl Gadgets", "Electronics & Software", "3% back", { activation: "none_shown", channel: "online" }),
+      fx("zi-c1", "Capital One", "Zqiso Gadgets", "Electronics & Software", "3% back", { activation: "none_shown", channel: "in_store_and_online" }),
+      fx("zp-c1", "Capital One", "Zqapp Gadgets", "Electronics & Software", "3% back", { activation: "none_shown", channel: "in_store_and_app" }),
+      fx("zn-c1", "Capital One", "Zqns Gadgets", "Electronics & Software", "3% back", { activation: "none_shown", channel: "online" }),
+      fx("zn-flex", "Chase Freedom Flex", "Zqns Gadgets", "Electronics & Software", "5% cash back", { activation: "needs_activation", channel: "none_shown" }),
+      fx("zm-c1", "Capital One", "Zqmixo Gadgets", "Electronics & Software", "3% back", { activation: "none_shown", channel: "online" }),
+      fx("zm-boa", "Bank of America", "Zqmixo Gadgets", "Electronics & Software", "2% Cash back", { channel: "in_store_and_online" }),
+      fx("etsy", "Capital One", "Etsy", "Marketplaces & Department Stores", "3% back", { activation: "none_shown", channel: "in_store_and_online" }),
+      // Compact rows keep one short condition: a max reward (first $60) in store, ending in 5 days online.
+      fx("zc-usb", "U.S. Bank", "Zqcond Cafe", "Dining", "10% cash back", { channel: "in_store", fine_print: "Earn 10% cash back with a $6 cash back maximum." }),
+      fx("zc-flex", "Chase Freedom Flex", "Zqcond Cafe", "Dining", "15% cash back", { activation: "needs_activation", channel: "online", expires: "2026-11-09" })
     ];
     let BONUS = null; // entries' card -> activation (or "ended"), applied to the real bonus file
     const realBonus = JSON.parse(fs.readFileSync(path.join(SITE, "data/bonus-categories.json")));
@@ -1311,6 +1323,42 @@ const label = r => r.merchant + " | " + r.card + " | " + r.bonus;
     const top = await page.$eval("#use .usetop", e => e.textContent).catch(() => "");
     ok(/^Top offer: Zqcc Diner 30% with Citi Custom Cash, conditional: only if restaurants is your actual top eligible category this cycle\.$/.test(top),
       "s2 r1 Top offer says when its total is conditional (" + top + ")");
+    // Step 2A 1: the online shopping rate through offers only for channel "online" (a keyword still qualifies;
+    // none_shown still blocks). The Online filter itself still keeps the combined channels.
+    for (const [q, want, why] of [["zqonl", true, "an online offer qualifies"], ["zqiso", false, "an in_store_and_online offer alone doesn't"],
+      ["zqapp", false, "an in_store_and_app offer alone doesn't"], ["etsy", true, "a keyword store qualifies whatever its offer's channel"],
+      ["zqns", false, "an offer with no channel shown blocks it"]]) {
+      a = await open(q, "online");
+      const cc = /^Ready now: Customized Cash 5\.25%/.test(a.heads[0] || "");
+      const sum = a.rates ? a.rates.sum : "";
+      ok(cc === want && a.rows.length >= 1 && (want ? /online shopping 5\.25%/.test(sum) : !/online shopping/.test(sum)),
+        "s2a online shopping: " + why + " (" + J([a.heads[0], a.rates, a.rows]) + ")");
+    }
+    a = await open("zqmixo", "online");
+    ok(!/^Ready now: Customized Cash/.test(a.heads[0] || "") && /: 1 offer at Zqmixo Gadgets also works in store or in an app\./.test(a.rates.nc),
+      "s2a an online offer next to an in_store_and_online one: not counted, and Not counted says why (" + J([a.heads[0], a.rates.nc]) + ")");
+    // Step 2A 2: the count line, from the list's own channel rules.
+    const count = () => page.textContent("#count");
+    for (const [q, ch, want] of [["la colombe", "store", "1 offer shown for In store · 3 online only hidden"],
+      ["la colombe", "online", "3 offers shown for Online · 1 in store only hidden"], ["la colombe", null, "4 offers · 3 online only · 1 in store only"],
+      ["coffee bean", "online", "3 offers shown for Online · 2 channel not shown"],
+      ["coffee bean", "store", "2 offers shown for In store · 2 channel not shown · 1 online only hidden"],
+      ["coffee bean", null, "3 offers · 1 online only · 2 channel not shown"],
+      ["zqiso", "store", "1 offer shown for In store"], ["zqapp", null, "1 offer · 1 in store & app"]]) {
+      a = await open(q, ch);
+      const c = await count();
+      ok(c === want && (/(\d+) offers? /.exec(c) || [0, -1])[1] == a.rows.length, "s2a count line, " + q + " " + (ch || "any") + ": \"" + c + "\" (" + a.rows.length + " rows)");
+    }
+    // Step 2A 3: compact rows keep their one short condition (and the activation wording).
+    a = await open("zqcond", null);
+    ok(a.chanRows.length === 2 && /^In store: Smartly 14% ready now \(first \$60\)/.test(a.chanRows[0]) &&
+      /Freedom Flex 20% after activating \(ends Nov 9\)/.test(a.chanRows[1]), "s2a compact rows keep first $60 / ends Nov 9 (" + J(a.chanRows) + ")");
+    a = await open("zqcond", "store");
+    ok(/^Online: Freedom Flex 20% after activating \(ends Nov 9\)/.test(a.alt || "") && /first \$60/.test(a.heads[0]), "s2a the other-channel row keeps its condition (" + J([a.heads[0], a.alt]) + ")");
+    a = await open("zqcond", "online");
+    ok(/^After activating: Freedom Flex 20% \(5% dining \+ 15% Chase offer, ends Nov 9\)/.test(a.heads[1] || ""), "s2a under Online the full line keeps ends Nov 9, not a repeated online (" + a.heads[1] + ")");
+    a = await open("zqweb", null);
+    ok(/Discover it 16% add to Discover it/.test(a.chanRows[1] || ""), "s2a compact rows still say add to <card> (" + a.chanRows[1] + ")");
     ok(!errs.length, "s2: no page errors (" + errs.join("; ") + ")");
 
     // The real merchant-locations.json (52 groups when this was written) with the real offers: it loads, and a
