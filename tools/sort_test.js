@@ -1535,6 +1535,7 @@ function listRows(sel) {
       fx("am-usb", "U.S. Bank", "Zqamazon", "Marketplaces & Department Stores", "5% cash back"),
       fx("am-c1", "Capital One", "Zqamazon.com", "Marketplaces & Department Stores", "3% back", { activation: "none_shown", channel: "online" }),
       fx("zsh-c1", "Capital One", "Zqshopx.com", "Clothing & Jewelry", "6% back", { activation: "none_shown", channel: "online" }),
+      fx("zdn-c1", "Capital One", "Zqdinerx.com", "Dining", "6% back", { activation: "none_shown", channel: "online" }),
       // Step 3A: a Custom Cash row whose total adds the planned restaurants 5% (conditional), and one in a category
       // the plan doesn't cover (its 1% base rate, certain).
       fx("cc-dine", "Citi Custom Cash", "Zqcc Bistro", "Dining", "5% Back", { activation: "needs_activation", channel: "none_shown" }),
@@ -1703,6 +1704,13 @@ function listRows(sel) {
       await open(q, ch);
       const at = await page.$$eval("#use .useat", es => es.map(e => e.textContent));
       ok(J(at) === J(want ? [want] : []), "s3a \"" + q + "\" " + ch + ": lead " + J(at));
+    }
+    // The bonus rows' lead keeps Step 2's test too: "zqdinerx" is the merchant Zqdinerx.com (merchant identity), so its
+    // dining row has no "Dining at Zqdinerx.com" lead; "alibaba" in store matched the restaurant, so it has one.
+    for (const [q, ch, want] of [["zqdinerx", null, false], ["alibaba", "store", true]]) {
+      await open(q, ch);
+      const leads = await page.$$eval("#use details.bonusrow .bhead", es => es.map(e => e.textContent));
+      ok(leads.length && leads.some(l => / at /.test(l)) === want, "s3a bonus-row lead for \"" + q + "\" " + (ch || "any") + ": " + J(leads));
     }
     v = await open("zqamazon", null);
     ok(J(ids(v)) === J(["Zqamazon: am-usb am-c1"]) && v.mcs[0].sub === "Marketplaces & Department Stores · 2 offers",

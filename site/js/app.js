@@ -131,8 +131,8 @@
     var sp = spaced(s.replace(/\.(com|net|org)\b/gi, "")), k = sp.replace(/ /g, "");
     return NAME_EXCEPTIONS[k] ? sp.replace(/ /g, "_") : k;
   }
-  // A name as compared with what was typed (the "At <merchant>" leads): compact(), as in Step 2, so "jackery" is not
-  // "jackery.com"; only the named exception keeps its word breaks ("alibaba" is not "Ali Baba").
+  // A name as compared with what was typed (the "At <merchant>" / "Dining at <merchant>" leads): compact(), as in
+  // Step 2, so "jackery" is not "jackery.com"; only the named exception keeps its word breaks ("alibaba" is not "Ali Baba").
   function typedForm(s) { var c = compact(s); return NAME_EXCEPTIONS[c] ? merchantKey(s) : c; }
 
   function todayISO() {
@@ -1370,7 +1370,7 @@
     order.forEach(function (t) {
       t.lead = null;
       if (!byQuery || !t.names.length || t.cuisine) return;
-      var same = t.names.some(function (n) { return typedForm(n) === typedForm(query); });
+      var same = t.names.some(function (n) { return typedForm(n) === typedForm(query) || merchantKey(n) === merchantKey(query); });
       if (!same) t.lead = t.names[0] + (t.names.length > 1 ? " and " + (t.names.length - 1) + " more" : "");
     });
     // The everyday card (Smartly 4%) joins every row that has a bonus card, at its rank; bonus cards below it
