@@ -489,7 +489,7 @@ async function usedChecks(page, load, search, testEdits) {
   let list = await rows();
   // Merchant containers in the order of their newest used offer (a merchant's used offers together).
   // (Merchant identity as the page has it: the full name, an approved location under its group.)
-  const mkey = n => n.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/\.(com|net|org)\b/gi, "").toLowerCase().replace(/[^a-z0-9]+/g, "");
+  const mkey = n => { const sp = n.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/\.(com|net|org)\b/gi, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim(), k = sp.replace(/ /g, ""); return k === "alibaba" ? sp.replace(/ /g, "_") : k; };
   const locs = JSON.parse(fs.readFileSync(path.join(DATA, "merchant-locations.json"))).groups, member = {};
   Object.keys(locs).forEach(g => locs[g].forEach(m => { member[mkey(m)] = mkey(g); }));
   const wantMc = (l => { const by = new Map(); l.forEach(o => { const k = member[mkey(o.merchant)] || mkey(o.merchant);
