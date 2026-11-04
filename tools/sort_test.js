@@ -1939,25 +1939,28 @@ function listRows(sel) {
     ["Ralphs", "Temu", "Chevron", "Regal", "SoCalGas"].forEach(k => ok(Object.values(realBonus.keyword_lists).some(l => (l.keywords || []).includes(k)),
       "qp fixture: \"" + k + "\" is still a keyword in the real lists (the Step 2 comparison matches through it)"));
     let CASE = {}; // { set: { card: activation | "ended" | {start, end} }, choice }
-    await page.route("**/data/offers.json", r => r.fulfill({ json: Object.assign({}, real, { offers: FX }) }));
-    await page.route("**/data/phone-edits.json", r => r.fulfill({ json: {} }));
-    await page.route("**/data/merchant-locations.json", r => r.fulfill({ json: { groups: {} } }));
-    await page.route("**/data/cards.json", r => r.fulfill({ json: Object.assign({}, realCards, {
-      preferred_rewards: { cards: ["Unlimited Cash", "Customized Cash"], percent: 75, until: "2026-12-15", then_percent: 50, note: "test", checked: "2026-10-20" } }) }));
-    await page.route("**/data/bonus-categories.json", r => {
-      const d = { keyword_lists: realBonus.keyword_lists, entries: JSON.parse(JSON.stringify(ENTRIES)) };
-      d.entries.forEach(e => {
-        const b = (CASE.set || {})[e.card];
-        if (b === "ended") { e.start = "2026-07-01"; e.end = "2026-09-30"; } else if (b && typeof b === "object") Object.assign(e, b); else if (b) e.activation = b;
-        if (e.choices && CASE.choice) e.choice = CASE.choice;
-      });
-      return r.fulfill({ json: d });
-    });
+    const ROUTES = {
+      "offers.json": r => r.fulfill({ json: Object.assign({}, real, { offers: FX }) }),
+      "phone-edits.json": r => r.fulfill({ json: {} }),
+      "merchant-locations.json": r => r.fulfill({ json: { groups: {} } }),
+      "cards.json": r => r.fulfill({ json: Object.assign({}, realCards, {
+        preferred_rewards: { cards: ["Unlimited Cash", "Customized Cash"], percent: 75, until: "2026-12-15", then_percent: 50, note: "test", checked: "2026-10-20" } }) }),
+      "bonus-categories.json": r => {
+        const d = { keyword_lists: realBonus.keyword_lists, entries: JSON.parse(JSON.stringify(ENTRIES)) };
+        d.entries.forEach(e => {
+          const b = (CASE.set || {})[e.card];
+          if (b === "ended") { e.start = "2026-07-01"; e.end = "2026-09-30"; } else if (b && typeof b === "object") Object.assign(e, b); else if (b) e.activation = b;
+          if (e.choices && CASE.choice) e.choice = CASE.choice;
+        });
+        return r.fulfill({ json: d });
+      }
+    };
+    for (const k of Object.keys(ROUTES)) await page.route("**/data/" + k, ROUTES[k]);
     // Everything a tile shows (screen-reader-only text left out), plus the section's layout facts.
     const quick = () => page.evaluate(() => {
       const q = document.getElementById("qp");
       if (q.hidden) return null;
-      const txt = e => { if (!e) return null; const c = e.cloneNode(true); c.querySelectorAll(".sr-only, .usegain").forEach(x => x.remove()); return c.textContent; };
+      const txt = e => { if (!e) return null; const c = e.cloneNode(true); c.querySelectorAll(".sr-only, .usegain").forEach(x => x.remove()); return c.textContent.replace(/\u00a0/g, " "); };
       const gain = e => e && e.querySelector(".usegain") ? e.querySelector(".usegain").textContent : null;
       const tiles = {};
       q.querySelectorAll(".qpgrid > li.qpt").forEach(li => {
@@ -2014,10 +2017,12 @@ function listRows(sel) {
     const parity = async (name, Q) => {
       for (const topic of Object.keys(PAR)) {
         const t = Q.tiles[topic], s = await step2(PAR[topic][0], PAR[topic][1]);
-        const tAfter = t.after ? /^After activating: (.+) ([\d.]+%) (\+.+)$/.exec(t.after) : null, tCond = t.cond ? /^(.+) ([\d.]+%) · conditional (\+.+)$/.exec(t.cond) : null;
+        // A line the tile shows but that doesn't read as expected counts as a mismatch, never as no line.
+        const parts = (text, re) => { if (!text) return null; const m = re.exec(text); return m ? [m[1], m[2], m[3]] : ["unreadable", text]; };
+        const tAfter = parts(t.after, /^After activating: (.+) ([\d.]+%) (\+.+)$/), tCond = parts(t.cond, /^(.+) ([\d.]+%) · conditional (\+.+)$/);
         const same = s.ready && t.card === s.ready.card && t.rate === s.ready.rate && (t.more ? +/\d+/.exec(t.more)[0] : 0) === s.ready.n - 1 &&
-          J(tAfter ? [tAfter[1], tAfter[2], tAfter[3]] : null) === J(s.after ? [s.after.card, s.after.rate, s.after.gain] : null) &&
-          J(tCond ? [tCond[1], tCond[2], tCond[3]] : null) === J(s.cond ? [s.cond.card, s.cond.rate, s.cond.gain] : null);
+          J(tAfter) === J(s.after ? [s.after.card, s.after.rate, s.after.gain] : null) &&
+          J(tCond) === J(s.cond ? [s.cond.card, s.cond.rate, s.cond.gain] : null);
         ok(same, "qp " + name + ": " + topic + " matches the Step 2 answer for \"" + PAR[topic][0] + "\" (tile " + J(t) + "; Step 2 " + J(s.raw) + ")");
       }
     };
@@ -2035,7 +2040,7 @@ function listRows(sel) {
     tileIs("A", Q, "Dining", { rate: "5%", card: "Freedom Flex", more: "+2 more ready", dated: Q4, after: null, cond: null, note: null });
     tileIs("A", Q, "Grocery stores", { rate: "5%", card: "Freedom Flex", more: "+1 more ready", dated: Q4, after: null, cond: null, note: GROCERY_NOTE });
     tileIs("A", Q, "Online shopping", { rate: "5.25%", card: "Customized Cash", more: null, dated: null, after: null, cond: null, note: BOOST });
-    tileIs("A/E", Q, "Gas stations", { rate: "4%", card: "Smartly", more: "+1 more ready", dated: null, after: null, cond: null, note: "Costco Visa: 5% at Costco gas" });
+    tileIs("A/E", Q, "Gas stations", { rate: "4%", card: "Smartly", more: "+1 more ready", dated: null, after: null, cond: null, note: "Costco Visa also 4%, 5% at Costco gas" });
     tileIs("A", Q, "Entertainment", { rate: "5%", card: "Discover it", more: null, dated: Q4, after: null, cond: null, note: ENT_NOTE });
     tileIs("A/H", Q, "Utilities", { rate: "5%", card: "Discover it", more: null, dated: Q4, after: null, cond: null, note: null });
     ok(Object.keys(Q.tiles).every(k => !Q.tiles[k].empty && !Q.tiles[k].over), "qp H: no empty parts and nothing wider than its tile (" + J(Object.keys(Q.tiles).map(k => [k, Q.tiles[k].empty, Q.tiles[k].over])) + ")");
@@ -2104,8 +2109,32 @@ function listRows(sel) {
     // G. A dated bonus that isn't a calendar quarter: "Through Nov 30", no quarter name.
     Q = await open({ set: { "Discover it": { start: "2026-11-01", end: "2026-11-30" } } });
     tileIs("G", Q, "Utilities", { rate: "5%", card: "Discover it", dated: "Through Nov 30" });
+    // Dates in a tile stay on one line ("Dec 31", "Dec 15").
+    ok(await page.evaluate(() => [...document.querySelectorAll("#qp .qpd, #qp .qpnote")].every(e => !/[A-Z][a-z]{2} \d/.test(e.textContent))), "qp: tile dates use a no-break space");
     ok(errs.length === 0, "qp: no page errors (" + errs.join("; ") + ")");
     await ctx5.close();
+    // The Preferred Rewards switch (Dec 15 -> 16) with the tab open: the day redraw keeps the tile's note in step with
+    // the rate it shows (the rate itself follows the answer card's, which is worked out when the files are readied),
+    // and the tile still matches the Step 2 answer.
+    const ctx6 = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: "block" });
+    page = await ctx6.newPage();
+    page.on("pageerror", e => errs.push(e.message));
+    for (const k of Object.keys(ROUTES)) await page.route("**/data/" + k, ROUTES[k]);
+    CASE = {};
+    await page.clock.install({ time: new Date(2026, 11, 15, 23, 59, 0) });
+    await page.goto(base);
+    await page.waitForFunction(() => window.__cardsReady && window.__bonusReady && !document.getElementById("qp").hidden);
+    const before = (await quick()).tiles["Online shopping"];
+    await page.clock.runFor(120000);
+    await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+    await page.waitForTimeout(100);
+    Q = await quick();
+    const tOn = Q.tiles["Online shopping"], tierOf = n => +((/Incl\. (\d+)% Preferred/.exec(n || "") || [0, 0])[1]);
+    ok(before.rate === "5.25%" && tierOf(before.note) === 75 && /\(50% after Dec 15\)/.test(before.note) && tOn.rate === (5.25 / 1.75 * (1 + tierOf(tOn.note) / 100)) + "%" && !/after Dec 15/.test(tOn.note),
+      "qp rollover: after midnight on Dec 15 the note's tier matches the rate shown (" + J([before.rate, before.note, tOn.rate, tOn.note]) + ")");
+    await parity("rollover", Q);
+    ok(errs.length === 0, "qp rollover: no page errors (" + errs.join("; ") + ")");
+    await ctx6.close();
     page = mainPage;
   }
 

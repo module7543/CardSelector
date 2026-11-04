@@ -2670,22 +2670,28 @@
     if (!e || !e.start || !e.end) return null;
     var s = /^(\d{4})-(\d{2})-01$/.exec(e.start), q = s && (+s[2] - 1) % 3 === 0 ? (+s[2] + 2) / 3 : 0;
     var last = q ? s[1] + "-" + ("0" + q * 3).slice(-2) + "-" + (q === 1 || q === 4 ? "31" : "30") : null;
-    return (last === e.end ? "Q" + q + " · through " : "Through ") + fmtDate(e.end);
+    return (last === e.end ? "Q" + q + " · through " : "Through ") + tileDate(e.end);
   }
-  // "Incl. 75% Preferred Rewards (50% after Dec 15)": the boost in a Bank of America rate, worded as the bonus rows
-  // ("incl. 75% Preferred Rewards") and the boost note ("50% after Dec 15") word it.
-  function boostShort(name) {
-    var p = cardsRaw && cardsRaw.preferred_rewards, b = boostPct(name);
+  // A date that stays on one line in a tile ("Dec 15").
+  function tileDate(iso) { return fmtDate(iso).replace(/ /g, " "); }
+  // "Incl. 75% Preferred Rewards (50% after Dec 15)": the boost in the leading rate r, worded as the bonus rows
+  // ("incl. 75% Preferred Rewards") and the boost note ("50% after Dec 15") word it. The percent is the one the
+  // rate was worked out with (a bonus group's rate is boosted when the file is readied), so the note always
+  // matches the rate shown.
+  function boostShort(name, r) {
+    var p = cardsRaw && cardsRaw.preferred_rewards, b = r && r.e ? r.e._boost : boostPct(name);
     if (!b) return null;
-    return "Incl. " + b + "% Preferred Rewards" +
-      (todayISO() <= p.until && p.then_percent !== p.percent ? " (" + p.then_percent + "% after " + fmtDate(p.until) + ")" : "");
+    return "Incl. " + b + "% Preferred Rewards" + (b === p.percent && todayISO() <= p.until && p.then_percent !== p.percent ?
+      " (" + p.then_percent + "% after " + tileDate(p.until) + ")" : "");
   }
   // At most one short note, only from the data: the leading card's Preferred Rewards boost, its rate group's
-  // rate_note or button_note, else a tied card's rate_note ("Costco Visa: 5% at Costco gas"). Nothing else is
-  // written; with none, the tile has no note. Smartly's own caveat is on the Everyday tile.
+  // rate_note or button_note, else a tied card as the answer card's tie note words it ("Costco Visa also 4%, 5% at
+  // Costco gas"). Nothing else is written; with none, the tile has no note. Smartly's own caveat is on the Everyday tile.
   function quickNote(p) {
-    var lead = p.wins[0], g = lead.base.g, notes = [boostShort(lead.C.name), g && g.rate_note, g && g.button_note];
-    p.wins.slice(1).forEach(function (c) { if (c.base.g && c.base.g.rate_note) notes.push(c.C.name + ": " + c.base.g.rate_note); });
+    var lead = p.wins[0], g = lead.base.g, notes = [boostShort(lead.C.name, lead.base), g && g.rate_note, g && g.button_note];
+    p.wins.slice(1).forEach(function (c) {
+      if (c.base.g && c.base.g.rate_note) notes.push(c.C.name + " also " + pct(c.total) + "%, " + c.base.g.rate_note);
+    });
     return notes.filter(function (n) { return n && n.length <= QP_NOTE_MAX; })[0] || null;
   }
   // One topic's answer: the best ready rate and its leading card (Smartly wins a tie it is in, then cards.json
