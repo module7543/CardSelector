@@ -34,31 +34,69 @@ function whole(name, query, strict) {
   for (let i = 0; i < ws.length; i++) for (let j = i, acc = ""; j < ws.length && acc.length < qc.length; j++) { acc += ws[j]; if (sameWord(acc, qc, strict)) return true; }
   return false;
 }
+// A row's names for whole-word matching, as the page's containerNames(): its merchant, its aliases and, for an
+// approved location member, its group's name.
+const wholeRow = (r, query, strict) => r.names.some(n => whole(n, query, strict));
 // Whole-word grouping, as the page's wholeLevel(): the matches with the "s" rule when they are 1 to 3 merchants
-// (the full name, as the page's merchant identity with no location groups); when more than 3, the exact-word
-// matches when those are 1 to 3; else none.
+// (merchant identity as the page has it: the container key, so an approved location and its group are one
+// merchant); when more than 3, the exact-word matches when those are 1 to 3; else none.
 // Returns false (no grouping) or the strict flag to use. `rows` must be the full result list.
 function grouped(rows, query) {
   if (!query) return false;
-  const count = strict => new Set(rows.filter(r => whole(r.merchant, query, strict)).map(r => spaced(r.merchant.replace(/\.(com|net|org)\b/gi, "")).replace(/ /g, ""))).size;
+  const count = strict => new Set(rows.filter(r => wholeRow(r, query, strict)).map(r => r.ck)).size;
   const n = count(false);
   if (n >= 1 && n <= 3) return { strict: false };
   if (n > 3) { const m = count(true); if (m >= 1 && m <= 3) return { strict: true }; }
   return false;
 }
-// Best offer order: (whole-word matches first, when grouped), then tier high to low, then amount high to low.
-// A percent offer's amount is its total with its card ("· 15% with Freedom") when the row shows one.
-function bestOrderBreak(rows, query) {
-  const g = grouped(rows, query);
-  const amt = r => { const k = rank(r.bonus); return (k[0] === 5 || k[0] === 4) && r.total != null ? r.total : k[1]; };
-  const key = r => [g && !whole(r.merchant, query, g.strict) ? 1 : 0, -rank(r.bonus)[0], -amt(r)];
-  for (let i = 1; i < rows.length; i++) {
-    const a = key(rows[i - 1]), b = key(rows[i]);
-    for (let k = 0; k < 3; k++) { if (a[k] < b[k]) break; if (a[k] > b[k]) return i; }
+// Container-aware order check: the rows inside each merchant container follow key() (lexicographic, smaller first),
+// and containers rank by their first (best) row. Returns the index of the first row out of order, or -1.
+function orderBreak(rows, key) {
+  const less = (a, b) => { for (let k = 0; k < a.length; k++) { if (a[k] < b[k]) return -1; if (a[k] > b[k]) return 1; } return 0; };
+  let head = null;
+  for (let i = 0; i < rows.length; i++) {
+    const r = rows[i], prev = rows[i - 1];
+    if (!prev || prev.ci !== r.ci) { if (head && less(key(head), key(r)) > 0) return i; head = r; }
+    else if (less(key(prev), key(r)) > 0) return i;
   }
   return -1;
 }
+// Best offer order: (whole-word matches first, when grouped), then tier high to low, then amount high to low.
+// A percent offer's amount is its row total (the big number).
+function bestOrderBreak(rows, query) {
+  const g = grouped(rows, query);
+  const amt = r => { const k = rank(r.bonus); return (k[0] === 5 || k[0] === 4) && r.total != null ? r.total : k[1]; };
+  return orderBreak(rows, r => [g && !wholeRow(r, query, g.strict) ? 1 : 0, -rank(r.bonus)[0], -amt(r)]);
+}
+// Each merchant container's first row, in container order.
+const heads = rows => rows.filter((r, i) => !i || rows[i - 1].ci !== r.ci);
+// Every offer row exactly once, every container's rows together (a container never split or repeated).
+const containersWhole = rows => new Set(rows.map(r => r.id)).size === rows.length &&
+  heads(rows).length === new Set(rows.map(r => r.ci)).size && new Set(heads(rows).map(r => r.ck)).size === heads(rows).length;
 const label = r => r.merchant + " | " + r.card + " | " + r.bonus;
+// The result rows in page order (run in the page): each offer row of every merchant container under `sel`, with the
+// offer it shows (window.__offerOf), its container (ci: its index, ck: its key, cname: its name) and its big number
+// (total: the row total of a percent offer). Main's flat rows (no containers, for the base app.js) read as before.
+function listRows(sel) {
+  const out = [];
+  document.querySelectorAll(sel + " > li.mc, " + sel + " > li.offer").forEach((c, ci) => {
+    const flat = c.matches("li.offer");
+    (flat ? [c] : [...c.querySelectorAll("li.offer")]).forEach(li => {
+      const o = window.__offerOf ? window.__offerOf(li.dataset.oid) : null;
+      const big = li.querySelector(".obig"), pctBig = big && /([\d.]+)%$/.exec(big.textContent);
+      const merchant = o ? o.merchant : li.querySelector(".merchant").textContent;
+      const old = flat && li.querySelector(".bonus .total");
+      out.push({ id: li.dataset.oid, merchant, card: li.querySelector(".mcard").textContent,
+        bonus: o ? o.bonus : li.querySelector(".bonus").firstChild.textContent,
+        total: flat ? (old ? +/([\d.]+)%/.exec(old.textContent)[1] : null) : pctBig ? +pctBig[1] : null,
+        totalText: flat ? (old ? old.textContent : "") : (li.querySelector(".obreak") || {}).textContent || "",
+        text: li.innerText, gone: li.classList.contains("gone"), loc: (li.querySelector(".loctag") || {}).textContent || null,
+        ci, ck: flat ? merchant : c.dataset.ck.replace(/^[^:]*:/, ""), cname: flat ? merchant : c.querySelector(".mcname").textContent,
+        names: [merchant].concat(o && o.aliases || [], !flat && li.querySelector(".loctag") ? [c.querySelector(".mcname").textContent] : []) });
+    });
+  });
+  return out;
+}
 
 (async () => {
   const server = http.createServer((req, res) => {
@@ -71,13 +109,7 @@ const label = r => r.merchant + " | " + r.card + " | " + r.bonus;
   const browser = await chromium.launch(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {});
   // Service workers blocked: the saved copy (sw.js) would answer requests before page.route sees them.
   let page = await browser.newPage({ viewport: { width: 390, height: 844 }, serviceWorkers: "block" });
-  const rows = () => page.$$eval("#main > ul.results > li.offer", ls => ls.map(li => ({
-    merchant: li.querySelector(".merchant").textContent,
-    card: li.querySelector(".mcard").textContent,
-    bonus: li.querySelector(".bonus").firstChild.textContent,
-    total: (t => t ? +/([\d.]+)%/.exec(t.textContent)[1] : null)(li.querySelector(".bonus .total")),
-    totalText: (li.querySelector(".bonus .total") || { textContent: "" }).textContent
-  })));
+  const rows = () => page.evaluate(listRows, "#main > ul.results");
   // Merchants the per-merchant "Use:" headline names (none for the category headline).
   const useNames = () => page.$$eval("#use .usemname, #use .useat", es => es.map(e => e.textContent.replace(/:\s*$/, "").replace(/^At /, "")).sort());
   // The answer card's text, without its Any / In store / Online selector and its Card rates here disclosure.
@@ -105,14 +137,17 @@ const label = r => r.merchant + " | " + r.card + " | " + r.bonus;
   // 1. "pizza": Round Table Pizza 10% above 1.92%, the same order with and without the Dining filter.
   // Many merchants match "pizza" as a whole word, so it is plain reward order (Greco's New York Pizzeria 5% above 4%).
   const pz = await setup("pizza", { all: true }), pzD = await setup("pizza", { cat: "Dining", all: true });
-  ok(pz.length > 0 && !grouped(pz, "pizza") && bestOrderBreak(pz, "pizza") === -1, "pizza, Best offer: plain reward order, no whole-word grouping (" + pz.length + " rows)");
+  ok(pz.length > 0 && !grouped(pz, "pizza") && bestOrderBreak(pz, "pizza") === -1 && containersWhole(pz),
+    "pizza, Best offer: plain reward order (inside each merchant container and across them), no whole-word grouping (" + pz.length + " rows, " + heads(pz).length + " merchants)");
   ok(JSON.stringify(pz.map(label)) === JSON.stringify(pzD.map(label)), "pizza: same order with and without the Dining filter");
-  const rt = pz.findIndex(r => r.merchant === "Round Table Pizza" && /^10%/.test(r.bonus)), low = pz.findIndex(r => /^1\.92%/.test(r.bonus));
-  if (rt === -1 || low === -1) skip("pizza: Round Table Pizza 10% or a 1.92% offer is no longer active");
-  else ok(rt < low, "pizza: Round Table Pizza 10% (row " + (rt + 1) + ") above 1.92% (row " + (low + 1) + ")");
-  const gr = pz.findIndex(r => /^Greco's New York Pizzeria$/.test(r.merchant) && /^5%/.test(r.bonus)), p4 = pz.findIndex(r => /^4%/.test(r.bonus));
-  if (gr === -1 || p4 === -1) skip("pizza: Greco's New York Pizzeria 5% or a 4% offer is no longer active");
-  else ok(gr < p4, "pizza: Greco's New York Pizzeria 5% (row " + (gr + 1) + ") above the first 4% (row " + (p4 + 1) + ")");
+  // Merchant containers rank by their best row: compared on each container's first row.
+  const pzh = heads(pz);
+  const rt = pzh.findIndex(r => r.cname === "Round Table Pizza"), low = pzh.findIndex(r => /^1\.92%/.test(r.bonus));
+  if (rt === -1 || low === -1) skip("pizza: Round Table Pizza or a merchant led by a 1.92% offer is no longer active");
+  else ok(rt < low, "pizza: the Round Table Pizza container (" + (rt + 1) + ") above one led by 1.92% (" + (low + 1) + ")");
+  const gr = pzh.findIndex(r => /^Greco's New York Pizzeria$/.test(r.cname) && /^5%/.test(r.bonus)), p4 = pzh.findIndex(r => /^4%/.test(r.bonus));
+  if (gr === -1 || p4 === -1) skip("pizza: Greco's New York Pizzeria led by 5%, or a merchant led by 4%, is no longer active");
+  else ok(gr < p4, "pizza: Greco's New York Pizzeria 5% (container " + (gr + 1) + ") above the first led by 4% (" + (p4 + 1) + ")");
 
   // 2. "shell": a Shell offer above Bombshell Sportswear and Shelly, even with a smaller reward.
   await page.route("**/data/offers.json", async route => {
@@ -130,17 +165,21 @@ const label = r => r.merchant + " | " + r.card + " | " + r.bonus;
 
   // 3. Needs activation, Highest percent: every definite percent above every "Up to" percent.
   const na = await setup("", { act: "Needs activation", sort: "percent", all: true });
-  const pct = na.filter(r => /\d\s*%/.test(r.bonus) && !/^\s*save\b/i.test(r.bonus));
+  // Percent first (no percent last), definite above "Up to", then the percent high to low: inside each container and
+  // across containers (by their first row).
+  const pctKey = r => { const m = /(\d+(?:\.\d+)?)\s*%/.exec(r.bonus), sv = /^\s*save\b/i.test(r.bonus); return m && !sv ? [0, /^\s*up to\b/i.test(r.bonus) ? 1 : 0, -m[1]] : [1, 0, 0]; };
+  const nah = heads(na), pct = nah.filter(r => pctKey(r)[0] === 0);
   const firstUp = pct.findIndex(r => /^\s*up to\b/i.test(r.bonus)), lastDef = pct.map(r => !/^\s*up to\b/i.test(r.bonus)).lastIndexOf(true);
-  ok(pct.length > 0 && (firstUp === -1 || lastDef < firstUp), "Needs activation, Highest percent: definite percents (" + (lastDef + 1) + ") all above \"Up to\" percents (" + na.length + " rows)");
-  const yt = na.findIndex(r => /^50%/.test(r.bonus)), up50 = na.findIndex(r => /^up to (\d+)/i.test(r.bonus) && +/^up to (\d+)/i.exec(r.bonus)[1] >= 50);
+  ok(pct.length > 0 && (firstUp === -1 || lastDef < firstUp) && orderBreak(na, pctKey) === -1,
+    "Needs activation, Highest percent: definite percents above \"Up to\" percents, in each container and across them (" + na.length + " rows, " + nah.length + " merchants)");
+  const yt = nah.findIndex(r => /^50%/.test(r.bonus)), up50 = nah.findIndex(r => /^up to (\d+)/i.test(r.bonus) && +/^up to (\d+)/i.exec(r.bonus)[1] >= 50);
   if (yt === -1 || up50 === -1) skip("Needs activation: no definite 50% or no \"Up to 50%\"-or-more offer is active");
-  else ok(yt < up50, "Needs activation, Highest percent: definite 50% (row " + (yt + 1) + ") above \"Up to\" 50%+ (row " + (up50 + 1) + ")");
+  else ok(yt < up50, "Needs activation, Highest percent: a merchant led by a definite 50% (" + (yt + 1) + ") above one led by \"Up to\" 50%+ (" + (up50 + 1) + ")");
   const nb = await setup("", { act: "Needs activation" });
   ok(bestOrderBreak(nb, "") === -1, "Needs activation, Best offer: first page in tier order (definite % before \"Up to\" %)");
   const nr = await setup("", { act: "Needs activation", sort: "rate", all: true });
-  const ru = nr.findIndex(r => /^\s*up to\b.*%/i.test(r.bonus)), rd = nr.map(r => /\d\s*%/.test(r.bonus) && !/^\s*(up to|save)\b/i.test(r.bonus)).lastIndexOf(true);
-  ok(ru !== -1 && rd !== -1 && rd < ru, "Needs activation, Best rate: definite percents (last at row " + (rd + 1) + ") above \"Up to\" percents (first at row " + (ru + 1) + ")");
+  const nrh = heads(nr), ru = nrh.findIndex(r => /^\s*up to\b.*%/i.test(r.bonus)), rd = nrh.map(r => /\d\s*%/.test(r.bonus) && !/^\s*(up to|save)\b/i.test(r.bonus)).lastIndexOf(true);
+  ok(ru !== -1 && rd !== -1 && rd < ru, "Needs activation, Best rate: merchants led by definite percents (last at " + (rd + 1) + ") above those led by \"Up to\" percents (first at " + (ru + 1) + ")");
 
   // Ties break by merchant A to Z, then card, in every reward sort: 021 Originals and 1Password (both 30%) keep
   // one order in Best offer and Highest percent.
@@ -149,20 +188,24 @@ const label = r => r.merchant + " | " + r.card + " | " + r.bonus;
   if ([b021, b1p, p021, p1p].includes(-1)) skip("ties: 021 Originals or 1Password is not on the Needs activation lists");
   else ok((b021 < b1p) === (p021 < p1p), "ties: 021 Originals / 1Password in the same order in Best offer and Highest percent");
 
-  // 4. "cafe" Show more continues the same order with no repeats.
-  const cf0 = await setup("cafe");
+  // 4. Show more continues the same order with no repeats (a search with more than 60 merchants: Show more pages by
+  // merchant container).
+  let cq = null, cf0 = null;
+  for (const q of ["bar", "grill", "house", "cafe"]) { cf0 = await setup(q); cq = q; if (await page.locator("#main > button.more:visible").count()) break; }
   await moreAll();
   const cf = await rows();
-  ok(cf.length > cf0.length, "cafe: Show more added rows (" + cf0.length + " -> " + cf.length + ")");
-  ok(JSON.stringify(cf.slice(0, cf0.length).map(label)) === JSON.stringify(cf0.map(label)), "cafe: the first page is unchanged after Show more");
-  ok(new Set(cf.map(label)).size === cf.length, "cafe: no repeated rows");
-  ok(bestOrderBreak(cf, "cafe") === -1, "cafe: Best offer order holds across the pages");
+  ok(cf.length > cf0.length, cq + ": Show more added rows (" + cf0.length + " -> " + cf.length + ")");
+  ok(heads(cf0).length === 60 && containersWhole(cf), cq + ": the first page is 60 merchant containers, none split (" + heads(cf0).length + " containers, " + cf0.length + " rows)");
+  ok(JSON.stringify(cf.slice(0, cf0.length).map(label)) === JSON.stringify(cf0.map(label)), cq + ": the first page is unchanged after Show more");
+  ok(new Set(cf.map(r => r.id)).size === cf.length, cq + ": no repeated rows");
+  ok(bestOrderBreak(cf, cq) === -1, cq + ": Best offer order holds across the pages");
 
   // 5. Save offers rank last under Best offer (Bank of America has them).
   const bo = await setup("", { card: "Bank of America", all: true });
-  const firstSave = bo.findIndex(r => /^\s*save\b/i.test(r.bonus)), saves = bo.filter(r => /^\s*save\b/i.test(r.bonus)).length;
+  // Saves last: in each container after its rewards, and merchants led by a Save after every other merchant.
+  const boh = heads(bo), firstSave = boh.findIndex(r => /^\s*save\b/i.test(r.bonus)), saves = boh.filter(r => /^\s*save\b/i.test(r.bonus)).length;
   if (firstSave === -1) skip("Bank of America: no Save offers are active");
-  else ok(firstSave === bo.length - saves && bestOrderBreak(bo, "") === -1, "Bank of America, Best offer: all " + saves + " Save offers last, Save Now at the very end (" + bo.length + " rows)");
+  else ok(firstSave === boh.length - saves && bestOrderBreak(bo, "") === -1, "Bank of America, Best offer: the " + saves + " merchants led by a Save offer last, Save Now at the very end, Saves last inside each container (" + bo.length + " rows)");
 
   // 6. Best offer ranks percent offers by total: offer + what its card earns there.
   const near = (a, b) => a != null && Math.abs(a - b) < 0.006;
@@ -385,23 +428,26 @@ const label = r => r.merchant + " | " + r.card + " | " + r.bonus;
   const exp = await page.evaluate(() => {
     const out = {};
     document.querySelectorAll("li.offer").forEach(li => {
-      const m = li.querySelector(".meta"), kids = [...m.children], soon = m.querySelector(".badge.soon");
-      out[li.querySelector(".merchant").textContent] = { gone: li.classList.contains("gone"), text: soon ? soon.textContent : null,
+      const t = li.querySelector(".oterms"), kids = [...t.children], soon = t.querySelector(".soon");
+      out[window.__offerOf(li.dataset.oid).merchant] = { gone: li.classList.contains("gone"), text: soon ? soon.textContent : null,
         icon: soon ? !!soon.querySelector("svg.bico[aria-hidden='true'] circle") : null,
-        after: soon ? kids.indexOf(soon) > kids.indexOf(m.querySelector(".badge.act")) && kids.indexOf(m.querySelector(".badge.act")) !== -1 : null,
-        before: soon ? kids.indexOf(soon) < kids.indexOf(m.querySelector(".badge.chan")) : null };
+        // The terms line: channel first, then the ends-soon note (in place of the end date); the status on the right.
+        after: soon ? kids.indexOf(soon) > kids.indexOf(t.querySelector(".chan")) && kids.indexOf(t.querySelector(".chan")) !== -1 : null,
+        status: (li.querySelector(".ostat") || {}).textContent || null, ends: /Ends (about )?[A-Z][a-z]{2} \d/.test(t.textContent) };
     });
     return out;
   });
   await page.unroute("**/data/offers.json");
-  for (const [m, , want] of EXP) {
+  for (const [m, n, want] of EXP) {
     const x = exp[m];
-    ok(x && !x.gone && x.text === want && (!want || (x.icon && x.after && x.before)),
-      m + ": " + (want ? "\"" + want + "\" with a clock, after activation, before channel" : "no ends-soon badge") + " (" + JSON.stringify(x) + ")");
+    ok(x && !x.gone && x.text === want && x.status === "Activate" && (want ? x.icon && x.after && !x.ends : x.ends === (n != null)),
+      m + ": " + (want ? "\"" + want + "\" with a clock, after the channel, no plain end date" : "no ends-soon note" + (n != null ? ", its end date instead" : "")) + " (" + JSON.stringify(x) + ")");
   }
   ok(exp["Zzexp Gone"] && exp["Zzexp Gone"].gone && exp["Zzexp Gone"].text === null, "Zzexp Gone (Recently unavailable, ends tomorrow): no ends-soon badge (" + JSON.stringify(exp["Zzexp Gone"]) + ")");
   // The badge is display only: the first 10 rows of 12 searches, on the same fixed day, match the base branch's
-  // app.js (BASE_REF, else origin/main, else main, else main fetched from origin), when git can get it.
+  // app.js (BASE_REF, else origin/main, else main, else main fetched from origin), when git can get it. A base
+  // without merchant containers lists offers flat, so its order is clustered first: each merchant's offers moved
+  // up to its best one, merchants in the order of their best offers (merchant identity as the page has it).
   let baseApp = null, baseRef = null;
   for (const ref of [process.env.BASE_REF, "origin/main", "main"].filter(Boolean)) {
     try { baseApp = execFileSync("git", ["show", ref + ":site/js/app.js"], { cwd: path.join(__dirname, ".."), stdio: ["ignore", "pipe", "ignore"] }); baseRef = ref; break; } catch (e) {}
@@ -419,12 +465,22 @@ const label = r => r.merchant + " | " + r.card + " | " + r.bonus;
   else {
     const diff = [];
     let soonSeen = 0;
+    const locs = JSON.parse(fs.readFileSync(path.join(SITE, "data/merchant-locations.json"))).groups;
+    const mkey = s => s.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/\.(com|net|org)\b/gi, "").toLowerCase().replace(/[^a-z0-9]+/g, "");
+    const member = {};
+    Object.keys(locs).forEach(g => locs[g].forEach(m => { member[mkey(m)] = mkey(g); }));
+    const cluster = list => { const by = new Map(); list.forEach(r => { const k = member[mkey(r.merchant)] || mkey(r.merchant); if (!by.has(k)) by.set(k, []); by.get(k).push(r); }); return [...by.values()].flat(); };
     for (const q of SEARCHES) {
-      const mine = (await setup(q)).slice(0, 10).map(label);
-      soonSeen += await page.locator("#main .badge.soon").count();
+      await setup(q, { all: true });
+      const mineAll = await rows();
+      const mine = mineAll.slice(0, 10).map(r => r.id);
+      soonSeen += await page.locator("#main .oterms .soon").count();
       await page.route("**/js/app.js", route => route.fulfill({ body: baseApp, contentType: "text/javascript" }));
-      const theirs = (await setup(q)).slice(0, 10).map(label);
+      await setup(q, { all: true });
+      const base0 = await rows(), flatBase = base0.every((r, i) => r.ci === i);
+      const theirs = (flatBase ? cluster(base0) : base0).slice(0, 10).map(r => r.id);
       await page.unroute("**/js/app.js");
+      if (new Set(mineAll.map(r => r.id)).size !== mineAll.length || mineAll.length !== base0.length) diff.push(q + " (" + mineAll.length + " rows, base " + base0.length + ")");
       if (JSON.stringify(mine) !== JSON.stringify(theirs)) diff.push(q);
     }
     ok(!diff.length, "ends soon: first 10 rows of " + SEARCHES.length + " searches match " + baseRef + " on 2026-10-21 (" + soonSeen + " ends-soon badges on them)" + (diff.length ? " (differ: " + diff.join(", ") + ")" : ""));
@@ -450,15 +506,16 @@ const label = r => r.merchant + " | " + r.card + " | " + r.bonus;
     await route.fulfill({ json: j });
   };
   const dayState = () => page.evaluate(() => {
-    const q = document.getElementById("q"), f = document.activeElement, li = f && f.closest("li[data-oid]");
+    const q = document.getElementById("q"), f = document.activeElement, li = f && f.closest("li[data-oid]"), mc = f && f.closest("li[data-ck]");
     const pressed = id => [...document.querySelectorAll("#" + id + " button[aria-pressed=true]")].map(b => b.textContent.replace(/\s*\(?\d+\)?$/, "").trim());
-    const rowOf = m => [...document.querySelectorAll("li.offer")].find(l => l.querySelector(".merchant").textContent === m);
-    const soon = m => { const l = rowOf(m); const b = l && l.querySelector(".badge.soon"); return b ? b.textContent : null; };
+    const rowOf = m => [...document.querySelectorAll("li.offer")].find(l => window.__offerOf(l.dataset.oid).merchant === m);
+    const soon = m => { const l = rowOf(m); const b = l && l.querySelector(".oterms .soon"); return b ? b.textContent : null; };
     return {
       renders: window.__renders, y: Math.round(window.scrollY), q: q.value, caret: [q.selectionStart, q.selectionEnd],
-      focus: f === q ? "input" : li ? li.getAttribute("data-oid") + " " + f.tagName + "." + f.className : f ? f.tagName + "#" + f.id + "." + f.className : null,
+      focus: f === q ? "input" : li ? li.getAttribute("data-oid") + " " + f.tagName + "." + f.className : mc ? mc.getAttribute("data-ck") + " " + f.tagName + "." + f.className :
+        f ? f.tagName + "#" + f.id + "." + f.className : null,
       cats: pressed("cats"), cards: pressed("cards"), cuis: pressed("cuis"), chans: pressed("chans"), acts: pressed("acts"), sort: document.getElementById("sort").value,
-      open: [...document.querySelectorAll("li.offer button.toggle[aria-expanded=true]")].map(b => b.closest("li").querySelector(".merchant").textContent),
+      open: [...document.querySelectorAll("li.mc > button.mchead[aria-expanded=true]")].map(b => b.querySelector(".mcname").textContent),
       filters: document.getElementById("filters").classList.contains("open"), strip: document.getElementById("bstrip").open,
       more: [...document.querySelectorAll("#blist li[data-eid] > details.bmore[open]")].map(d => d.parentNode.getAttribute("data-eid")),
       rates: (document.querySelector("#use details.rates") || {}).open,
@@ -466,7 +523,7 @@ const label = r => r.merchant + " | " + r.card + " | " + r.bonus;
       leads: [...document.querySelectorAll("#use details.bonusrow[open] .bhead")].map(h => h.textContent),
       expired: (document.querySelector("#main details.expired") || {}).open,
       fresh: document.getElementById("foot").open, edit: document.getElementById("editmode").open,
-      gone: [...document.querySelectorAll("#main details.expired li.offer .merchant")].map(e => e.textContent),
+      gone: [...document.querySelectorAll("#main details.expired li.offer")].map(l => window.__offerOf(l.dataset.oid).merchant),
       today: rowOf("Zzday Ends Today") ? (rowOf("Zzday Ends Today").classList.contains("gone") ? "gone" : "live") : "none",
       soonToday: soon("Zzday Ends Today"), soonTomorrow: soon("Zzday Ends Tomorrow")
     };
@@ -491,7 +548,7 @@ const label = r => r.merchant + " | " + r.card + " | " + r.bonus;
     await page.fill("#q", "zzday");
     await page.waitForTimeout(900); // past the after-typing scroll
     await page.locator("#cuis button", { hasText: /^Unclassified/ }).first().click();
-    await page.locator("li.offer:has(.merchant:text-is('Zzday Ends Tomorrow')) button.toggle").first().click();
+    await page.locator("li.mc:has(li.offer[data-oid='test/zzday-1']) > button.mchead").first().click();
     await page.click("#bstrip > summary");
     await page.locator("#blist li[data-eid='citi-custom-cash/standing'] > details.bmore > summary").click();
     await page.click("#use details.rates > summary");
@@ -499,7 +556,7 @@ const label = r => r.merchant + " | " + r.card + " | " + r.bonus;
     await page.locator("#main details.expired > summary").click(); // closed (it opens under a search)
     await page.evaluate(() => { document.getElementById("foot").open = true; document.getElementById("editmode").open = true; });
     await page.evaluate(() => { const q = document.getElementById("q"); q.setSelectionRange(2, 2); });
-    await page.evaluate(() => document.querySelector("li.offer:not(.gone) button.toggle[aria-expanded=true]").focus({ preventScroll: true }));
+    await page.evaluate(() => document.querySelector("#main > ul.results li.mc:not(.gone) > button.mchead[aria-expanded=true]").focus({ preventScroll: true }));
     await page.evaluate(() => window.scrollTo(0, Math.min(700, document.documentElement.scrollHeight - innerHeight)));
     await page.clock.pauseAt(new Date(2026, 9, 21, 23, 59, 50));
   };
@@ -755,8 +812,14 @@ const label = r => r.merchant + " | " + r.card + " | " + r.bonus;
       return {
         on: !wc.hidden, name: document.getElementById("wcname").textContent, dot: (document.querySelector("#wcname .idot") || {}).className || null,
         sub: document.getElementById("wcsub").textContent, tabs: tabs.map(b => b.textContent), picked: tabs.filter(b => b.getAttribute("aria-pressed") === "true").map(b => b.textContent.split(" ")[0]),
-        groups, rows: [...document.querySelectorAll("#main li.offer")].map(li => li.querySelector(".merchant").textContent + " | " + li.querySelector(".mcard").textContent +
+        groups, rows: [...document.querySelectorAll("#main li.offer")].map(li => window.__offerOf(li.dataset.oid).merchant + " | " + li.querySelector(".mcard").textContent +
           (li.querySelector(".dropped") ? " | " + li.querySelector(".dropped").textContent : "")),
+        // The merchant containers in page order: "<heading>: <name> [<offer ids>]".
+        mcs: [...document.querySelectorAll("#main > ul.results > li.mc")].map(m => {
+          let h = m.parentNode.previousElementSibling;
+          while (h && !h.matches("h3.wcgroup")) h = h.previousElementSibling;
+          return (h ? h.textContent + ": " : "") + m.querySelector(".mcname").textContent + " [" + [...m.querySelectorAll("li.offer")].map(l => l.dataset.oid.replace(/^test\/wc-/, "")).join(", ") + "]";
+        }),
         headline: !document.getElementById("use").hidden, strip: document.getElementById("bstrip").checkVisibility(),
         bonusRows: document.querySelectorAll(".bonusrows").length, expired: document.querySelectorAll("#main details.expired").length
       };
@@ -789,7 +852,7 @@ const label = r => r.merchant + " | " + r.card + " | " + r.bonus;
     await page.waitForTimeout(100);
     const tags = await page.$$eval("#main li.offer", ls => ls.map(li => {
       const t = li.querySelector(".newtag"), s = t && getComputedStyle(t);
-      return { row: li.querySelector(".merchant").textContent + " | " + li.querySelector(".mcard").textContent, tag: !!t,
+      return { row: window.__offerOf(li.dataset.oid).merchant + " | " + li.querySelector(".mcard").textContent, tag: !!t,
         after: !!t && t.previousElementSibling && t.previousElementSibling.classList.contains("mcard"), gone: li.classList.contains("gone"),
         style: s ? [s.fontSize, s.fontWeight, s.paddingTop + " " + s.paddingRight, s.borderTopLeftRadius].join(" ") : null };
     }));
@@ -800,9 +863,12 @@ const label = r => r.merchant + " | " + r.card + " | " + r.bonus;
     ok(tags.some(t => /Zq Papa Pens/.test(t.row) && !t.tag) && tags.some(t => /Zq Alpha Coffee \| Quicksilver/.test(t.row) && !t.tag),
       "New tag: none on the first-read Citi offer or the Capital One Zq Alpha Coffee (seen before)");
     {
+      // The links are in an open container's details.
+      await page.evaluate(() => document.querySelectorAll("#main li.mc > button.mchead[aria-expanded=false]").forEach(b => b.click()));
       const ic = await page.$$eval("#main details.expired li.offer.gone", ls => ls.map(li => [getComputedStyle(li.querySelector("a.glink svg")).color, getComputedStyle(li.querySelector("a.cardlink svg")).color]));
       const live = await page.$eval("#main > ul.results li.offer:not(.gone) a.glink svg", e => getComputedStyle(e).color);
       ok(ic.length && ic.every(c => c[0] === c[1] && c[0] !== live), "Recently unavailable: the Google icon is grey like the card icon, blue on live rows (" + JSON.stringify([ic[0], live]) + ")");
+      await page.evaluate(() => document.querySelectorAll("#main li.mc > button.mchead[aria-expanded=true]").forEach(b => b.click()));
     }
     for (const scheme of ["light", "dark"]) {
       await page.emulateMedia({ colorScheme: scheme });
@@ -861,14 +927,19 @@ const label = r => r.merchant + " | " + r.card + " | " + r.bonus;
       "what changed: Gone in groups, the sort (A to Z) inside each, Pulled early and Ended labels (" + s.groups.join(", ") + ": " + s.rows.join("; ") + ")");
     const still = await page.$$eval("#main li.offer", ls => ls.map(li => {
       const so = li.querySelector(".stillon");
-      return { m: li.querySelector(".merchant").textContent, text: so ? so.textContent : null, dots: so ? [...so.querySelectorAll(".idot")].map(d => d.className.replace("idot ", "")) : [] };
+      return { m: window.__offerOf(li.dataset.oid).merchant, text: so ? so.textContent : null, dots: so ? [...so.querySelectorAll(".idot")].map(d => d.className.replace("idot ", "")) : [] };
     }));
     const fox = still.find(x => x.m === "Zq Foxtrot Pulled");
     ok(fox && fox.text === "Still on Bank of America and Capital One" && JSON.stringify(fox.dots) === JSON.stringify(["i-boa", "i-cap1"]),
       "what changed: Still on Bank of America and Capital One, each with its dot (names compared ignoring case, accents and punctuation; a missing U.S. Bank offer left out) (" + JSON.stringify(fox) + ")");
     ok(still.filter(x => x.m !== "Zq Foxtrot Pulled").every(x => x.text === null), "what changed: no Still on line where no other card has the merchant live");
     // Gone rows: the Google icon is grey like the card icon (its own blue .ext color doesn't win).
-    const iconColors = () => page.$$eval("li.offer.gone", ls => ls.map(li => [getComputedStyle(li.querySelector("a.glink svg")).color, getComputedStyle(li.querySelector("a.cardlink svg")).color, getComputedStyle(li.querySelector(".meta")).color]));
+    const iconColors = async () => {
+      await page.evaluate(() => document.querySelectorAll("#main li.mc > button.mchead[aria-expanded=false]").forEach(b => b.click()));
+      const c = await page.$$eval("li.offer.gone", ls => ls.map(li => [getComputedStyle(li.querySelector("a.glink svg")).color, getComputedStyle(li.querySelector("a.cardlink svg")).color, getComputedStyle(li.querySelector(".oterms")).color]));
+      await page.evaluate(() => document.querySelectorAll("#main li.mc > button.mchead[aria-expanded=true]").forEach(b => b.click()));
+      return c;
+    };
     const ic = await iconColors();
     ok(ic.length && ic.every(c => c[0] === c[1] && c[0] === c[2]), "what changed: Gone rows' Google and card icons are both grey (" + JSON.stringify(ic[0]) + ")");
     // Headings only for the groups the search leaves: one group left keeps its heading.
@@ -1022,9 +1093,8 @@ const label = r => r.merchant + " | " + r.card + " | " + r.bonus;
     const rowsOf = x => x.rows.map(label).sort();
     ok(JSON.stringify(rowsOf(g.rt)) === JSON.stringify(rowsOf(empty.rt)) && g.rt.rows.filter(r => r.merchant === "Round Table Pizza - Newport Beach").length === 2,
       "locations: a grouped member keeps its own rows, name and bonus (" + g.rt.rows.length + " rows, same as without the file)");
-    await page.locator("#main li.offer").filter({ has: page.locator(".merchant", { hasText: /^Round Table Pizza - Newport Beach$/ }) })
-      .filter({ has: page.locator(".bonus", { hasText: /^20%/ }) }).locator("button.toggle").click();
-    const terms = await page.$eval("#main li.offer button.toggle[aria-expanded=true]", b => b.closest("li").innerText);
+    await page.locator("#main li.mc:has(li.offer[data-oid='test/id-rt-nb']) > button.mchead").click();
+    const terms = await page.$eval("#main li.offer[data-oid='test/id-rt-nb']", li => li.innerText);
     ok(/Zq Newport Beach terms only/.test(terms), "locations: the grouped offer's details show its own terms");
     // (Step 2: under Any, an answer whose In store and Online results differ shows two channel rows instead.)
     const answered = t => /Ready now: |^In store: /m.test(t);
@@ -1163,8 +1233,9 @@ const label = r => r.merchant + " | " + r.card + " | " + r.bonus;
         rates: d ? { open: d.open, sum: d.querySelector("summary").innerText.replace(/\s+/g, " "), nc: (d.querySelector(".ratesnc") || {}).textContent || "",
           rows: d.querySelectorAll(".bonusrow").length } : null,
         text: [...u.children].filter(c => !c.matches(".chansel, details.rates")).map(c => c.innerText).join("\n"),
-        rows: [...document.querySelectorAll("#main > ul.results > li.offer")].map(li => li.getAttribute("data-oid").replace(/^test\/s2-/, "")),
-        rowText: [...document.querySelectorAll("#main > ul.results > li.offer")].map(li => li.innerText),
+        rows: [...document.querySelectorAll("#main > ul.results li.offer")].map(li => li.getAttribute("data-oid").replace(/^test\/s2-/, "")),
+        rowText: [...document.querySelectorAll("#main > ul.results li.offer")].map(li => li.innerText),
+        mcs: [...document.querySelectorAll("#main > ul.results > li.mc")].map(m => m.querySelector(".mcname").textContent + " [" + m.querySelectorAll("li.offer").length + "]"),
         stored: (() => { try { return localStorage.getItem("cardselector.channel"); } catch (e) { return "?"; } })(),
         filterChan: [...document.querySelectorAll("#chans button[aria-pressed=true]")].map(b => b.textContent).join()
       };
@@ -1394,6 +1465,346 @@ const label = r => r.merchant + " | " + r.card + " | " + r.bonus;
         "s2 real locations file: \"" + pickG + "\" is one answer (" + (J(a.names) || "[]") + "), its " + want + " offers all listed (" + a.rows.length + " rows)");
     }
     await ctx2.close();
+    page = mainPage;
+  }
+
+  // Step 3, merchant containers in result lists, on fixed fixture offers (offers.json replaced by these only) with a
+  // fixed clock (noon, Nov 4, 2026) and an approved Round Table Pizza location. The answer card and the count line
+  // are compared with the base app.js (main, without containers) on the same fixtures.
+  {
+    const ctx3 = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: "block" });
+    page = await ctx3.newPage();
+    const errs = [];
+    page.on("pageerror", e => errs.push(e.message));
+    await page.clock.install({ time: new Date(2026, 10, 4, 12, 0, 0) });
+    const real = JSON.parse(fs.readFileSync(path.join(SITE, "data/offers.json")));
+    const fx = (id, card, merchant, category, bonus, extra) => Object.assign({ id: "test/s3-" + id, card, merchant, category, bonus,
+      expires: null, expires_text: null, activation: "already_activated", channel: "in_store", spend_cap: null, minimum_spend: null,
+      fine_print: null, other_details: [], last_read: "2026-10-18", first_seen: "2026-10-18", status: "active", status_since: "2026-10-18" }, extra || {});
+    const FX = [
+      // Coffee Bean & Tea Leaf (the Step 2 shape): two Chase offers with no channel shown, Capital One $10 on $20+ online.
+      fx("cb-flex", "Chase Freedom Flex", "Coffee Bean & Tea Leaf", "Dining", "10% cash back", { activation: "needs_activation", channel: "none_shown",
+        fine_print: "Earn 10% cash back with a $2 cash back maximum." }),
+      fx("cb-free", "Chase Freedom", "Coffee Bean & Tea Leaf", "Dining", "10% cash back", { activation: "needs_activation", channel: "none_shown",
+        fine_print: "Earn 10% cash back with a $2 cash back maximum." }),
+      fx("cb-c1", "Capital One", "Coffee Bean & Tea Leaf", "Dining", "Spend $20, earn $10", { activation: "none_shown", channel: "online" }),
+      // Round Table Pizza: the approved Newport Beach member, Chase x2, U.S. Bank, BofA 10% and 4% (two rows on one
+      // card), and an unapproved Irvine name that stays its own merchant.
+      fx("rt-flex", "Chase Freedom Flex", "Round Table Pizza", "Dining", "10% cash back", { activation: "needs_activation", channel: "none_shown" }),
+      fx("rt-free", "Chase Freedom", "Round Table Pizza", "Dining", "10% cash back", { activation: "needs_activation", channel: "none_shown" }),
+      fx("rt-usb", "U.S. Bank", "Round Table Pizza", "Dining", "6% cash back"),
+      fx("rt-boa10", "Bank of America", "Round Table Pizza", "Dining", "10% Cash back", { activation: "auto_enrolled" }),
+      fx("rt-boa4", "Bank of America", "Round Table Pizza", "Dining", "4% Cash back", { activation: "auto_enrolled", other_details: ["3 locations listed"] }),
+      fx("rt-nb", "Bank of America", "Round Table Pizza - Newport Beach", "Dining", "20% Cash back", { fine_print: "Zq Newport Beach terms only" }),
+      fx("rt-irv", "Bank of America", "Round Table Pizza - Irvine", "Dining", "2% Cash back"),
+      // La Colombe: Chase 15% online x2, U.S. Bank 15% in store and 15% online.
+      fx("lc-flex", "Chase Freedom Flex", "La Colombe", "Dining", "15% cash back", { activation: "needs_activation", channel: "online", expires: "2026-11-29" }),
+      fx("lc-free", "Chase Freedom", "La Colombe", "Dining", "15% cash back", { activation: "needs_activation", channel: "online", expires: "2026-11-29" }),
+      fx("lc-usb", "U.S. Bank", "La Colombe", "Dining", "15% cash back", { channel: "in_store", expires: "2026-11-27" }),
+      fx("lc-usb-2", "U.S. Bank", "La Colombe", "Dining", "15% cash back", { channel: "online", expires: "2026-11-29" }),
+      // Panda Express: a BofA merchant offer needing activation and a BofA Shop now offer, on the same card.
+      fx("pe-boa", "Bank of America", "Panda Express", "Dining", "5% Cash back", { activation: "needs_activation" }),
+      fx("pe-boa-2", "Bank of America", "Panda Express", "Dining", "Save 20%", { activation: "via_shop_link", channel: "online" }),
+      // Identity: three JetBlue merchants (an alias groups nothing), two KitchenAid merchants (no " - " grouping).
+      fx("jb", "Citi Double Cash", "JetBlue", "Travel", "$50 Back", { activation: "needs_activation", channel: "none_shown" }),
+      fx("jb-points", "Citi Double Cash", "JetBlue TrueBlue Points", "Travel", "5% Back", { activation: "needs_activation", channel: "none_shown", aliases: ["JetBlue"] }),
+      fx("jb-vac", "Citi Double Cash", "jetBlue Vacations", "Travel", "4% Back", { activation: "needs_activation", channel: "none_shown" }),
+      fx("ka-major", "Capital One", "KitchenAid - Major Appliances", "Home & Garden", "5% back", { activation: "none_shown", channel: "online" }),
+      fx("ka-counter", "Capital One", "KitchenAid - Countertop Appliances", "Home & Garden", "3% back", { activation: "none_shown", channel: "online" }),
+      // Sorting: Alpha has one excellent and one weak row, Bravo two medium ones, Charlie a dollar offer (U.S. Bank:
+      // every percent offer adds Smartly 4%).
+      fx("zs-a30", "U.S. Bank", "Zqsort Alpha", "Clothing & Jewelry", "30% cash back", { first_seen: "2026-10-18" }),
+      fx("zs-a1", "U.S. Bank", "Zqsort Alpha", "Clothing & Jewelry", "1% cash back", { first_seen: "2026-10-31", expires: "2026-11-06" }),
+      fx("zs-b12", "U.S. Bank", "Zqsort Bravo", "Clothing & Jewelry", "12% cash back", { first_seen: "2026-10-25", expires: "2026-11-20" }),
+      fx("zs-b11", "U.S. Bank", "Zqsort Bravo", "Clothing & Jewelry", "11% cash back", { first_seen: "2026-10-18", expires: "2026-11-10" }),
+      fx("zs-c", "U.S. Bank", "Zqsort Charlie", "Clothing & Jewelry", "Spend $50, earn $25", { first_seen: "2026-10-20", expires: "2026-11-08" }),
+      // Recently unavailable: one merchant, three unavailable rows (missing, expired, past its end date) and a used one.
+      fx("zg-miss", "U.S. Bank", "Zqgone Deli", "Dining", "8% cash back", { status: "missing", status_since: "2026-11-01" }),
+      fx("zg-exp", "U.S. Bank", "Zqgone Deli", "Dining", "5% cash back", { status: "expired", expires: "2026-10-30", status_since: "2026-10-31" }),
+      fx("zg-past", "Chase Freedom", "Zqgone Deli", "Dining", "6% cash back", { activation: "needs_activation", channel: "none_shown", expires: "2026-11-01" }),
+      fx("zg-used", "U.S. Bank", "Zqgone Deli", "Dining", "9% cash back", { status: "used", status_since: "2026-11-02", other_details: ["Used on Smartly"] }),
+      fx("zg-live", "Capital One", "Zqgone Deli", "Dining", "3% back", { activation: "none_shown", channel: "online" }),
+      // Review round 1: an approved group whose base row sorts first and whose member has more rows than the base.
+      fx("zgr-base", "U.S. Bank", "Zqgroup Diner", "Clothing & Jewelry", "30% cash back"),
+      fx("zgr-n1", "U.S. Bank", "Zqgroup Diner - North Hills", "Clothing & Jewelry", "10% cash back"),
+      fx("zgr-n2", "U.S. Bank", "Zqgroup Diner - North Hills", "Clothing & Jewelry", "8% cash back")
+    ];
+    // Paging: 65 merchants, the 60th (the last on the first page) with 8 offers, its 7 weaker ones below the best of
+    // the 5 merchants after it.
+    for (let i = 1; i <= 65; i++) {
+      const m = "Zqpage " + String(i).padStart(3, "0");
+      FX.push(fx("zp-" + i, "U.S. Bank", m, "Clothing & Jewelry", (100 - i) + "% cash back"));
+      if (i === 60) for (let k = 1; k <= 7; k++) FX.push(fx("zp-60-" + k, "U.S. Bank", m, "Clothing & Jewelry", k + "% cash back"));
+    }
+    const LOCS = { groups: { "Round Table Pizza": ["Round Table Pizza - Newport Beach"], "Zqgroup Diner": ["Zqgroup Diner - North Hills"] } };
+    await page.route("**/data/offers.json", r => r.fulfill({ json: Object.assign({}, real, { offers: FX }) }));
+    await page.route("**/data/phone-edits.json", r => r.fulfill({ json: {} }));
+    await page.route("**/data/merchant-locations.json", r => r.fulfill({ json: LOCS }));
+    const open = async (q, chan, sort, opts) => {
+      await page.goto(base);
+      await page.evaluate(([c, s]) => { try { localStorage.clear(); if (c) localStorage.setItem("cardselector.channel", c); if (s) localStorage.setItem("cardselector.sort", s); } catch (e) {} }, [chan || null, sort || null]);
+      await page.goto(base);
+      await page.waitForFunction(() => window.__cardsReady && window.__bonusReady && document.querySelectorAll("#cards button").length > 1);
+      if (opts && opts.card) {
+        if (await page.locator("#ftoggle").isVisible()) await page.click("#ftoggle");
+        await page.locator("#cards button", { hasText: new RegExp("^" + opts.card) }).first().click();
+      }
+      await page.fill("#q", q);
+      await page.waitForTimeout(150);
+      return view();
+    };
+    const view = () => page.evaluate(() => {
+      const u = document.getElementById("use");
+      const mc = m => ({ name: m.querySelector(".mcname").textContent, sub: m.querySelector(".mcsub").textContent, gone: m.classList.contains("gone"),
+        exp: m.querySelector(".mchead").getAttribute("aria-expanded"),
+        rows: [...m.querySelectorAll("li.offer")].map(li => ({ id: li.dataset.oid.replace(/^test\/s3-/, ""), loc: (li.querySelector(".loctag") || {}).textContent || null,
+          big: li.querySelector(".obig").textContent, sub: (li.querySelector(".omin") || {}).textContent || null, status: li.querySelector(".ostat").textContent,
+          brk: li.querySelector(".obreak").textContent, terms: li.querySelector(".oterms").textContent, gone: li.classList.contains("gone"),
+          isNew: !!li.querySelector(".newtag"), card: li.querySelector(".mcard").textContent })) });
+      return {
+        ans: u.hidden ? "" : [...u.children].filter(c => !c.matches(".chansel, details.rates")).map(c => c.innerText).join("\n"),
+        count: document.getElementById("count").textContent,
+        mcs: [...document.querySelectorAll("#main > ul.results > li.mc")].map(mc),
+        gone: [...document.querySelectorAll("#main details.expired li.mc")].map(mc),
+        more: (document.querySelector("#main > button.more:not([hidden])") || {}).textContent || null
+      };
+    });
+    const J = x => JSON.stringify(x);
+    const ids = v => v.mcs.map(m => m.name + ": " + m.rows.map(r => r.id).join(" "));
+    // The answer card and count line on main's app.js, same fixtures (null when git has no base).
+    const onBase = async (q, chan) => {
+      if (!baseApp) return null;
+      await page.route("**/js/app.js", route => route.fulfill({ body: baseApp, contentType: "text/javascript" }));
+      const v = await open(q, chan);
+      await page.unroute("**/js/app.js");
+      return v;
+    };
+    const sameAsBase = async (q, chan, v) => {
+      const b = await onBase(q, chan);
+      if (!b) return skip("s3 " + q + " " + (chan || "any") + ": no base app.js, answer card not compared");
+      ok(b.ans === v.ans && b.count === v.count, "s3 " + q + " " + (chan || "any") + ": answer card and count line as on " + baseRef + " (" + J([v.ans.split("\n")[0], v.count]) + ")" +
+        (b.ans === v.ans && b.count === v.count ? "" : " base: " + J([b.ans, b.count]) + " now: " + J([v.ans, v.count])));
+    };
+
+    // Coffee Bean & Tea Leaf, Any: one container, three rows, the Step 2 count line; In store: the two Chase rows
+    // with no channel shown; Online: all three, the Chase rows still "channel not shown".
+    let v = await open("coffee bean", null);
+    ok(J(ids(v)) === J(["Coffee Bean & Tea Leaf: cb-free cb-flex cb-c1"]) && v.mcs[0].sub === "Cafés, Coffee & Tea · 3 offers",
+      "s3 Coffee Bean any: one container, three rows (Chase by total, then the dollar offer), header \"Cafés, Coffee & Tea · 3 offers\" (" + J([ids(v), v.mcs[0] && v.mcs[0].sub]) + ")");
+    ok(v.count === "3 offers · 1 online only · 2 channel not shown", "s3 Coffee Bean any: count line " + J(v.count));
+    const cbRow = id => v.mcs[0].rows.find(r => r.id === id);
+    ok(cbRow("cb-flex").big === "15%" && cbRow("cb-flex").brk === "10% Chase offer + 5% dining" && cbRow("cb-flex").status === "Activate" &&
+      /^Channel not shown · Max \$2$/.test(cbRow("cb-flex").terms),
+      "s3 Coffee Bean: the Chase row shows its total big, the breakdown, Activate and its terms (" + J(cbRow("cb-flex")) + ")");
+    ok(cbRow("cb-c1").big === "$10" && cbRow("cb-c1").sub === "on $20+" && cbRow("cb-c1").status === "Add to card" && /^Online$/.test(cbRow("cb-c1").terms) &&
+      /^Spend \$20, earn \$10 · Capital One offer$/.test(cbRow("cb-c1").brk), "s3 Coffee Bean: the dollar row shows $10 on $20+, Add to card (" + J(cbRow("cb-c1")) + ")");
+    await sameAsBase("coffee bean", null, v);
+    v = await open("coffee bean", "store");
+    ok(J(ids(v)) === J(["Coffee Bean & Tea Leaf: cb-free cb-flex"]) && v.mcs[0].sub === "Cafés, Coffee & Tea · 2 offers" &&
+      v.mcs[0].rows.every(r => /^Channel not shown/.test(r.terms)), "s3 Coffee Bean in store: one container, the two Chase rows, Capital One hidden (" + J(ids(v)) + ")");
+    await sameAsBase("coffee bean", "store", v);
+    v = await open("coffee bean", "online");
+    ok(J(ids(v)) === J(["Coffee Bean & Tea Leaf: cb-free cb-flex cb-c1"]) && v.mcs[0].rows.filter(r => /^Channel not shown/.test(r.terms)).length === 2,
+      "s3 Coffee Bean online: one container, all three rows, the Chase rows still say channel not shown (" + J(ids(v)) + ")");
+    await sameAsBase("coffee bean", "online", v);
+
+    // Round Table Pizza: one container for the approved group, every offer its own row (BofA 10% and 4% apart), the
+    // Newport Beach row tagged with its place; Irvine (not approved) is its own container with no tag.
+    v = await open("round table", null);
+    ok(J(ids(v)) === J(["Round Table Pizza: rt-nb rt-free rt-flex rt-boa10 rt-usb rt-boa4", "Round Table Pizza - Irvine: rt-irv"]),
+      "s3 Round Table: one approved container (by total, the Newport Beach 20% first), Irvine apart and after it (" + J(ids(v)) + ")");
+    const rtRows = v.mcs[0].rows;
+    ok(rtRows.find(r => r.id === "rt-nb").loc === "Newport Beach" && rtRows.filter(r => r.loc).length === 1 && !v.mcs[1].rows[0].loc,
+      "s3 Round Table: only the approved member's row has a location tag (Newport Beach); Irvine has none (" + J(rtRows.map(r => r.loc)) + ")");
+    ok(v.mcs[0].sub === "Italian & Pizza · 6 offers" && v.mcs[1].sub === "Dining · 1 offer", "s3 Round Table: header cuisine and offer counts (\"" + v.mcs[0].sub + "\", \"" + v.mcs[1].sub + "\")");
+    ok(rtRows.find(r => r.id === "rt-boa10").big === "12.63%" && rtRows.find(r => r.id === "rt-boa4").big === "6.63%" &&
+      rtRows.find(r => r.id === "rt-boa10").brk === "10% BofA offer + 2.63% Unlimited Cash", "s3 Round Table: BofA 10% and 4% are two rows with their own totals (" + J(rtRows.filter(r => /boa/.test(r.id))) + ")");
+    await sameAsBase("round table", null, v);
+    v = await open("round table", "store");
+    ok(v.mcs.length === 2 && v.mcs[0].rows.length === 6, "s3 Round Table in store: the same containers (" + J(ids(v)) + ")");
+    await sameAsBase("round table", "store", v);
+
+    // La Colombe: one container under each channel; the channel changes its rows, not the container.
+    for (const [ch, want] of [[null, ["lc-free", "lc-flex"]], ["store", ["lc-usb"]], ["online", ["lc-free", "lc-flex", "lc-usb-2"]]]) {
+      v = await open("la colombe", ch);
+      const got = v.mcs.length === 1 ? v.mcs[0].rows.map(r => r.id) : null;
+      ok(got && J(got.slice(0, want.length)) === J(want) && got.length === (ch ? want.length : 4) && v.mcs[0].sub === "Cafés, Coffee & Tea · " + got.length + (got.length === 1 ? " offer" : " offers"),
+        "s3 La Colombe " + (ch || "any") + ": one container, rows in total order (" + J(ids(v)) + ")");
+      await sameAsBase("la colombe", ch, v);
+    }
+
+    // Panda Express: two offers on one card, two rows with their own statuses; the Shop now offer says so.
+    v = await open("panda express", null);
+    const pe = v.mcs.length === 1 ? v.mcs[0].rows : [];
+    ok(J(pe.map(r => [r.id, r.status])) === J([["pe-boa", "Activate"], ["pe-boa-2", "Shop link"]]) && /Shop now link only/.test(pe[1].terms) && pe[1].big === "Save 20%",
+      "s3 Panda Express: two rows on one BofA card, Activate and Shop link (" + J(pe) + ")");
+    await sameAsBase("panda express", null, v);
+
+    // JetBlue: three containers (the alias groups nothing); KitchenAid: two, with no location tags.
+    v = await open("jetblue", null);
+    ok(J(v.mcs.map(m => m.name).sort()) === J(["JetBlue", "JetBlue TrueBlue Points", "jetBlue Vacations"]) && v.mcs.every(m => m.rows.length === 1),
+      "s3 JetBlue: three containers (" + J(ids(v)) + ")");
+    await sameAsBase("jetblue", null, v);
+    v = await open("kitchenaid", null);
+    ok(J(v.mcs.map(m => m.name)) === J(["KitchenAid - Major Appliances", "KitchenAid - Countertop Appliances"]) && v.mcs.every(m => m.rows.every(r => !r.loc)),
+      "s3 KitchenAid: two containers, no location tags (" + J(ids(v)) + ")");
+    await sameAsBase("kitchenaid", null, v);
+
+    // Sorting: containers rank by their best row under the sort, rows inside follow the same comparator.
+    const SORTED = {
+      best: ["Zqsort Alpha: zs-a30 zs-a1", "Zqsort Bravo: zs-b12 zs-b11", "Zqsort Charlie: zs-c"],
+      percent: ["Zqsort Alpha: zs-a30 zs-a1", "Zqsort Bravo: zs-b12 zs-b11", "Zqsort Charlie: zs-c"],
+      dollar: ["Zqsort Charlie: zs-c", "Zqsort Alpha: zs-a30 zs-a1", "Zqsort Bravo: zs-b12 zs-b11"],
+      rate: ["Zqsort Charlie: zs-c", "Zqsort Alpha: zs-a30 zs-a1", "Zqsort Bravo: zs-b12 zs-b11"],
+      az: ["Zqsort Alpha: zs-a30 zs-a1", "Zqsort Bravo: zs-b12 zs-b11", "Zqsort Charlie: zs-c"],
+      za: ["Zqsort Charlie: zs-c", "Zqsort Bravo: zs-b12 zs-b11", "Zqsort Alpha: zs-a30 zs-a1"],
+      newest: ["Zqsort Alpha: zs-a1 zs-a30", "Zqsort Bravo: zs-b12 zs-b11", "Zqsort Charlie: zs-c"],
+      oldest: ["Zqsort Alpha: zs-a30 zs-a1", "Zqsort Bravo: zs-b11 zs-b12", "Zqsort Charlie: zs-c"],
+      expiring: ["Zqsort Alpha: zs-a1 zs-a30", "Zqsort Charlie: zs-c", "Zqsort Bravo: zs-b11 zs-b12"]
+    };
+    for (const [mode, want] of Object.entries(SORTED)) {
+      v = await open("zqsort", null, mode);
+      ok(J(ids(v)) === J(want), "s3 sort " + mode + ": " + J(ids(v)));
+    }
+    v = await open("zqsort", null, "best");
+    ok(J(v.mcs[0].rows.map(r => r.big)) === J(["34%", "5%"]) && v.mcs[1].rows[0].big === "16%",
+      "s3 sort best: Alpha's 5% row stays in its container above Bravo's 16% (a container ranks by its best row) (" + J(v.mcs.map(m => m.rows.map(r => r.big))) + ")");
+
+    // Review round 1: the group's name heads its container whichever row comes first (the base under most sorts, the
+    // member under Z to A), even when a member has more rows; only the member rows are tagged.
+    for (const mode of ["best", "az", "za", "newest", "oldest", "expiring"]) {
+      v = await open("zqgroup", null, mode);
+      ok(J(v.mcs.map(m => [m.name, m.rows.map(r => r.id + (r.loc ? "@" + r.loc : ""))])) === J([["Zqgroup Diner", mode === "za" ? ["zgr-n1@North Hills", "zgr-n2@North Hills", "zgr-base"] : ["zgr-base", "zgr-n1@North Hills", "zgr-n2@North Hills"]]]),
+        "s3 r1 group name heads its container under " + mode + " (base first, member with more rows) (" + J(v.mcs.map(m => [m.name, m.rows.map(r => r.id + (r.loc ? "@" + r.loc : ""))])) + ")");
+    }
+
+    // Paging: 60 containers on the first page, the 60th whole (8 rows); Show more adds the last 5 whole; every
+    // record once. The count line still counts offers.
+    v = await open("zqpage", null);
+    const pageIds = v.mcs.flatMap(m => m.rows.map(r => r.id));
+    ok(v.mcs.length === 60 && v.mcs[59].name === "Zqpage 060" && v.mcs[59].rows.length === 8 && pageIds.length === 67,
+      "s3 paging: the first page is 60 containers, the boundary merchant with all 8 rows (" + v.mcs.length + " containers, " + pageIds.length + " rows, last " + J(v.mcs[59] && [v.mcs[59].name, v.mcs[59].rows.length]) + ")");
+    ok(v.more === "Show 5 more merchants (5 left)" && /^72 offers \(showing 67, keep typing to narrow\) · 72 in store only$/.test(v.count),
+      "s3 paging: Show more counts merchants, the count line offers (" + J([v.more, v.count]) + ")");
+    await page.click("#main > button.more");
+    v = await view();
+    const allIds = v.mcs.flatMap(m => m.rows.map(r => r.id)), wantIds = FX.filter(o => /^Zqpage /.test(o.merchant)).map(o => o.id.replace(/^test\/s3-/, ""));
+    ok(v.mcs.length === 65 && !v.more && allIds.length === wantIds.length && new Set(allIds).size === allIds.length && wantIds.every(i => allIds.includes(i)) &&
+      J(v.mcs.slice(0, 60).flatMap(m => m.rows.map(r => r.id))) === J(pageIds), "s3 paging: Show more adds the 5 whole containers; all 72 records once, the first page unchanged (" + v.mcs.length + " containers, " + allIds.length + " rows)");
+    v = await open("zqpage", null, null, { card: "U.S. Bank" });
+    ok(v.mcs.length === 65 && !v.more, "s3 paging: with a card picked, up to 100 containers on a page (" + v.mcs.length + ")");
+
+    // Recently unavailable: one container, each row with its own status; the used offer is hidden signed out.
+    v = await open("zqgone", null);
+    const zg = v.gone.length === 1 ? v.gone[0] : null;
+    ok(zg && zg.gone && J(zg.rows.map(r => [r.id, r.status])) === J([["zg-miss", "Dropped off Nov 1"], ["zg-past", "Expired Nov 1"], ["zg-exp", "Expired Oct 30"]]) &&
+      zg.sub === "Dining · 3 offers", "s3 Recently unavailable: one Zqgone Deli container, each row its own status (" + J(zg) + ")");
+    ok(J(ids(v)) === J(["Zqgone Deli: zg-live"]) && !J(v).includes("zg-used"), "s3 Recently unavailable: the live row in the results, the used one hidden signed out (" + J(ids(v)) + ")");
+
+    // Interaction: the header expands and collapses (aria-expanded, aria-controls, keyboard); a row is not a tap
+    // target; open rows show their details, the Google search for their own name and the issuer link; no edit
+    // controls signed out.
+    v = await open("round table", null);
+    const head = page.locator("#main li.mc").first().locator("> button.mchead");
+    await page.locator("#main li.offer[data-oid='test/s3-rt-nb'] .orow").click();
+    ok((await head.getAttribute("aria-expanded")) === "false" && !(await page.locator("#main li.offer .details:visible").count()), "s3 tapping an offer row does nothing (not a tap target)");
+    await head.click();
+    const opened = await page.evaluate(() => {
+      const m = document.querySelector("#main li.mc"), h = m.querySelector(".mchead"), ctl = (h.getAttribute("aria-controls") || "").split(" ").filter(Boolean);
+      const nb = m.querySelector("li.offer[data-oid='test/s3-rt-nb']"), g = nb.querySelector("a.glink"), c = nb.querySelector("a.cardlink");
+      return { exp: h.getAttribute("aria-expanded"), ctl: ctl.length, all: ctl.every(id => document.getElementById(id) && !document.getElementById(id).hidden),
+        rows: m.querySelectorAll("li.offer").length, terms: /Zq Newport Beach terms only/.test(nb.innerText),
+        g: g && [g.href, g.target, g.rel], c: c && [c.href, c.target, c.rel], edits: m.querySelectorAll(".edrow button").length, h: Math.round(h.getBoundingClientRect().height) };
+    });
+    ok(opened.exp === "true" && opened.ctl === 6 && opened.all && opened.terms && opened.h >= 44,
+      "s3 the header opens every row's details (aria-expanded, aria-controls naming each), a 44px target (" + J(opened) + ")");
+    ok(J(opened.g) === J(["https://www.google.com/search?q=Round%20Table%20Pizza%20-%20Newport%20Beach", "_blank", "noopener noreferrer"]) &&
+      J(opened.c) === J(["https://www.bankofamerica.com/", "_blank", "noopener noreferrer"]), "s3 the open location row searches its own name and links its issuer (" + J([opened.g, opened.c]) + ")");
+    ok(opened.edits === 0, "s3 signed out: no edit controls in the open container");
+    ok(!(await page.locator("#main li.offer:not(:has(.details:visible)) a.glink").count()) && !(await page.locator("#main li.mc").nth(1).locator("a.glink, a.cardlink").count()),
+      "s3 closed containers show no link icons (the links are in the open details)");
+    await head.focus();
+    await page.keyboard.press("Enter");
+    ok((await head.getAttribute("aria-expanded")) === "false" && !(await page.locator("#main li.mc").first().locator(".details:visible").count()), "s3 Enter on the header closes it");
+    await page.keyboard.press(" ");
+    ok((await head.getAttribute("aria-expanded")) === "true", "s3 Space on the header opens it");
+    // The open container stays open across a redraw in the same view (a channel change keeps the search).
+    await page.click("#use .chansel button[data-ch=store]");
+    ok((await page.locator("#main li.mc").first().locator("> button.mchead").getAttribute("aria-expanded")) === "true", "s3 an open container stays open across a redraw");
+    ok(!errs.length, "s3: no page errors (" + errs.join("; ") + ")");
+    await ctx3.close();
+  }
+
+  // Step 3, What changed: New and Gone lists in merchant containers, each Gone group on its own; Still on <cards>
+  // follows merchant identity (an approved location and its group are one merchant; an alias or an unapproved
+  // " - " name is not).
+  {
+    const ctx4 = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: "block" });
+    page = await ctx4.newPage();
+    const J = x => JSON.stringify(x);
+    const errs = [];
+    page.on("pageerror", e => errs.push(e.message));
+    await page.clock.install({ time: new Date(2026, 10, 4, 12, 0, 0) });
+    const wx = (id, card, merchant, first, status, since, expires, extra) => Object.assign({ id: "test/s3w-" + id, card, merchant, category: "Dining", bonus: "10% cash back",
+      expires: expires || null, expires_text: null, activation: "needs_activation", channel: "none_shown", spend_cap: null, minimum_spend: null, fine_print: null,
+      other_details: [], last_read: "2026-10-31", first_seen: first, status, status_since: since }, extra || {});
+    const BATCHES = [["Chase Freedom Flex", "2026-10-18"], ["Chase Freedom Flex", "2026-10-31"], ["Bank of America", "2026-10-18"], ["Bank of America", "2026-10-31"],
+      ["U.S. Bank", "2026-10-18"], ["Capital One", "2026-10-18"], ["Citi Double Cash", "2026-10-18"]].map(([card, read_date]) => ({ card, read_date, offers_found: 1 }));
+    const OFF = [
+      // New on Freedom Flex: two offers at the Round Table group (one at the approved Newport Beach member).
+      wx("new-rt", "Chase Freedom Flex", "Round Table Pizza", "2026-10-31", "active", "2026-10-31"),
+      wx("new-nb", "Chase Freedom Flex", "Round Table Pizza - Newport Beach", "2026-10-31", "active", "2026-10-31", null, { bonus: "12% cash back" }),
+      // New on Bank of America, at the member: live, so the group is still on Bank of America.
+      wx("new-boa-nb", "Bank of America", "Round Table Pizza - Newport Beach", "2026-10-31", "active", "2026-10-31", null, { activation: "auto_enrolled", channel: "in_store" }),
+      // Gone on Freedom Flex: two pulled early (the member and the base), one ended, one dropped with no end date.
+      wx("gone-nb", "Chase Freedom Flex", "Round Table Pizza - Newport Beach", "2026-10-18", "missing", "2026-10-31", "2026-11-20"),
+      wx("gone-pulled", "Chase Freedom Flex", "Round Table Pizza", "2026-10-18", "missing", "2026-10-31", "2026-11-25", { bonus: "8% cash back" }),
+      wx("gone-ended", "Chase Freedom Flex", "Round Table Pizza", "2026-10-18", "expired", "2026-10-31", "2026-10-30", { bonus: "7% cash back" }),
+      wx("gone-dropped", "Chase Freedom Flex", "Round Table Pizza", "2026-10-18", "missing", "2026-10-31", null, { bonus: "6% cash back" }),
+      // Still live elsewhere: the base on U.S. Bank; an alias of the name (Capital One) and an unapproved location
+      // (Citi) that are other merchants.
+      wx("usb-rt", "U.S. Bank", "Round Table Pizza", "2026-10-18", "active", "2026-10-18", null, { activation: "already_activated", channel: "in_store" }),
+      wx("c1-alias", "Capital One", "Zqround Pies", "2026-10-18", "active", "2026-10-18", null, { activation: "none_shown", channel: "online", aliases: ["Round Table Pizza"] }),
+      wx("citi-irv", "Citi Double Cash", "Round Table Pizza - Irvine", "2026-10-18", "active", "2026-10-18")
+    ];
+    const real = JSON.parse(fs.readFileSync(path.join(SITE, "data/offers.json")));
+    await page.route("**/data/offers.json", r => r.fulfill({ json: { categories: real.categories, batches: BATCHES, offers: OFF } }));
+    await page.route("**/data/phone-edits.json", r => r.fulfill({ json: {} }));
+    await page.route("**/data/merchant-locations.json", r => r.fulfill({ json: { groups: { "Round Table Pizza": ["Round Table Pizza - Newport Beach"] } } }));
+    await page.goto(base);
+    await page.waitForFunction(() => /active offers loaded/.test(document.body.innerText));
+    await page.evaluate(() => { document.getElementById("fresh").open = true; });
+    const wv = () => page.evaluate(() => ({
+      tabs: [...document.querySelectorAll("#wctabs button")].map(b => b.textContent),
+      groups: [...document.querySelectorAll("#main h3.wcgroup")].map(h => h.textContent),
+      mcs: [...document.querySelectorAll("#main > ul.results > li.mc")].map(m => {
+        let h = m.parentNode.previousElementSibling;
+        while (h && !h.matches("h3.wcgroup")) h = h.previousElementSibling;
+        return (h ? h.textContent + ": " : "") + m.querySelector(".mcname").textContent + " [" + [...m.querySelectorAll("li.offer")].map(l => l.dataset.oid.replace(/^test\/s3w-/, "") +
+          (l.querySelector(".loctag") ? "@" + l.querySelector(".loctag").textContent : "")).join(", ") + "]";
+      }),
+      still: Object.fromEntries([...document.querySelectorAll("#main li.offer")].map(l => [l.dataset.oid.replace(/^test\/s3w-/, ""), (l.querySelector(".stillon") || {}).textContent || null]))
+    }));
+    await page.locator("#flist .fhead[data-card='Chase Freedom Flex']").click();
+    let w = await wv();
+    ok(J(w.tabs) === J(["New 2", "Gone 4"]) && J(w.mcs) === J(["Round Table Pizza [new-nb@Newport Beach, new-rt]"]),
+      "s3 what changed New: Freedom Flex's two new offers in one Round Table container, counts unchanged (" + J(w) + ")");
+    await page.locator("#wctabs button", { hasText: /^Gone/ }).click();
+    w = await wv();
+    ok(J(w.groups) === J(["Pulled early 2", "Ended 1", "Dropped 1"]) && J(w.mcs) === J(["Pulled early 2: Round Table Pizza [gone-nb@Newport Beach, gone-pulled]",
+      "Ended 1: Round Table Pizza [gone-ended]", "Dropped 1: Round Table Pizza [gone-dropped]"]),
+      "s3 what changed Gone: a container in each group, no offer leaves its group to merge (" + J(w) + ")");
+    ok(["gone-nb", "gone-pulled", "gone-ended", "gone-dropped"].every(id => w.still[id] === "Still on Bank of America and U.S. Bank"),
+      "s3 what changed: Still on follows merchant identity: the Newport Beach member and the base are one merchant; the alias and the unapproved Irvine name don't count (" + J(w.still) + ")");
+    if ((await page.getAttribute("#ftoggle", "aria-expanded")) !== "true") await page.click("#ftoggle");
+    await page.locator("#cards button", { hasText: /^All cards/ }).click();
+    w = await wv();
+    ok(J(w.tabs) === J(["New 3", "Gone 4"]), "s3 what changed All cards: counts are offer counts (" + J(w.tabs) + ")");
+    await page.locator("#wctabs button", { hasText: /^New/ }).click();
+    w = await wv();
+    ok(J(w.mcs) === J(["Round Table Pizza [new-nb@Newport Beach, new-rt, new-boa-nb@Newport Beach]"]), "s3 what changed All cards New: one container, three rows (" + J(w.mcs) + ")");
+    ok(!errs.length, "s3 what changed: no page errors (" + errs.join("; ") + ")");
+    await ctx4.close();
     page = mainPage;
   }
 

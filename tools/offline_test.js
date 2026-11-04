@@ -178,7 +178,7 @@ class Hub {
   const search = async q => {
     await page.fill("#q", q);
     await page.waitForTimeout(150);
-    return page.$$eval("#main li.offer", ls => ls.map(li => ({ merchant: li.querySelector(".merchant").textContent, card: li.querySelector(".mcard").textContent, gone: li.classList.contains("gone"), text: li.innerText })));
+    return page.$$eval("#main li.offer", ls => ls.map(li => ({ merchant: window.__offerOf(li.dataset.oid).merchant, card: li.querySelector(".mcard").textContent, gone: li.classList.contains("gone"), text: li.innerText })));
   };
   const shows = (rows, o) => rows.some(r => r.merchant === o.merchant && r.card === ROW_CARD(o.card) && !r.gone);
   // The saved copy as the worker keeps it: the current set's name and version, and its phone-edits.json / offers.json.
@@ -192,10 +192,15 @@ class Hub {
   });
   const remembered = () => page.evaluate(() => JSON.parse(localStorage.getItem("cardselector.saves") || "{}"));
   const offline = () => page.$eval("#offline", e => e.hidden ? "" : e.textContent);
+  const openMcOf = async id => {
+    const h = page.locator("#main li.mc:has(li.offer[data-oid='" + id + "']) > button.mchead").first();
+    if ((await h.getAttribute("aria-expanded")) !== "true") await h.click();
+  };
   const openRow = async o => {
     await search(o.merchant);
-    const li = page.locator("#main li.offer").filter({ has: page.locator(".merchant", { hasText: o.merchant }) }).filter({ has: page.locator(".mcard", { hasText: ROW_CARD(o.card) }) }).first();
-    await li.locator("button.toggle").click();
+    // The offer's row; its merchant container's header opens every row's details.
+    const li = page.locator("#main li.offer[data-oid='" + o.id + "']").first();
+    await openMcOf(o.id);
     return li;
   };
   const bar = () => page.$eval("#savebar", e => e.hidden ? "" : e.innerText.replace(/\s+/g, " "));
@@ -230,7 +235,7 @@ class Hub {
   await page.evaluate(([m, c]) => {
     new MutationObserver(() => {
       document.querySelectorAll("#main li.offer:not(.gone)").forEach(li => {
-        if (li.querySelector(".merchant").textContent === m && li.querySelector(".mcard").textContent === c) window.__sawUsed(new Date().toISOString());
+        if (window.__offerOf(li.dataset.oid).merchant === m && li.querySelector(".mcard").textContent === c) window.__sawUsed(new Date().toISOString());
       });
     }).observe(document.getElementById("main"), { childList: true, subtree: true });
   }, [U.merchant, ROW_CARD(U.card)]);
@@ -304,7 +309,8 @@ class Hub {
   // Restoring it replaces the entry; after a reload during the restore's deploy, the offer is back.
   await page.click("#ftoggle");
   await page.locator("#used button").click();
-  await page.locator("#main li.offer").filter({ has: page.locator(".merchant", { hasText: U2.merchant }) }).locator("button", { hasText: "Restore offer" }).click();
+  await openMcOf(U2.id);
+  await page.locator("#main li.offer[data-oid='" + U2.id + "']").locator("button", { hasText: "Restore offer" }).click();
   await waitBar(/Deploying/);
   mem = await remembered();
   ok(mem[k2] && mem[k2].after.status === "active" && mem[k2].before.status === "used", "restore replaces the entry (one per record)");
@@ -391,7 +397,7 @@ class Hub {
   await page.click("#ftoggle").catch(() => {});
   let rows = await search("pizza");
   const opened = rows[1];
-  await page.locator("#main li.offer").nth(1).locator("button.toggle").click();
+  await page.evaluate(() => document.querySelectorAll("#main li.offer")[1].closest("li.mc").querySelector(".mchead").click());
   await page.evaluate(() => window.scrollTo(0, 400));
   await page.waitForTimeout(100);
   const y0 = await page.evaluate(() => window.scrollY);
@@ -399,7 +405,7 @@ class Hub {
   const pizzaOffers = offersWith({}, [{ id: "test/zqx-pizza", card: "U.S. Bank", merchant: "Zqx Pizza Test", category: "Dining", bonus: "99% back", channel: "in_store" }]);
   site.publish({ "data/offers.json": pizzaOffers });
   await check();
-  rows = await page.$$eval("#main li.offer", ls => ls.map(li => ({ merchant: li.querySelector(".merchant").textContent, card: li.querySelector(".mcard").textContent, open: li.querySelector("button.toggle").getAttribute("aria-expanded") })));
+  rows = await page.$$eval("#main li.offer", ls => ls.map(li => ({ merchant: window.__offerOf(li.dataset.oid).merchant, card: li.querySelector(".mcard").textContent, open: li.closest("li.mc").querySelector(".mchead").getAttribute("aria-expanded") })));
   const state = await page.evaluate(() => ({ q: document.getElementById("q").value, sort: document.getElementById("sort").value,
     cat: (document.querySelector("#cats button[aria-pressed=true]") || {}).textContent, chan: (document.querySelector("#chans button[aria-pressed=true]") || {}).textContent, y: window.scrollY, swaps: window.__swaps }));
   ok(state.swaps === swaps0 + 1 && rows[0].merchant === "Zqx Pizza Test", "new data swapped in right away (first row now " + rows[0].merchant + ")");
@@ -448,7 +454,7 @@ class Hub {
   await waitBar(/Deploying/);
   await page.fill("#q", "");
   await page.focus("#q");
-  ok(!(await page.$("#main button.toggle[aria-expanded=true]")), "no details open");
+  ok(!(await page.$("#main button.mchead[aria-expanded=true]")), "no details open");
   await comeBack8();
   await stays("with the save bar showing (" + (await bar()).slice(0, 20) + "…)");
   await page.click("#savebar button.xbtn");
