@@ -119,21 +119,35 @@ def same_place(old, new):
 
 
 def location_change(a, b):
-    """Two '<base> - <location>' names on the same base whose location part differs ('X - LA' / 'X - La Habra',
-    'X - North' / 'X - Northridge'): the reason they are never paired automatically, or None. The same location
-    once case and punctuation are ignored, or one cut off on screen ('X - Newport Be...') that the other
-    completes, is not a change."""
-    for ma in re.finditer(r"\s+-\s+", a or ""):
-        base = merchant_key(a[:ma.start()])
-        if not base:
-            continue
-        for mb in re.finditer(r"\s+-\s+", b or ""):
-            if merchant_key(b[:mb.start()]) != base:
+    """Two names on the same base where one is '<base> - <location>' and the other names a different place or
+    none: 'X - LA' / 'X - La Habra', 'X - North' / 'X Northridge' (the dash dropped), 'X - Encino' / 'X' (the
+    location dropped or added). The reason such a pair is never automatic, or None. The same location once case
+    and punctuation are ignored, or one cut off on screen ('X - Newport Be...') that the other completes, is not a
+    change."""
+    def same(sa, sb):
+        return compact(sa) == compact(sb) or (truncated(sa) and same_place(sa, sb)) or (truncated(sb) and same_place(sb, sa))
+    for x, y in ((a or "", b or ""), (b or "", a or "")):
+        for m in re.finditer(r"\s+-\s+", x):
+            base, loc = x[:m.start()], x[m.end():]
+            bkey, bw = merchant_key(base), words(base)
+            if not bkey or not compact(loc):
                 continue
-            sa, sb = a[ma.end():], b[mb.end():]
-            if compact(sa) == compact(sb) or (truncated(sa) and same_place(sa, sb)) or (truncated(sb) and same_place(sb, sa)):
+            other = None
+            for mb in re.finditer(r"\s+-\s+", y):
+                if merchant_key(y[:mb.start()]) == bkey:
+                    other = y[mb.end():]
+                    break
+            if other is None:
+                if merchant_key(y) == bkey:
+                    other = ""
+                elif bw and words(y)[:len(bw)] == bw and len(words(y)) > len(bw):
+                    other = " ".join(words(y)[len(bw):])
+            if other is None:
+                continue
+            if other and same(loc, other):
                 return None
-            return f"location-style names on one base with different locations ({sa!r} / {sb!r}): never automatic"
+            return (f"location-style names on one base with different locations ({loc!r} / {other!r}): never automatic"
+                    if other else f"one name adds or drops the location {loc!r}: never automatic")
     return None
 
 
@@ -950,20 +964,16 @@ def plan(card, paths, given_date, decisions=None, part=False, complete_parts=Fal
 
     def rule_truncated(inc, o):
         for n in names(o):
-            if location_change(n, inc.merchant):
-                continue
             if truncated(n) and len(nkey(stem(n))) >= 4 and nkey(inc.merchant).startswith(nkey(stem(n))):
                 return f"saved name {n!r} is cut off; the file has the full name"
         if truncated(inc.merchant) and len(nkey(stem(inc.merchant))) >= 4 and \
-                any(nkey(n).startswith(nkey(stem(inc.merchant))) and not location_change(n, inc.merchant) for n in names(o)):
+                any(nkey(n).startswith(nkey(stem(inc.merchant))) for n in names(o)):
             return "the file's name is cut off"
         return None
 
     def rule_extends(inc, o):
         a = words(inc.merchant)
         for n in names(o):
-            if location_change(n, inc.merchant):
-                continue
             b = words(n)
             s, l = (a, b) if len(a) <= len(b) else (b, a)
             if s and s != l and l[:len(s)] == s and len("".join(s)) >= 3:
@@ -993,6 +1003,8 @@ def plan(card, paths, given_date, decisions=None, part=False, complete_parts=Fal
                     continue
                 if any(nkey(n) in file_names for n in names(o)):
                     continue
+                if any(location_change(n, incs[i].merchant) for n in names(o)):
+                    continue  # a location changes between any of the offer's names and the file's: proposed (step 4)
                 why = fn(incs[i], o)
                 if why:
                     found.setdefault(i, []).append((o, why))
@@ -1057,7 +1069,7 @@ def plan(card, paths, given_date, decisions=None, part=False, complete_parts=Fal
                     if fn(inc, o):
                         score, w = 1.0, fn(inc, o) + " (several candidates, so not automatic)"
                 lc = location_change(n, inc.merchant)
-                if lc and (a.startswith(b) or b.startswith(a)):
+                if lc:
                     score, w = 1.0, lc
                 if inc.tld and compact(domain_base(inc.tld)) and len(compact(domain_base(inc.tld))) >= 4 and \
                         (compact(domain_base(inc.tld)) in b or b in compact(domain_base(inc.tld))) and score < 0.9:
@@ -1175,6 +1187,11 @@ def plan(card, paths, given_date, decisions=None, part=False, complete_parts=Fal
             if rule == "decided" and alias is None and merchant == v["merchant"] and bare_domain(inc.merchant) \
                     and nkey(inc.merchant) != nkey(merchant):
                 alias = inc.merchant  # the saved name stays; the domain becomes an alias, so the next read matches it
+        # The old name is the new name's base ("Subway" -> "Subway - Encino"): no alias. Search already finds it,
+        # and the base as an alias would tie this location to the base merchant (and to its cuisine entry).
+        base_alias = bool(alias) and location_of_base(merchant, merchant_key(alias))
+        if base_alias:
+            alias = None
         rename = None
         if merchant != o["merchant"]:
             rename = {"id": sid, "from": o["merchant"], "to": merchant, "rule": rule}
@@ -1188,7 +1205,7 @@ def plan(card, paths, given_date, decisions=None, part=False, complete_parts=Fal
             # once case, accents and punctuation are ignored, or never offered as one.
             saved = alias and compact(alias) in {compact(a) for a in o.get("aliases", [])}
             same = alias and not saved and compact(alias) == compact(merchant)
-            rename["alias"] = "added" if saved else ("same_name" if same else "none")
+            rename["alias"] = "added" if saved else ("same_name" if same else ("base" if base_alias else "none"))
             rename["alias_added"] = bool(saved)
         if inc.bonus is not None and inc.bonus != o["bonus"]:
             (out["bonus_changes"] if bonus_key(inc.bonus) != bonus_key(o["bonus"]) else out["wording_changes"]).append(
@@ -1541,7 +1558,7 @@ def plan(card, paths, given_date, decisions=None, part=False, complete_parts=Fal
 # ---------- output ----------
 
 RENAME_ALIAS = {"added": " (old name added to aliases)", "same_name": " (no alias needed: same name once punctuation is ignored)",
-                "none": " (no alias)"}
+                "base": " (no alias: the old name is the new name's base)", "none": " (no alias)"}
 
 def show(out, limit=40):
     def p(t=""):

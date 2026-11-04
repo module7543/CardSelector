@@ -663,6 +663,49 @@ class RefreshTest(unittest.TestCase):
                 finally:
                     t.close()
 
+    def test_location_changes_are_decided_per_offer_never_automatic(self):
+        # Review 1A F1-F3: a base alias on the saved offer, a dashless file name, or a location dropped all leave the
+        # pair for the owner, with the reason.
+        cases = [("eBay - LA", ["eBay"], "eBay - La Habra"), ("eBay - Canoga Park", ["eBay"], "eBay - Northridge"),
+                 ("eBay - LA", None, "eBay La Habra"), ("eBay - Encino", None, "eBay")]
+        for old, aliases, new in cases:
+            with self.subTest(old=old, aliases=aliases, new=new):
+                t = Tree()
+                try:
+                    def f(by, d):
+                        by["capital-one/ebay"].update(merchant=old)
+                        if aliases:
+                            by["capital-one/ebay"]["aliases"] = aliases
+                    t.change_offers(f)
+                    p = t.csv("Capital One", lambda rows: [dict(r, merchant=new) if r["merchant"] == "eBay" else r for r in rows])
+                    code, out, rep = t.run("report", "Capital One", [p])
+                    self.assertNotIn("capital-one/ebay", [m["id"] for m in rep["paired"]], out)
+                    self.assertEqual([(m["saved"], m["file"]) for m in rep["proposals"]], [("capital-one/ebay", new)], out)
+                    self.assertIn("never automatic", rep["proposals"][0]["why"], out)
+                finally:
+                    t.close()
+
+    def test_citi_saved_location_now_listed_under_the_base_is_proposed(self):
+        # Review 1A F3b: "Subway - Woodland Hills" is saved; Citi's tile now reads just "Subway"
+        p = self.t.csv("Citi Double Cash", lambda rows: [dict(r, merchant="Subway") if r["merchant"] == "Subway - Woodland Hills" else r for r in rows])
+        code, out, rep = self.t.run("report", "Citi Double Cash", [p])
+        self.assertEqual(rep["renames"], [], out)
+        self.assertEqual([(m["saved"], m["file"]) for m in rep["proposals"]], [("citi-double-cash/subway-woodland-hills", "Subway")], out)
+
+    def test_conflicting_completion_new_in_the_same_read_holds_the_member(self):
+        # Review 1A S1: the other completion arrives as a new offer in the same read
+        self.t.change_offers(lambda by, d: by["capital-one/ebay"].update(merchant="eBay - Newport Be..."))
+        self.t.write_json("merchant-locations.json", {"groups": {"eBay": ["eBay - Newport Be..."]}})
+        before = self.t.read("merchant-locations.json")
+        def fn(rows):
+            e = next(r for r in rows if r["merchant"] == "eBay")
+            return [dict(r, merchant="eBay - Newport Bend") if r["merchant"] == "eBay" else r for r in rows] + \
+                   [dict(e, merchant="eBay - Newport Beach", bonus="Spend $50, earn $25")]
+        out, rep = self.apply_ok("Capital One", [self.t.csv("Capital One", fn)],
+                                 decisions={"categories": {"eBay - Newport Beach": "Marketplaces & Department Stores"}})
+        self.assertEqual(rep["location_moves"], [], out)
+        self.assertEqual(self.t.read("merchant-locations.json"), before)
+
     def test_visibly_cut_location_still_pairs_automatically(self):
         # "eBay - Newport Be..." on screen, "eBay - Newport Beach" now: the same place, completed (no location file needed)
         self.t.change_offers(lambda by, d: by["capital-one/ebay"].update(merchant="eBay - Newport Be..."))
@@ -761,7 +804,8 @@ class RefreshTest(unittest.TestCase):
                 if r["merchant"] == "eBay":
                     r["merchant"] = "eBay Outlet Store"
             return rows
-        out, rep = self.apply_ok("Capital One", [self.t.csv("Capital One", fn)])
+        pair = {"saved": "capital-one/ebay", "file": "eBay Outlet Store", "bonus": "Spend $20, earn $10", "accept": True}
+        out, rep = self.apply_ok("Capital One", [self.t.csv("Capital One", fn)], decisions={"pairs": [pair]})
         self.assertEqual(self.t.read("merchant-locations.json"), before, "never rewritten into a member the validator would refuse")
         self.assertEqual([(m["to"], m["why"]) for m in rep["location_held"]], [("eBay Outlet Store", "the new name is not 'eBay - <location>'")], out)
         self.assertIn("is in no offer now", out)  # validate.py's note on the stale member
@@ -815,7 +859,8 @@ class RefreshTest(unittest.TestCase):
 
     def test_citi_records_from_the_old_location_rule_are_restored_on_the_next_read(self):
         # Saved as the old rule made them: Taqueria El Tapatio (2 rows merged, location in a note), Subway (location
-        # stripped). The next read keeps each row's full name and drops the old notes.
+        # stripped). The next read keeps each row's full name and drops the old notes; the stripped Subway against
+        # its "Subway - Woodland Hills" tile is proposed (a location added), and accepted it takes no base alias.
         def old(by, d):
             d["offers"] = [o for o in d["offers"] if not o["id"].endswith("/taqueria-el-tapatio-woodland-hills")]
             for t in d["offers"]:
@@ -824,22 +869,42 @@ class RefreshTest(unittest.TestCase):
             s = next(o for o in d["offers"] if o["id"] == "citi-double-cash/subway-woodland-hills")
             s.update(id="citi-double-cash/subway", merchant="Subway", other_details=["Location listed: Woodland Hills"])
         self.t.change_offers(old)
-        cj = self.t.load("cuisines.json")
-        cj["merchants"].pop("Subway - Woodland Hills")  # as in the real data: only the stripped name had an entry
-        (self.t.data / "cuisines.json").write_text(json.dumps(cj, indent=2, ensure_ascii=False) + "\n")
         p = self.t.csv("Citi Double Cash")
         dec = {"categories": {"Taqueria El Tapatio - Woodland Hills": "Dining"}}
         code, out, rep = self.t.run("report", "Citi Double Cash", [p], decisions=dec)
         self.assertEqual(code, 0, out)
-        self.assertEqual([m["merchant"] for m in rep["new"]], ["Taqueria El Tapatio - Woodland Hills"], out)
-        self.assertEqual([(r["id"], r["to"]) for r in rep["renames"]], [("citi-double-cash/subway", "Subway - Woodland Hills")], out)
-        self.assertEqual([c["merchant"] for c in rep["location_candidates"]], ["Taqueria El Tapatio - Woodland Hills"], out)
-        self.apply_ok("Citi Double Cash", [p], decisions=dec)
+        # until the pair is decided, its file row counts as new (as for any proposed pair)
+        self.assertEqual([m["merchant"] for m in rep["new"]], ["Taqueria El Tapatio - Woodland Hills", "Subway - Woodland Hills"], out)
+        self.assertEqual(rep["renames"], [], out)
+        self.assertEqual([(m["saved"], m["file"]) for m in rep["proposals"]], [("citi-double-cash/subway", "Subway - Woodland Hills")], out)
+        self.assertIn("adds or drops the location", rep["proposals"][0]["why"], out)
+        self.assertEqual([c["merchant"] for c in rep["location_candidates"]], ["Taqueria El Tapatio - Woodland Hills", "Subway - Woodland Hills"], out)
+        dec["pairs"] = [{"saved": "citi-double-cash/subway", "file": "Subway - Woodland Hills", "bonus": "5% Back", "accept": True}]
+        out, rep = self.apply_ok("Citi Double Cash", [p], decisions=dec)
         by = self.t.offers()
         self.assertEqual(by["citi-double-cash/taqueria-el-tapatio"]["other_details"], [])
-        self.assertEqual((by["citi-double-cash/subway"]["merchant"], by["citi-double-cash/subway"]["other_details"]),
-                         ("Subway - Woodland Hills", []))
+        s = by["citi-double-cash/subway"]
+        self.assertEqual((s["merchant"], s["other_details"], s.get("aliases")), ("Subway - Woodland Hills", [], None))
+        self.assertIn("(no alias: the old name is the new name's base)", out)
         self.assertEqual(self.t.load("merchant-locations.json"), {"groups": {}})
+
+    def test_citi_old_rule_record_whose_plain_tile_is_gone_applies_once_decided(self):
+        # Review 1A F4: the plain Taqueria tile is gone, only "Taqueria El Tapatio - Woodland Hills" is read. Both
+        # names have cuisine entries (as in the real data), so a base alias would make validate.py refuse.
+        def old(by, d):
+            d["offers"] = [o for o in d["offers"] if not o["id"].endswith("/taqueria-el-tapatio-woodland-hills")]
+            for t in d["offers"]:
+                if t["id"].endswith("/taqueria-el-tapatio"):
+                    t["other_details"] = ["2 locations listed", "Location listed: Woodland Hills"]
+        self.t.change_offers(old)
+        p = self.t.csv("Citi Double Cash", lambda rows: [r for r in rows if r["offer_id"] != "RN-90002"])
+        code, out, rep = self.t.run("report", "Citi Double Cash", [p])
+        self.assertEqual([(m["saved"], m["file"]) for m in rep["proposals"]],
+                         [("citi-double-cash/taqueria-el-tapatio", "Taqueria El Tapatio - Woodland Hills")], out)
+        pair = {"saved": "citi-double-cash/taqueria-el-tapatio", "file": "Taqueria El Tapatio - Woodland Hills", "bonus": "5% Back", "accept": True}
+        out, rep = self.apply_ok("Citi Double Cash", [p], decisions={"pairs": [pair]})
+        t = self.t.offers()["citi-double-cash/taqueria-el-tapatio"]
+        self.assertEqual((t["merchant"], t.get("aliases"), t["other_details"]), ("Taqueria El Tapatio - Woodland Hills", None, []))
 
     def test_validate_failure_puts_files_back(self):
         cards = self.t.load("cards.json")
