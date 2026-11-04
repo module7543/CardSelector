@@ -609,6 +609,30 @@ class RefreshTest(unittest.TestCase):
         self.assertEqual([m["to"] for m in rep["location_held"]], ["eBay - La Habra"], out)
         self.assertEqual(self.t.read("merchant-locations.json"), before)
 
+    def test_cut_off_member_completed_two_ways_is_held(self):
+        def two(by, d):
+            by["capital-one/ebay"].update(merchant="eBay - Newport Be...")
+            by["capital-one/pura"].update(merchant="eBay - Newport Be...", category="Marketplaces & Department Stores")
+        self.t.change_offers(two)
+        self.t.write_json("merchant-locations.json", {"groups": {"eBay": ["eBay - Newport Be..."]}})
+        before = self.t.read("merchant-locations.json")
+        def fn(rows):
+            for r in rows:
+                if r["merchant"] == "eBay":
+                    r["merchant"] = "eBay - Newport Beach"
+                elif r["merchant"] == "Pura" and r["bonus"] == "Spend $20, earn $10":
+                    r["merchant"] = "eBay - Newport Bend"
+            return rows
+        pairs = [{"saved": "capital-one/ebay", "file": "eBay - Newport Beach", "bonus": "Spend $20, earn $10", "accept": True},
+                 {"saved": "capital-one/pura", "file": "eBay - Newport Bend", "bonus": "Spend $20, earn $10", "accept": True}]
+        code, out, rep = self.t.run("report", "Capital One", [self.t.csv("Capital One", fn)], decisions={"pairs": pairs})
+        self.assertEqual(code, 0, out)
+        self.assertEqual(sorted(r["to"] for r in rep["renames"] if r["from"] == "eBay - Newport Be..."), ["eBay - Newport Beach", "eBay - Newport Bend"], out)
+        self.assertEqual(rep["location_moves"], [], out)
+        self.assertEqual(sorted((m["to"], m["why"]) for m in rep["location_held"]),
+                         [("eBay - Newport Beach", "renamed to more than one name in this read"), ("eBay - Newport Bend", "renamed to more than one name in this read")], out)
+        self.assertEqual(self.t.read("merchant-locations.json"), before)
+
     def test_renamed_location_member_to_another_place_is_held(self):
         self.t.change_offers(lambda by, d: by["capital-one/ebay"].update(merchant="eBay - Outlet"))
         self.t.write_json("merchant-locations.json", {"groups": {"eBay": ["eBay - Outlet"]}})

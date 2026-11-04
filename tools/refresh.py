@@ -1370,6 +1370,10 @@ def plan(card, paths, given_date, decisions=None, part=False, complete_parts=Fal
     member_of = {merchant_key(m): (b, m) for b, ms in groups_now.items() if isinstance(ms, list) for m in ms if isinstance(m, str)}
     still_all = {merchant_key(o["merchant"]) for o in new["offers"]}
     loc_moves, loc_held, done, moved = [], [], set(), set()
+    targets = {}  # an approved member's new names in this run: more than one and none is followed
+    for r in out["renames"]:
+        if merchant_key(r["from"]) in member_of and merchant_key(r["from"]) != merchant_key(r["to"]):
+            targets.setdefault(merchant_key(r["from"]), set()).add(merchant_key(r["to"]))
     for r in out["renames"]:
         old_k, new_k = merchant_key(r["from"]), merchant_key(r["to"])
         if old_k not in member_of or old_k == new_k or (old_k, new_k) in done:
@@ -1378,7 +1382,9 @@ def plan(card, paths, given_date, decisions=None, part=False, complete_parts=Fal
         base, member = member_of[old_k]
         # another offer still has the old name (or it was already moved to another name): keep both
         how = "copy" if old_k in still_all or old_k in moved else "move"
-        if new_k in member_of:
+        if len(targets.get(old_k, ())) > 1:
+            why = "renamed to more than one name in this read"
+        elif new_k in member_of:
             why = "already listed" if member_of[new_k][0] == base else f"already in group {member_of[new_k][0]!r}"
         elif new_k == merchant_key(base):
             why = "the new name is the group's own name (it is that merchant now)"
