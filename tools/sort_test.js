@@ -1116,6 +1116,13 @@ const label = r => r.merchant + " | " + r.card + " | " + r.bonus;
       fx("zn-flex", "Chase Freedom Flex", "Zqns Gadgets", "Electronics & Software", "5% cash back", { activation: "needs_activation", channel: "none_shown" }),
       fx("zm-c1", "Capital One", "Zqmixo Gadgets", "Electronics & Software", "3% back", { activation: "none_shown", channel: "online" }),
       fx("zm-boa", "Bank of America", "Zqmixo Gadgets", "Electronics & Software", "2% Cash back", { channel: "in_store_and_online" }),
+      // Step 2A review: two merchants blocked for different reasons; a "may not count" line with a condition.
+      fx("zt3-c1", "Capital One", "Zqtri", "Electronics & Software", "3% back", { activation: "none_shown", channel: "online" }),
+      fx("zt3-ns", "Chase Freedom Flex", "Zqtri", "Electronics & Software", "5% cash back", { activation: "needs_activation", channel: "none_shown" }),
+      fx("zt4-c1", "Capital One", "Zqtri Shop", "Electronics & Software", "3% back", { activation: "none_shown", channel: "online" }),
+      fx("zt4-io", "Capital One", "Zqtri Shop", "Electronics & Software", "2% back", { activation: "none_shown", channel: "in_store_and_online" }),
+      fx("is-boa", "Bank of America", "Instacart", "Groceries & Food Delivery", "10% Cash back", { channel: "in_store", fine_print: "Earn 10% cash back with a $5 cash back maximum." }),
+      fx("is-c1", "Capital One", "Instacart", "Groceries & Food Delivery", "2% back", { activation: "none_shown", channel: "online" }),
       fx("etsy", "Capital One", "Etsy", "Marketplaces & Department Stores", "3% back", { activation: "none_shown", channel: "in_store_and_online" }),
       // Compact rows keep one short condition: a max reward (first $60) in store, ending in 5 days online.
       fx("zc-usb", "U.S. Bank", "Zqcond Cafe", "Dining", "10% cash back", { channel: "in_store", fine_print: "Earn 10% cash back with a $6 cash back maximum." }),
@@ -1359,6 +1366,12 @@ const label = r => r.merchant + " | " + r.card + " | " + r.bonus;
     ok(/^After activating: Freedom Flex 20% \(5% dining \+ 15% Chase offer, ends Nov 9\)/.test(a.heads[1] || ""), "s2a under Online the full line keeps ends Nov 9, not a repeated online (" + a.heads[1] + ")");
     a = await open("zqweb", null);
     ok(/Discover it 16% add to Discover it/.test(a.chanRows[1] || ""), "s2a compact rows still say add to <card> (" + a.chanRows[1] + ")");
+    a = await open("zqtri", "online");
+    ok(/channel not shown on 1 offer at Zqtri · 1 offer at Zqtri Shop also works in store or in an app\./.test(a.rates.nc),
+      "s2a review: Not counted gives each merchant its own reason (" + a.rates.nc + ")");
+    a = await open("instacart", null);
+    ok(/ready now \(first \$50, may not count\) · else Smartly 4%/.test(a.chanRows[0] || "") && !/\) \(/.test(a.chanRows[0] || ""),
+      "s2a review: one condition group on a compact row, may not count inside it (" + a.chanRows[0] + ")");
     ok(!errs.length, "s2: no page errors (" + errs.join("; ") + ")");
 
     // The real merchant-locations.json (52 groups when this was written) with the real offers: it loads, and a

@@ -1300,6 +1300,8 @@
   // noAt: leave out where (the line already names the merchant).
   function notCountedWhy(t, mode, answered, noAt) {
     if (mode === "store") return "online purchases only";
+    // 2 or 3 merchants: one reason each ("channel not shown on 1 offer at X · 1 offer at Y also works in store …").
+    if (answered && answered.length > 1 && !noAt) return answered.map(function (G) { return notCountedWhy(t, mode, [G]); }).join(" · ");
     var at = noAt ? "" : answered ? " at " + answered.map(function (G) { return G.name; }).join(" and ") : " here";
     var b = answered ? onlineBlockers([].concat.apply([], answered.map(function (G) { return G.offers; }))) : t.block || { unknown: 0, both: 0 };
     var n = b.unknown, m = b.both;
@@ -2083,10 +2085,10 @@
       useStrong(d, ln.short, ln.first);
       if (!ln.bare) d.appendChild(el("span", "useextra", " " + (ln.clabel || ln.label.toLowerCase())));
       // The line's one short condition, as on its full line ("first $60", "on $20+", "ends Nov 9"), and "channel not shown".
-      var cs = [withNote ? ln.note : null, ln.cns ? "channel not shown" : null].filter(Boolean);
+      var cs = [withNote ? ln.note : null, ln.cns ? "channel not shown" : null, ln.mnc ? "may not count" : null].filter(Boolean);
       if (cs.length) d.appendChild(el("span", "useextra", " (" + cs.join(", ") + ")"));
       if (ln.gain && !noGain) d.appendChild(el("span", "usegain", ln.gain));
-      if (ln.mnc) d.appendChild(el("span", "useextra", " (may not count)" + (ln.orElse || "")));
+      if (ln.mnc && ln.orElse) d.appendChild(el("span", "useextra", ln.orElse));
       if (ln.store) d.appendChild(el("span", "useextra", ln.store));
     });
   }
@@ -2605,8 +2607,10 @@
     };
     setCount(n, n);
     if (!list.length) {
-      var p = el("p", "empty", "No " + (isNewTab ? "new" : "gone") + " offers" + scope.replace(/^,/, "") +
-        (chanMode !== "any" ? (chanMode === "store" ? " in store" : " online") : ""));
+      var chw = chanMode !== "any" ? (chanMode === "store" ? ", in store" : ", online") : "";
+      var actw = actMode !== "any" ? (actMode === "ready" ? ", ready now" : ", needs activation") : "";
+      var p = el("p", "empty", "No " + (isNewTab ? "new" : "gone") + " offers" +
+        (scope.slice(0, scope.length - actw.length) + chw + actw).replace(/^,/, ""));
       if (compact(query) !== "") {
         p.appendChild(document.createTextNode(" match "));
         p.appendChild(el("strong", null, "“" + query.trim() + "”"));
