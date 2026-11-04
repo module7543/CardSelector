@@ -1085,7 +1085,21 @@ const label = r => r.merchant + " | " + r.card + " | " + r.bonus;
       fx("rt-flex", "Chase Freedom Flex", "Round Table Pizza", "Dining", "10% cash back", { activation: "needs_activation", channel: "none_shown" }),
       fx("rt-usb", "U.S. Bank", "Round Table Pizza", "Dining", "6% cash back"),
       fx("rt-nb", "Bank of America", "Round Table Pizza - Newport Beach", "Dining", "20% Cash back", { fine_print: "Zq Newport Beach terms only" }),
-      fx("rt-nb-2", "Bank of America", "Round Table Pizza - Newport Beach", "Dining", "$5 Cash back")
+      fx("rt-nb-2", "Bank of America", "Round Table Pizza - Newport Beach", "Dining", "$5 Cash back"),
+      // Review round 1. Online shopping at Zqalpha (all known online) is not blocked by another merchant's offer
+      // with no channel (Zqalphabet Toys, matched by the same query).
+      fx("za-c1", "Capital One", "Zqalpha", "Electronics & Software", "3% back", { activation: "none_shown", channel: "online" }),
+      fx("zab-flex", "Chase Freedom Flex", "Zqalphabet Toys", "Pets & Baby", "5% cash back", { activation: "needs_activation", channel: "none_shown" }),
+      // The merchants answered follow the channel's matches: under In store only Zqbook Shop has an offer.
+      fx("zb-c1", "Capital One", "Zqbook Outlet", "Clothing & Jewelry", "5% back", { activation: "none_shown", channel: "online" }),
+      fx("zb-usb", "U.S. Bank", "Zqbook Shop", "Clothing & Jewelry", "5% cash back", { channel: "in_store" }),
+      // Only online offers: under In store the answer falls back to the merchant's offers in every channel.
+      fx("zw-c1", "Capital One", "Zqweb Cafe", "Dining", "11% back", { activation: "none_shown", channel: "online" }),
+      // A cuisine search ("burmese", the real cuisines.json detail) in both channels.
+      fx("bu-usb", "U.S. Bank", "Irrawaddy Taste of Burma", "Dining", "5% cash back", { channel: "in_store" }),
+      fx("bu-c1", "Capital One", "Irrawaddy Taste of Burma", "Dining", "5% back", { activation: "none_shown", channel: "online" }),
+      // A Citi Custom Cash offer that leads Top offer under the Dining button (with its planned 5%).
+      fx("zcc", "Citi Custom Cash", "Zqcc Diner", "Dining", "25% Back", { channel: "none_shown" })
     ];
     let BONUS = null; // entries' card -> activation (or "ended"), applied to the real bonus file
     const realBonus = JSON.parse(fs.readFileSync(path.join(SITE, "data/bonus-categories.json")));
@@ -1248,6 +1262,38 @@ const label = r => r.merchant + " | " + r.card + " | " + r.bonus;
     ok(J(a.names) === J(["Round Table Pizza"]) && /^Ready now: /.test(a.heads[0]), "s2 round table: the approved group is one merchant answer (" + J([a.names, a.heads]) + ")");
     ok(J(a.rows.slice().sort()) === J(["rt-flex", "rt-nb", "rt-nb-2", "rt-usb"]), "s2 round table: four separate records listed (" + J(a.rows) + ")");
     ok(/Unlimited Cash 22\.63%/.test(a.heads[0]), "s2 round table in store: the Newport Beach member's 20% offer answers for the group (" + a.heads[0] + ")");
+    // Review round 1 fixes.
+    a = await open("zqalpha", "online");
+    ok(J(a.names) === J([]) && /^Ready now: Customized Cash 5\.25%/.test(a.heads[0]) && /online shopping 5\.25%/.test(a.rates.sum) && !a.rates.nc,
+      "s2 r1 the answer and Card rates agree: online shopping counted at Zqalpha, not blocked by Zqalphabet Toys (" + J([a.heads[0], a.rates]) + ")");
+    a = await open("netflix", "store");
+    ok(a.sel === null && /^Use: Customized Cash 5\.25% online/.test(a.heads[0] || "") && !a.rates.nc,
+      "s2 r1 no offers, no selector: a remembered In store changes nothing (" + J([a.heads[0], a.rates]) + ")");
+    a = await open("zqbook", null);
+    ok(J(a.names.slice().sort()) === J(["Zqbook Outlet", "Zqbook Shop"]), "s2 r1 zqbook any: both merchants (" + J(a.names) + ")");
+    a = await open("zqbook", "store");
+    ok(J(a.names) === J(["Zqbook Shop"]) && J(a.rows) === J(["zb-usb"]), "s2 r1 zqbook in store: the answer names the merchant the list shows (" + J([a.names, a.rows]) + ")");
+    a = await open("zqweb", "store");
+    ok(J(a.names) === J(["Zqweb Cafe"]) && /^Ready now: /.test(a.heads[0] || "") && /^Online: /.test(a.alt || "") && !a.rows.length,
+      "s2 r1 zqweb in store: no in-store offer, still answered, with the Online line (" + J([a.heads, a.alt]) + ")");
+    a = await open("zqweb", null);
+    ok(a.chanRows.length === 2 && /add to Discover it/.test(a.chanRows[1]) && !/after activating/.test(a.chanRows[1]),
+      "s2 r1 compact rows keep \"add to <card>\", not \"after activating\" (" + J(a.chanRows) + ")");
+    a = await open("la colombe", null);
+    ok(!/Likely/.test(a.chanRows[0]) && /Likely/.test(a.chanRows[1]), "s2 r1 Likely only on the row whose total has a category rate (" + J(a.chanRows) + ")");
+    for (const ch of [null, "store", "online"]) {
+      a = await open("burmese", ch);
+      ok(!a.names.length && /^Use: /.test(a.heads[0] || ""), "s2 r1 burmese (a cuisine search) gets the category headline under " + (ch || "any") + " (" + J([a.names, a.heads[0]]) + ")");
+    }
+    a = await open("ralphs", null, { "Freedom Flex": "not_confirmed", "Freedom": "not_confirmed" });
+    ok(/grocery stores 3\.5% \(5% not activated, below Smartly 4%\)/.test(a.rates.sum), "s2 r1 Card rates summary qualifies a rate below the answer (" + a.rates.sum + ")");
+    await open("", null);
+    if (await page.locator("#ftoggle").isVisible()) await page.click("#ftoggle");
+    await page.locator("#cats button", { hasText: /^Dining/ }).first().click();
+    await page.waitForTimeout(150);
+    const top = await page.$eval("#use .usetop", e => e.textContent).catch(() => "");
+    ok(/^Top offer: Zqcc Diner 30% with Citi Custom Cash, conditional: only if restaurants is your actual top eligible category this cycle\.$/.test(top),
+      "s2 r1 Top offer says when its total is conditional (" + top + ")");
     ok(!errs.length, "s2: no page errors (" + errs.join("; ") + ")");
 
     // The real merchant-locations.json (52 groups when this was written) with the real offers: it loads, and a
