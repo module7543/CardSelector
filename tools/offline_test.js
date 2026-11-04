@@ -158,7 +158,7 @@ class Hub {
   let ctx, page, hub;
   const fresh = async (opts = {}) => {
     if (ctx) await ctx.close();
-    site.over = { "data/phone-edits.json": opts.edits || "{}\n" }; site.fail = {}; site.delay = {}; site.hook = null;
+    site.over = Object.assign({ "data/phone-edits.json": opts.edits || "{}\n" }, opts.over || {}); site.fail = {}; site.delay = {}; site.hook = null;
     site.publish();
     hub = new Hub(site);
     ctx = await browser.newContext({ viewport: { width: 390, height: 844 } }); // service workers allowed
@@ -188,7 +188,7 @@ class Hub {
     if (!r) return null;
     const m = await r.json(), c = await caches.open(m.name);
     const t = async p => { const x = await c.match(new URL(p, location.href).href); return x ? x.text() : null; };
-    return { name: m.name, version: m.version, edits: await t("data/phone-edits.json"), offers: await t("data/offers.json") };
+    return { name: m.name, version: m.version, edits: await t("data/phone-edits.json"), offers: await t("data/offers.json"), locs: await t("data/merchant-locations.json") };
   });
   const remembered = () => page.evaluate(() => JSON.parse(localStorage.getItem("cardselector.saves") || "{}"));
   const offline = () => page.$eval("#offline", e => e.hidden ? "" : e.textContent);
@@ -505,7 +505,7 @@ class Hub {
   });
   ok(held9.length > 0 && !held9.some(e => /api\.github\.com/.test(e.url)), "no api.github.com request in Cache Storage (" + held9.length + " entries)");
   ok(!held9.some(e => e.body.includes("test-token-offline")), "the sign-in token is in no saved file");
-  const allowed = /\/(index\.html|js\/(edits|store|recent|copy|app)\.js|data\/(offers|phone-edits|bonus-categories|cuisines|cards|card-links)\.json|__saved-copy__\/(current|known))$/;
+  const allowed = /\/(index\.html|js\/(edits|store|recent|copy|app)\.js|data\/(offers|phone-edits|bonus-categories|cuisines|cards|card-links|merchant-locations)\.json|__saved-copy__\/(current|known))$/;
   ok(held9.every(e => allowed.test(new URL(e.url).pathname)), "only the page, its scripts and its data files are saved: " + [...new Set(held9.map(e => new URL(e.url).pathname))].filter(p => !allowed.test(p)).join(", "));
   const vj = await page.evaluate(() => fetch("version.json").then(r => r.headers.get("X-Saved-Copy")));
   ok(vj === null, "version.json is never answered from the copy");
@@ -586,6 +586,69 @@ class Hub {
   const offRows = await search("pizza");
   const offHeader = await page.evaluate(() => fetch("data/offers.json").then(r => r.headers.get("X-Saved-Copy")));
   ok(offRows.length > 5 && offHeader === null && !(await page.evaluate(() => navigator.serviceWorker.controller)), "off: the next open loads from the network and works (" + offRows.length + " rows)");
+
+  // 13. merchant-locations.json: in the saved set, swapped in on its own, used offline; a set saved by a worker that
+  // predates the file opens with no location merges until the new worker's set brings it.
+  console.log("-- 13. merchant locations");
+  const locOffers = offersWith({}, [{ id: "test/zqxloc", card: "U.S. Bank", merchant: "Zqxloc Pizza", category: "Dining", bonus: "5% back", channel: "in_store" },
+    { id: "test/zqxloc-nb", card: "U.S. Bank", merchant: "Zqxloc Pizza - Newport Beach", category: "Dining", bonus: "7% back", channel: "in_store" }]);
+  const grouping = ser({ groups: { "Zqxloc Pizza": ["Zqxloc Pizza - Newport Beach"] } });
+  const TWO = JSON.stringify(["Zqxloc Pizza", "Zqxloc Pizza - Newport Beach"]), ONE = JSON.stringify(["Zqxloc Pizza"]);
+  const locView = async () => {
+    const rows = await search("zqxloc");
+    const names = await page.$$eval("#use .usemname, #use .useat", es => es.map(e => e.textContent.replace(/:\s*$/, "").replace(/^At /, "")).sort());
+    return { names: JSON.stringify(names), n: await page.evaluate(() => window.__locations), rows: rows.filter(r => !r.gone).length };
+  };
+  await fresh({ over: { "data/offers.json": locOffers } });
+  st = await copy();
+  let lv = await locView();
+  ok(st.locs === read("data/merchant-locations.json").toString(), "the saved set holds merchant-locations.json as deployed (" + JSON.stringify(st.locs) + ")");
+  ok(lv.names === TWO && lv.n === 0 && lv.rows === 2, "empty locations file: Zqxloc Pizza and its - Newport Beach name are two merchants (" + lv.names + ")");
+  const sw13 = await page.evaluate(() => window.__swaps || 0);
+  site.publish({ "data/merchant-locations.json": grouping });
+  let n13 = site.log.length;
+  const r13 = await check();
+  const asked13 = site.log.slice(n13).filter(p => /^(data|js)\/|^index\.html$/.test(p));
+  lv = await locView();
+  ok(r13.status === "updated" && JSON.stringify(asked13) === JSON.stringify(["data/merchant-locations.json"]) && (await copy()).locs === grouping,
+    "a deploy changing only merchant-locations.json: only it is downloaded, into a new set (" + asked13.join(", ") + ")");
+  ok(await page.evaluate(() => window.__swaps) === sw13 + 1 && lv.names === ONE && lv.n === 1 && lv.rows === 2,
+    "the swap of that file alone re-groups: one merchant, both offers still listed (" + lv.names + ", " + lv.rows + " rows)");
+  const port13 = site.port;
+  await site.stop();
+  await page.goto(base()).catch(() => {});
+  await page.waitForFunction(() => window.__copyLast, null, { timeout: 30000 });
+  lv = await locView();
+  ok(lv.names === ONE && lv.n === 1 && lv.rows === 2, "offline first load from the copy: grouped as online (" + lv.names + ")");
+  await site.start(port13);
+
+  // A worker that predates the file (main's sw.js: no merchant-locations.json in DATA) saved the set.
+  const oldSw = read("sw.js").toString().replace(', "data/merchant-locations.json"', "");
+  ok(oldSw !== read("sw.js").toString(), "test sw.js without merchant-locations.json in DATA");
+  await fresh({ over: { "sw.js": oldSw, "data/offers.json": locOffers, "data/merchant-locations.json": grouping } });
+  let n13b = site.log.length;
+  await open(true);
+  const asked13b = site.log.slice(n13b).filter(p => /^data\//.test(p));
+  st = await copy();
+  lv = await locView();
+  ok(st && st.locs === null && lv.names === ONE, "older saved set without the file, online: the file comes from the network and groups (" + lv.names + ")");
+  ok(JSON.stringify(asked13b) === JSON.stringify(["data/merchant-locations.json"]), "older saved set, online: offers.json and the rest still open from the copy, only the missing file is fetched (" + asked13b.join(", ") + ")");
+  await site.stop();
+  await page.goto(base()).catch(() => {});
+  await page.waitForFunction(() => window.__copyLast, null, { timeout: 30000 });
+  lv = await locView();
+  ok(lv.names === TWO && lv.n === 0 && lv.rows === 2 && (await search("pizza")).length > 5, "older saved set without the file, offline: the page opens from the copy with no location merges (" + lv.names + ")");
+  await site.start(port13);
+  // A swap from such a set still goes in (the missing file means no merges).
+  site.publish({ "data/offers.json": offersWith({}, [{ id: "test/zqxloc-old", card: "U.S. Bank", merchant: "Zqxloc Oldset", category: "Clothing & Jewelry", bonus: "5% back", channel: "online" }]) });
+  await check();
+  ok((await copy()).locs === null && (await search("zqxloc oldset")).length === 1, "a swap from a set without the file goes in");
+  // The deploy of the new sw.js: its first complete set brings the file, and the page groups.
+  site.publish({ "sw.js": read("sw.js").toString(), "data/offers.json": locOffers });
+  await open(true);
+  for (let i = 0; i < 20 && (await copy()).locs !== grouping; i++) { await page.waitForTimeout(250); await check(); }
+  lv = await locView();
+  ok((await copy()).locs === grouping && lv.names === ONE && lv.n === 1, "the new worker's set brings merchant-locations.json and the page groups (" + lv.names + ")");
 
   await ctx.close();
   await browser.close();

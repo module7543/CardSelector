@@ -391,6 +391,55 @@ if EDITS.exists():
             if e["activation"] not in SWITCH: pbad("activation must be needs_activation or already_activated")
             if o.get("activation") not in SWITCH: pbad(f"the phone can't switch activation {o.get('activation')!r}")
 
+# merchant-locations.json: owner-approved location variants, { "groups": { "<base>": ["<base> - <location>", ...] } }.
+# The only thing that merges two merchant names on the page (CLAUDE.md, Phone page, Merchant identity). Always
+# deployed, even empty: the saved copy needs every data file it lists.
+def merchant_key(s):
+    """The page's merchantKey(): compact() after dropping .com / .net / .org."""
+    return compact(re.sub(r"\.(com|net|org)\b", "", s, flags=re.I | re.A))
+
+def location_of_base(member, base_key):
+    """'<base> - <suffix>': some ' - ' splits the member into the base (same merchant_key) and a non-empty suffix."""
+    return any(merchant_key(member[:m.start()]) == base_key and compact(member[m.end():])
+               for m in re.finditer(r"\s+-\s+", member))
+
+LOCS = PATH.parent / "merchant-locations.json"
+loc_groups = {}
+if not LOCS.exists():
+    errors.append("merchant-locations.json is missing (deploy it even when empty: {\"groups\": {}})")
+else:
+    def lbad(msg): errors.append(f"merchant-locations.json: {msg}")
+    try: lj = json.loads(LOCS.read_text())
+    except ValueError as ex: lbad(f"not valid JSON ({ex})"); lj = None
+    if lj is not None and not (isinstance(lj, dict) and set(lj) == {"groups"} and isinstance(lj["groups"], dict)):
+        lbad('must be {"groups": {"<base>": ["<base> - <location>", ...]}} with nothing else')
+    elif lj is not None:
+        loc_groups = lj["groups"]
+        member_of, base_keys = {}, {}
+        for base, members in loc_groups.items():
+            bk = merchant_key(base)
+            if not bk: lbad(f"group name {base!r} has no letters or digits"); continue
+            if bk in base_keys: lbad(f"group {base!r} is the same name as group {base_keys[bk]!r}")
+            base_keys[bk] = base
+            if not (isinstance(members, list) and members and all(isinstance(m, str) for m in members)):
+                lbad(f"group {base!r} must be a non-empty list of merchant names"); continue
+            for m in members:
+                mk = merchant_key(m)
+                if mk == bk: lbad(f"{m!r} is its group's own name ({base!r}), not a location of it"); continue
+                if not location_of_base(m, bk): lbad(f"{m!r} is not '{base} - <location>'"); continue
+                if mk in member_of:
+                    lbad(f"{m!r} is listed in group {member_of[mk]!r}" + (" twice" if member_of[mk] == base else f" and in group {base!r}"))
+                    continue
+                member_of[mk] = base
+        for mk, base in member_of.items():
+            if mk in base_keys: lbad(f"{base_keys[mk]!r} is a group name and also a member of group {base!r}")
+        # Approved locations can outlive an offer (expired, cleaned up): a note, not an error.
+        names = {merchant_key(str(o.get("merchant"))) for o in data["offers"]}
+        for base, members in loc_groups.items():
+            for m in members if isinstance(members, list) else []:
+                if isinstance(m, str) and merchant_key(m) not in names:
+                    notes.append(f"note: merchant-locations.json: {m!r} (group {base!r}) is in no offer now (kept on purpose)")
+
 if errors:
     print("\n".join(errors)); sys.exit(1)
 for n in notes: print(n)
@@ -398,4 +447,5 @@ extra = f", {len(entries)} cuisine entries, {len(todo)} to classify" if CUIS.exi
 extra += f", {len(bonus_entries)} bonus entries" if BONUS.exists() else ""
 extra += f", {len(card_defs)} cards" if CARDS.exists() else ""
 extra += f", {len(pending)} pending phone edits" if EDITS.exists() else ""
+extra += f", {sum(len(m) for m in loc_groups.values())} approved location variants in {len(loc_groups)} groups"
 print(f"OK: {len(data['offers'])} offers, {len(data['batches'])} batches{extra}")

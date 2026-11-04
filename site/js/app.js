@@ -227,9 +227,48 @@
     };
   }
 
-  // Same-merchant key for the headline and the Best offer grouping: the name without a " - Location" suffix.
-  function merchantBase(o) { return o.merchant.replace(/\s+-\s+.*$/, "") || o.merchant; }
-  function merchantBaseKey(o) { return merchantKey(merchantBase(o)) || merchantKey(o.merchant); }
+  // Merchant identity, one rule for the headline, Top offer, Best offer grouping and search: the full name as
+  // merchantKey() gives it, so "KitchenAid - Major Appliances" and "KitchenAid - Countertop Appliances" are two
+  // merchants. Nothing groups because of " - ", aliases or a shared word. Only an owner-approved location variant
+  // listed in data/merchant-locations.json joins its group (locations: merchantKey(member) -> the group).
+  var locations = Object.create(null);
+  // Reads merchant-locations.json ({ "groups": { "<base>": ["<base> - <location>", ...] } }). Anything missing or
+  // not in that shape, a member listed twice or also a group name, or one that isn't "<base> - <suffix>": no
+  // location merges at all (tools/validate.py refuses such a file before it can deploy).
+  function useLocations(j) {
+    var map = Object.create(null), bases = Object.create(null);
+    var okay = !!j && typeof j === "object" && !Array.isArray(j) && !!j.groups && typeof j.groups === "object" && !Array.isArray(j.groups);
+    if (okay) okay = Object.keys(j.groups).every(function (name) {
+      var key = merchantKey(name), list = j.groups[name];
+      bases[key] = 1;
+      return !!key && Array.isArray(list) && list.length > 0 && list.every(function (m) {
+        var k = typeof m === "string" ? merchantKey(m) : "";
+        if (!k || k === key || k in map || !locationOfBase(m, key)) return false;
+        map[k] = { name: name, key: key, n: { c: compact(name), s: spaced(name), w: wordForm(name) } };
+        return true;
+      });
+    }) && !Object.keys(map).some(function (k) { return k in bases; });
+    locations = okay ? map : Object.create(null);
+    window.__locations = Object.keys(locations).length; // tools/offline_test.js, tools/sort_test.js
+  }
+  // "<base> - <suffix>": some " - " in the member splits it into the base (same merchantKey) and a non-empty
+  // suffix (tools/validate.py checks the file with the same rule).
+  function locationOfBase(member, key) {
+    var re = /\s+-\s+/g, m;
+    while ((m = re.exec(member))) {
+      if (merchantKey(member.slice(0, m.index)) === key && compact(member.slice(m.index + m[0].length))) return true;
+    }
+    return false;
+  }
+  function ownKey(o) { return o._mk !== undefined ? o._mk : (o._mk = merchantKey(o.merchant)); }
+  function locationOf(o) { return locations[ownKey(o)] || null; }
+  function containerKey(o) { var g = locationOf(o); return g ? g.key : ownKey(o); }
+  function containerName(o) { var g = locationOf(o); return g ? g.name : o.merchant; }
+  // The offer's names (merchant, aliases) plus its group's name when it is an approved location, for rate matching.
+  function containerNames(o) {
+    var g = locationOf(o), names = nameKeys(o);
+    return g && !names.some(function (n) { return n.c === g.n.c; }) ? names.concat([g.n]) : names;
+  }
 
   // The one comparator for a sort mode, used for every list of offers (search, filters, Recently unavailable;
   // Show more pages through the same sorted list). Offers lacking the sorted value go after the rest, in Best
@@ -245,14 +284,14 @@
       var missBy = function (strict) {
         var memo = {};
         return function (o) {
-          if (!(o.id in memo)) memo[o.id] = nameKeys(o).some(function (n) { return wholeWordName(n, wq, strict); }) ? 0 : 1;
+          if (!(o.id in memo)) memo[o.id] = containerNames(o).some(function (n) { return wholeWordName(n, wq, strict); }) ? 0 : 1;
           return memo[o.id];
         };
       };
       var miss = { loose: missBy(false), strict: missBy(true) };
       var level = wholeLevel(function (strict) {
         var keys = {}, n = 0, m = miss[strict ? "strict" : "loose"];
-        pool.forEach(function (o) { if (!m(o) && !keys[merchantBaseKey(o)]) { keys[merchantBaseKey(o)] = 1; n++; } });
+        pool.forEach(function (o) { if (!m(o) && !keys[containerKey(o)]) { keys[containerKey(o)] = 1; n++; } });
         return n;
       });
       if (!level) return byTotal;
@@ -402,7 +441,7 @@
       if (rank === 4 && qs && cuisineOf(o) && o._cd && (o._cd.indexOf(" " + qs) !== -1 ||
           (multi && words.every(function (w) { return o._cd.indexOf(" " + w) !== -1; })))) rank = 3;
       if (rank === 4) return;
-      var key = merchantKey(o.merchant);
+      var key = containerKey(o);
       var g = groups[key] || (groups[key] = { rank: rank, name: names[0].s, offers: [] });
       g.rank = Math.min(g.rank, rank);
       g.offers.push(o);
@@ -1461,9 +1500,7 @@
     if (o.id in totalCache) return totalCache[o.id];
     var res = null, v = offerValue(o), L = cardsCfg && cardsCfg.lists[o.card];
     if (v.kind === "pct" && L && L.cards.length) {
-      var base = merchantBase(o), bn = { c: compact(base), s: spaced(base) }, names = nameKeys(o).slice();
-      if (!names.some(function (n) { return n.c === bn.c; })) names.push(bn);
-      var M = { names: names, offers: [o], online: o.channel === "online", rates: {} }, best = null;
+      var M = { names: containerNames(o), offers: [o], online: o.channel === "online", rates: {} }, best = null;
       L.cards.forEach(function (C) {
         var r = rateAt(C, M, today, o.channel !== "online", true).ready;
         if (!best || r.rate > best.rate) best = { C: C, rate: r.rate };
@@ -1481,7 +1518,7 @@
     return l ? l.cards : [];
   }
 
-  // Merchants among the matches, by name without a "- Location" suffix, plus typed bonus keywords that no offer
+  // Merchants among the matches, by merchant identity (containerKey: the full name, or an approved location's group), plus typed bonus keywords that no offer
   // carries ("shell" -> Shell). Whole-word matches win: when any merchant or keyword matches every typed word as a
   // whole word ("round table", "table round", "bp"), only those make the headline; partial matches (Shelly,
   // Bombshell Sportswear for "shell") stay in the results. When a name equals what was typed, keywords that only
@@ -1495,16 +1532,13 @@
     var strictWhole = function (n) { return wholeWordName(n, wq, true); };
     var exact = function (n) { return n.c === qc; };
     hits.forEach(function (o) {
-      var base = merchantBase(o), k = merchantBaseKey(o);
+      var k = containerKey(o);
       var g = by[k];
-      if (!g) { g = by[k] = { key: k, name: base, offers: [], names: [], seen: {}, rank: 9, rates: {} }; order.push(g); }
+      if (!g) { g = by[k] = { key: k, name: containerName(o), offers: [], names: [], seen: {}, rank: 9, rates: {} }; order.push(g); }
       g.offers.push(o);
-      nameKeys(o).forEach(function (n) {
-        g.rank = Math.min(g.rank, nameRank(n));
-        if (!g.seen[n.c]) { g.seen[n.c] = 1; g.names.push(n); }
-      });
-      var bn = { c: compact(base), s: spaced(base), w: wordForm(base) };
-      if (!g.seen[bn.c]) { g.seen[bn.c] = 1; g.names.push(bn); }
+      nameKeys(o).forEach(function (n) { g.rank = Math.min(g.rank, nameRank(n)); });
+      // The group's name (an approved location's base) counts as a name of the merchant, as its own names do.
+      containerNames(o).forEach(function (n) { if (!g.seen[n.c]) { g.seen[n.c] = 1; g.names.push(n); } });
     });
     order.forEach(function (g) { g.whole = g.names.some(whole); g.strict = g.names.some(strictWhole); g.exact = g.names.some(exact); });
     // Typed bonus keywords (gas stations, grocery stores, online stores...) with no offer of their own.
@@ -1765,10 +1799,10 @@
       if (!L) return;
       var v = offerValue(o);
       if (v.kind !== "pct" || v.upTo) return;
-      var base = o.merchant.replace(/\s+-\s+.*$/, "") || o.merchant, k = merchantKey(base);
-      var M = by[k] || (by[k] = { name: base, offers: [], names: [], rates: {}, online: false });
+      var k = containerKey(o);
+      var M = by[k] || (by[k] = { name: containerName(o), offers: [], names: [], rates: {}, online: false });
       M.offers.push(o);
-      nameKeys(o).forEach(function (n) { M.names.push(n); });
+      containerNames(o).forEach(function (n) { M.names.push(n); });
       M.online = M.offers.every(function (x) { return x.channel === "online"; });
     });
     hits.forEach(function (o) {
@@ -1776,7 +1810,7 @@
       if (!L) return;
       var v = offerValue(o);
       if (v.kind !== "pct" || v.upTo) return;
-      var M = by[merchantKey(o.merchant.replace(/\s+-\s+.*$/, "") || o.merchant)];
+      var M = by[containerKey(o)];
       L.cards.forEach(function (C) {
         if (cards.indexOf(C) === -1) return;
         var rb = rateAt(C, M, today).ready, total = rb.rate + v.pct;
@@ -2724,7 +2758,10 @@
   // The data files, each read by one function, used on the first load and again when a newer saved copy is
   // swapped in (swapIn below). loaded: the text of each file as the page has it, to tell what a swap changes.
   var DATA_FILES = ["data/offers.json", "data/phone-edits.json", "data/bonus-categories.json", "data/cuisines.json",
-                    "data/cards.json", "data/card-links.json"];
+                    "data/cards.json", "data/card-links.json", "data/merchant-locations.json"];
+  // May be missing from a saved set made before the file existed (or by a worker that predates it): no location
+  // merges until the next complete set brings it.
+  var OPTIONAL = ["data/merchant-locations.json"];
   var loaded = {};
   function parsed(text) { try { return JSON.parse(text); } catch (e) { return undefined; } }
 
@@ -3142,9 +3179,10 @@
   });
   renderEditMode();
 
-  // The first load: offers.json, phone-edits.json and card-links.json from one saved set (or all from the
-  // network), so offers and pending edits always belong to the same deploy.
-  CardCopy.fetchTogether(["data/offers.json", "data/phone-edits.json", "data/card-links.json"])
+  // The first load: offers.json, phone-edits.json, card-links.json and merchant-locations.json from one saved set
+  // (or all from the network), so offers and pending edits always belong to the same deploy and the first render
+  // already groups approved locations. A missing or broken locations file means no location merges.
+  CardCopy.fetchTogether(["data/offers.json", "data/phone-edits.json", "data/card-links.json", "data/merchant-locations.json"], { optional: OPTIONAL })
     .then(function (res) {
       var o = res.items[0];
       if (!o.ok) throw new Error(o.status);
@@ -3153,6 +3191,8 @@
       loaded["data/offers.json"] = o.text;
       loaded["data/phone-edits.json"] = res.items[1].ok ? res.items[1].text : null;
       if (res.items[2].ok) { useLinks(parsed(res.items[2].text)); loaded["data/card-links.json"] = res.items[2].text; }
+      useLocations(res.items[3].ok ? parsed(res.items[3].text) : null);
+      loaded["data/merchant-locations.json"] = res.items[3].ok ? res.items[3].text : null;
       dataSet = res.set;
       renderCats(); renderCards(); renderCuisines(); render(); refreshFreshness();
       startCopy();
@@ -3217,20 +3257,21 @@
   }
   // Reads every data file from the current saved set (Cache Storage, not through the worker) and, when any differs
   // from what the page shows, puts the new set in place: offers with their pending edits and the remembered saves,
-  // bonus categories, cuisines, cards and card links. The search, filters, sort, Used filter, scroll position and open details stay.
+  // bonus categories, cuisines, cards, card links and location groups. The search, filters, sort, Used filter, scroll position and open details stay.
   // duringSave: called by the save itself (a refused save, item "reload" in runSave), so a save in progress
   // doesn't hold it back.
   function swapIn(duringSave) {
-    return CardCopy.readSet(DATA_FILES).then(function (res) {
-      if (!res || !res.set || !res.items.every(function (it) { return it.ok; })) return false;
+    return CardCopy.readSet(DATA_FILES, { optional: OPTIONAL }).then(function (res) {
+      if (!res || !res.set || !res.items.every(function (it) { return it.ok || OPTIONAL.indexOf(it.path) !== -1; })) return false;
       var t = {};
-      res.items.forEach(function (it) { t[it.path] = it.text; });
+      // An optional file the set lacks (saved before it existed) is unknown, not empty: keep what the page has.
+      res.items.forEach(function (it) { t[it.path] = it.ok ? it.text : loaded[it.path] === undefined ? null : loaded[it.path]; });
       if (DATA_FILES.every(function (p) { return t[p] === loaded[p]; })) { dataSet = res.set; return false; }
       if (saving && !duringSave) { swapPending = true; return false; } // a save started while the files were read
       var j = {};
       for (var i = 0; i < DATA_FILES.length; i++) {
-        j[DATA_FILES[i]] = parsed(t[DATA_FILES[i]]);
-        if (j[DATA_FILES[i]] === undefined) return false;
+        j[DATA_FILES[i]] = t[DATA_FILES[i]] === null ? null : parsed(t[DATA_FILES[i]]);
+        if (j[DATA_FILES[i]] === undefined && OPTIONAL.indexOf(DATA_FILES[i]) === -1) return false;
       }
       var edits = editsOf({ status: 200, ok: true, text: t["data/phone-edits.json"] });
       var y = window.scrollY;
@@ -3244,6 +3285,8 @@
       if (changed("data/cuisines.json") || offersNew) useCuisines(j["data/cuisines.json"]);
       if (changed("data/cards.json")) useCards(j["data/cards.json"]);
       if (changed("data/bonus-categories.json")) useBonus(j["data/bonus-categories.json"]);
+      // Location groups decide which offers are one merchant: the results and headline are drawn again below.
+      if (changed("data/merchant-locations.json")) useLocations(j["data/merchant-locations.json"]);
       loaded = t;
       dataSet = res.set;
       totalCache = {}; totalSig = ""; // Best offer totals, worked out again from the new rates
