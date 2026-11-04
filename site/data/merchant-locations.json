@@ -1,1 +1,240 @@
-{ "groups": {} }
+{
+  "groups": {
+    "Baklava Factory": [
+      "Baklava Factory - Encino",
+      "Baklava Factory - Glendale",
+      "Baklava Factory - North Hollywood"
+    ],
+    "Bangin Buns": [
+      "Bangin Buns - Los Angeles",
+      "Bangin Buns - North Hollywood"
+    ],
+    "Brooklyn Square": [
+      "Brooklyn Square - Downey"
+    ],
+    "Caruso's Italian Kitchen": [
+      "Caruso's Italian Kitchen - Sylmar",
+      "Caruso's Italian Kitchen - Tujunga"
+    ],
+    "Crazy Otto's Diner": [
+      "Crazy Otto's Diner - Acton"
+    ],
+    "EggBred": [
+      "EggBred - Brea",
+      "EggBred - Garden Grove",
+      "EggBred - Seal Beach",
+      "EggBred - Whittier",
+      "Eggbred - Long Beach"
+    ],
+    "El Tarasco Mexican Restaurant": [
+      "El Tarasco Mexican Restaurant - Lawndale"
+    ],
+    "Fatima's Grill": [
+      "Fatima's Grill - Downey",
+      "Fatima's Grill - Garden Grove"
+    ],
+    "Firehouse Subs": [
+      "Firehouse Subs - Belle Fleur Center",
+      "Firehouse Subs - HB",
+      "Firehouse Subs - La Verne",
+      "Firehouse Subs - Mesa Verde",
+      "Firehouse Subs - Orange",
+      "Firehouse Subs - Palmdale",
+      "Firehouse Subs - Santa Ana"
+    ],
+    "Fire Island Grill": [
+      "Fire Island Grill - Palmdale",
+      "Fire Island Grill - Simi Valley"
+    ],
+    "Fish Grill": [
+      "Fish Grill - Pico"
+    ],
+    "For The Win": [
+      "For The Win - Alhambra",
+      "For The Win - Beverly Center",
+      "For The Win - Grand Central Market",
+      "For The Win - Hollywood",
+      "For The Win - Koreatown",
+      "For The Win - Van Nuys",
+      "For The Win - Whittier"
+    ],
+    "Hook'd Fish Grill": [
+      "Hook'd Fish Grill - Chatsworth"
+    ],
+    "Joe's Pizza": [
+      "Joe's Pizza - Downtown",
+      "Joe's Pizza - Hollywood",
+      "Joe's Pizza - Mid-City",
+      "Joe's Pizza - Sherman Oaks",
+      "Joe's Pizza - Studio City",
+      "Joe's Pizza - West LA"
+    ],
+    "Khan Saab Desi Craft Kitchen": [
+      "Khan Saab Desi Craft Kitchen - Santa Monica"
+    ],
+    "Loaded Cafe": [
+      "Loaded Cafe - Bellflower",
+      "Loaded Cafe - Gardena",
+      "Loaded Cafe - Lawndale",
+      "Loaded Cafe - Orange",
+      "Loaded Cafe - Placentia",
+      "Loaded Cafe - Santa Ana (First Street)",
+      "Loaded Cafe - Santa Ana (McFadden)"
+    ],
+    "Lucky Tiki": [
+      "Lucky Tiki - Highland Park",
+      "Lucky Tiki - West Hollywood"
+    ],
+    "Mad Lab Coffee": [
+      "Mad Lab Coffee - Culver City",
+      "Mad Lab Coffee - DTLA",
+      "Mad Lab Coffee - Hollywood",
+      "Mad Lab Coffee - Pico Blvd"
+    ],
+    "Maria's Italian Kitchen": [
+      "Maria's Italian Kitchen - Agoura Hills",
+      "Maria's Italian Kitchen - Encino",
+      "Maria's Italian Kitchen - Northridge",
+      "Maria's Italian Kitchen - Pasadena",
+      "Maria's Italian Kitchen - Sherman Oaks",
+      "Maria's Italian Kitchen - West Los Angeles",
+      "Maria's Italian Kitchen - Woodland Hills"
+    ],
+    "McDonald's": [
+      "McDonald's - Beach Blvd.",
+      "McDonald's - E 17th St",
+      "McDonald's - E 1st St",
+      "McDonald's - E. Katella",
+      "McDonald's - N Bristol St",
+      "McDonald's - N Tustin St",
+      "McDonald's - W Lincoln Ave"
+    ],
+    "Meet Fresh": [
+      "Meet Fresh - Tustin"
+    ],
+    "Ministry Of Coffee": [
+      "Ministry Of Coffee - Venice",
+      "Ministry Of Coffee - Westwood",
+      "Ministry of Coffee - West Hollywood"
+    ],
+    "My Panecito": [
+      "My Panecito - Placentia"
+    ],
+    "My Vegan": [
+      "My Vegan - Eagle Rock",
+      "My Vegan - Pasadena"
+    ],
+    "Paradise Bowls": [
+      "Paradise Bowls - Hermosa Beach",
+      "Paradise Bowls - Manhattan Beach",
+      "Paradise Bowls - Marina Del Rey"
+    ],
+    "Pasta Sisters": [
+      "Pasta Sisters - Culver City",
+      "Pasta Sisters - Mid City"
+    ],
+    "Patron Mexican Bar & Grill": [
+      "Patron Mexican Bar & Grill - Camarillo"
+    ],
+    "Pita Gr": [
+      "Pita GR - Downey"
+    ],
+    "Pop's Bagels": [
+      "Pop's Bagels - Beverly Hills",
+      "Pop's Bagels - Culver City",
+      "Pop's Bagels - Fairfax",
+      "Pop's Bagels - Santa Monica"
+    ],
+    "Proudly Serving": [
+      "Proudly Serving - Hermosa Beach",
+      "Proudly Serving - Long Beach",
+      "Proudly Serving - Redondo Beach"
+    ],
+    "Round Table Pizza": [
+      "Round Table Pizza - Newport Beach"
+    ],
+    "Sharky's Woodfired Mexican Grill": [
+      "Sharky's Woodfired Mexican Grill - Palmdale"
+    ],
+    "Sweet Red Peach": [
+      "Sweet Red Peach - Inglewood"
+    ],
+    "Taqueria El Tapatio": [
+      "Taqueria El Tapatio - Woodland Hills"
+    ],
+    "Tatsu Ramen": [
+      "Tatsu Ramen - Arts District DTLA",
+      "Tatsu Ramen - Melrose",
+      "Tatsu Ramen - Sawtelle"
+    ],
+    "The Bar by Seabutter": [
+      "The Bar by Seabutter - Glendale"
+    ],
+    "The Funnel House": [
+      "The Funnel House - Huntington Beach",
+      "The Funnel House - Northridge"
+    ],
+    "The Highland Cafe": [
+      "The Highland Cafe - El Sereno"
+    ],
+    "The Potholder Cafe": [
+      "The Potholder Cafe - Downtown"
+    ],
+    "Zankou Chicken": [
+      "Zankou Chicken - Thousand Oaks"
+    ],
+    "Big Mike's": [
+      "Big Mike's - El Segundo",
+      "Big Mike's - Redondo Beach"
+    ],
+    "Fermentation House": [
+      "Fermentation House - Santa Paula",
+      "Fermentation House - Ventura"
+    ],
+    "Himalayan Cafe": [
+      "Himalayan Cafe - Pasadena",
+      "Himalayan Cafe - San Dimas"
+    ],
+    "Kickin KAsian": [
+      "Kickin KAsian - Encino",
+      "Kickin KAsian - Northridge"
+    ],
+    "Le Shrimp Noodle Bar": [
+      "Le Shrimp Noodle Bar - South Coast Plaza",
+      "Le Shrimp Noodle Bar - The Americana"
+    ],
+    "MasalaCraft": [
+      "MasalaCraft - Anaheim",
+      "MasalaCraft - Santa Ana"
+    ],
+    "Mel's Drive-In": [
+      "Mel's Drive-In - Santa Monica",
+      "Mel's Drive-In - Sherman Oaks",
+      "Mel's Drive-In - West Hollywood"
+    ],
+    "Olive Pit Grill": [
+      "Olive Pit Grill - Brea",
+      "Olive Pit Grill - Huntington Beach"
+    ],
+    "ON + ON": [
+      "ON + ON - Compton",
+      "ON + ON - Torrance"
+    ],
+    "Qin West Noodle": [
+      "Qin West Noodle - Arcadia",
+      "Qin West Noodle - Irvine",
+      "Qin West Noodle - USC",
+      "Qin West Noodle - Westwood"
+    ],
+    "TRU Bowl Superfood Bar": [
+      "TRU Bowl Superfood Bar - Azusa",
+      "TRU Bowl Superfood Bar - South Whittier",
+      "TRU Bowl Superfood Bar - Whittier"
+    ],
+    "WADAYA": [
+      "WADAYA - Costa Mesa",
+      "WADAYA - Fulerton",
+      "WADAYA - West LA"
+    ]
+  }
+}
