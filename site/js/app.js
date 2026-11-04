@@ -1801,6 +1801,9 @@
     return fit ? true : g.channel === "online" && M.online ? "channel" : false;
   }
   function groupFitsBy(g, M) {
+    // A Quick Pick (topicMerchant): a type of purchase, not a merchant. The group fits when it pays on that
+    // topic (its name, the topic of a Custom Cash eligible category or a Customized Cash choice).
+    if (M.topic) return g.name === M.topic;
     var list = g._list || null;
     if (list && list.ex.length && M.names.some(function (n) { return list.ex.some(function (x) { return n.c.indexOf(x.c) !== -1; }); })) return false;
     var cats = g.app_categories || [];
@@ -2177,6 +2180,9 @@
     }
     out.value = Math.max.apply(null, out.lines.map(function (l) { return l.value === null ? -Infinity : l.value; }));
     out.sig = out.lines.map(function (l) { return l.label + ":" + l.text; }).join("|");
+    // The picks behind Ready now and After activating, for the Quick Picks (quickPick).
+    out.ready = t.ready;
+    out.after = out.lines.some(function (l) { return l.label === "After activating"; }) ? aft : null;
     return out;
   }
   // The line with the best definite result (Ready now on a tie).
@@ -2645,6 +2651,117 @@
     });
   }
 
+  // ---- Quick picks (home screen): the card to use for a type of purchase, with no merchant offer ----
+  // Always the same six issuer-style topics: [tile label, the topic name the bonus and card rate groups use].
+  // Each is answered by the answer card's own rules: merchantLines on a topic instead of a merchant (rateAt,
+  // pick, After activating only when it beats Ready now, Citi Custom Cash conditional), so the two can't drift.
+  var QUICK_PICKS = [["Dining", "dining"], ["Grocery stores", "grocery stores"], ["Online shopping", "online shopping"],
+    ["Gas stations", "gas stations"], ["Entertainment", "entertainment"], ["Utilities", "utilities"]];
+  var QP_NOTE_MAX = 80; // a longer sourced note is left off, so the tile stays compact
+  var qpEl = document.getElementById("qp");
+
+  // A type of purchase as a merchant with no offers and no name, bought under Any (groupFitsBy matches it by topic).
+  function topicMerchant(topic) {
+    return { key: "topic:" + topic, name: topic, names: [], all: [], offers: [], topic: topic, ch: "any", inStore: false, online: false, rates: {} };
+  }
+  // "Q4 · through Dec 31" for a dated bonus (a calendar quarter gets its name), "Through Nov 30" otherwise; null
+  // for an undated rate (standing, everyday).
+  function datedLabel(e) {
+    if (!e || !e.start || !e.end) return null;
+    var s = /^(\d{4})-(\d{2})-01$/.exec(e.start), q = s && (+s[2] - 1) % 3 === 0 ? (+s[2] + 2) / 3 : 0;
+    var last = q ? s[1] + "-" + ("0" + q * 3).slice(-2) + "-" + (q === 1 || q === 4 ? "31" : "30") : null;
+    return (last === e.end ? "Q" + q + " · through " : "Through ") + tileDate(e.end);
+  }
+  // A date that stays on one line in a tile ("Dec 15").
+  function tileDate(iso) { return fmtDate(iso).replace(/ /g, "\u00a0"); }
+  // "Incl. 75% Preferred Rewards (50% after Dec 15)": the boost in the leading rate r, worded as the bonus rows
+  // ("incl. 75% Preferred Rewards") and the boost note ("50% after Dec 15") word it. The percent is the one the
+  // rate was worked out with (a bonus group's rate is boosted when the file is readied), so the note always
+  // matches the rate shown.
+  function boostShort(name, r) {
+    var p = cardsRaw && cardsRaw.preferred_rewards, b = r && r.e ? r.e._boost : boostPct(name);
+    if (!b) return null;
+    return "Incl. " + b + "% Preferred Rewards" + (b === p.percent && todayISO() <= p.until && p.then_percent !== p.percent ?
+      " (" + p.then_percent + "% after " + tileDate(p.until) + ")" : "");
+  }
+  // At most one short note, only from the data: the leading card's Preferred Rewards boost, its rate group's
+  // rate_note or button_note, else a tied card as the answer card's tie note words it ("Costco Visa also 4%, 5% at
+  // Costco gas"). Nothing else is written; with none, the tile has no note. Smartly's own caveat is on the Everyday tile.
+  function quickNote(p) {
+    var lead = p.wins[0], g = lead.base.g, notes = [boostShort(lead.C.name, lead.base), g && g.rate_note, g && g.button_note];
+    p.wins.slice(1).forEach(function (c) {
+      if (c.base.g && c.base.g.rate_note) notes.push(c.C.name + " also " + pct(c.total) + "%, " + c.base.g.rate_note);
+    });
+    return notes.filter(function (n) { return n && n.length <= QP_NOTE_MAX; })[0] || null;
+  }
+  // One topic's answer: the best ready rate and its leading card (Smartly wins a tie it is in, then cards.json
+  // order), how many other cards are ready at that rate, the dated label of a dated winning rate, a bonus not yet
+  // activated only when it beats the ready rate, Citi Custom Cash only when its conditional rate would beat it
+  // (never ready, never counted), and the note.
+  function quickPick(topic, today) {
+    var L = merchantLines(topicMerchant(topic), today);
+    if (!L) return null;
+    var p = L.ready, lead = p.wins[0];
+    var aLine = L.lines.filter(function (l) { return l.label === "After activating"; })[0];
+    return {
+      rate: p.total, card: lead.C.name, more: p.wins.length - 1, cat: !!lead.base.cat, dated: datedLabel(lead.base.e),
+      after: L.after ? { card: L.after.wins[0].C.name, rate: L.after.total, gain: aLine.gain } : null,
+      cond: L.cond && L.cond.strong ? L.cond : null, note: quickNote(p)
+    };
+  }
+  // The section under the search box on the home screen (no search, category or card picked; not What changed or
+  // the Used list): a heading, the six tiles in a two-column grid, then the full-width Everyday default tile.
+  // Tiles are information only for now (no tap action).
+  function renderQuickPicks(show, today) {
+    qpEl.textContent = "";
+    qpEl.hidden = !(show && bonus && cardsCfg && payCards().length);
+    if (qpEl.hidden) return;
+    var picks = QUICK_PICKS.map(function (q) { return { label: q[0], p: quickPick(q[1], today) }; });
+    var head = el("div", "qphead");
+    head.appendChild(el("h2", "qph", "Quick picks · no offer needed")).id = "qp-h";
+    // One "Likely" for the section when a category rate leads any tile (merchant coding decides it).
+    if (picks.some(function (x) { return x.p && x.p.cat; })) head.appendChild(likelyTag());
+    qpEl.appendChild(head);
+    var ul = el("ul", "qpgrid");
+    picks.forEach(function (x) {
+      var p = x.p, li = el("li", "qpt");
+      li.setAttribute("data-topic", x.label);
+      li.appendChild(el("div", "qpn", x.label));
+      if (!p) { ul.appendChild(li); return; }
+      var w = el("div", "qpw");
+      w.appendChild(el("span", "qpr", pct(p.rate) + "%"));
+      w.appendChild(withDot(el("span", "qpc", p.card), p.card));
+      li.appendChild(w);
+      if (p.more) li.appendChild(el("div", "qpm", "+" + p.more + " more ready"));
+      if (p.dated) li.appendChild(el("div", "qpm qpd", p.dated));
+      if (p.after) {
+        var a = el("div", "qpx qpa", "After activating: " + p.after.card + " " + pct(p.after.rate) + "%");
+        a.appendChild(el("span", "usegain", p.after.gain));
+        li.appendChild(a);
+      }
+      if (p.cond) {
+        var c = el("div", "qpx qpcond", p.cond.e.card + " " + pct(p.cond.rate) + "% · conditional");
+        c.appendChild(el("span", "sr-only", ", " + condWhy(p.cond.e)));
+        c.appendChild(el("span", "usegain", p.cond.gain));
+        li.appendChild(c);
+      }
+      if (p.note) li.appendChild(el("div", "qpnote", p.note));
+      ul.appendChild(li);
+    });
+    qpEl.appendChild(ul);
+    // "Everyday default · Smartly 4%" with its caveat from the data ("First $10,000 per billing cycle, then 2%; ...").
+    var ev = everyday(today);
+    if (ev) {
+      var e = el("div", "qpt qpe"), t = el("div", "qpw");
+      t.appendChild(el("span", "qpn", "Everyday default · "));
+      t.appendChild(withDot(el("span", "qpc", ev.card + " " + pct(ev.rate) + "%"), ev.card));
+      e.appendChild(t);
+      var en = ev.headline_note || ev.strip_note;
+      if (en) e.appendChild(el("div", "qpnote", cap(en)));
+      qpEl.appendChild(e);
+    }
+  }
+
   // Results in pages of merchant containers ("Show N more merchants"), never splitting one: the page sizes count
   // containers. A redraw in the same view (after a save) shows as many containers as before. sections: [{ list:
   // sorted offers, node: a heading or null, label(o): the row's gone label or null, key }], each grouped into
@@ -2900,6 +3017,8 @@
     });
     renderWcPanel();
     renderFreshness(); // its New and Gone counts follow saves and new data
+    // Quick picks: the home screen only (a search, category or card answers in the answer card instead).
+    renderQuickPicks(!wc && !usedOn && !hasQuery && category === null && card === null, today);
     if (wc) return renderWcList(query, today, inScope, inUsedScope, scope, narrowed);
     if (usedOn) return renderUsedList(query, today, inUsedScope,
       (category !== null ? " in " + category + (cuis !== null ? ": " + cuis : "") : "") + (card !== null ? " on " + card : ""));
