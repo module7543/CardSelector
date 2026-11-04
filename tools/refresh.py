@@ -1369,7 +1369,7 @@ def plan(card, paths, given_date, decisions=None, part=False, complete_parts=Fal
     groups_now = lj.get("groups") if isinstance(lj, dict) and isinstance(lj.get("groups"), dict) else {}
     member_of = {merchant_key(m): (b, m) for b, ms in groups_now.items() if isinstance(ms, list) for m in ms if isinstance(m, str)}
     still_all = {merchant_key(o["merchant"]) for o in new["offers"]}
-    loc_moves, loc_held, done, moved = [], [], set(), set()
+    loc_moves, loc_held, done = [], [], set()
     targets = {}  # an approved member's new names in this run: more than one and none is followed
     for r in out["renames"]:
         if merchant_key(r["from"]) in member_of and merchant_key(r["from"]) != merchant_key(r["to"]):
@@ -1380,10 +1380,10 @@ def plan(card, paths, given_date, decisions=None, part=False, complete_parts=Fal
             continue
         done.add((old_k, new_k))
         base, member = member_of[old_k]
-        # another offer still has the old name (or it was already moved to another name): keep both
-        how = "copy" if old_k in still_all or old_k in moved else "move"
         if len(targets.get(old_k, ())) > 1:
             why = "renamed to more than one name in this read"
+        elif old_k in still_all:
+            why = "another offer still has the old name (the approved member stays as it is)"
         elif new_k in member_of:
             why = "already listed" if member_of[new_k][0] == base else f"already in group {member_of[new_k][0]!r}"
         elif new_k == merchant_key(base):
@@ -1397,9 +1397,7 @@ def plan(card, paths, given_date, decisions=None, part=False, complete_parts=Fal
         if why:
             loc_held.append({"from": member, "to": r["to"], "group": base, "why": why})
             continue
-        loc_moves.append({"group": base, "from": member, "to": r["to"], "how": how})
-        if how == "move":
-            moved.add(old_k)
+        loc_moves.append({"group": base, "from": member, "to": r["to"]})
         member_of[new_k] = (base, r["to"])
     out["location_moves"], out["location_held"] = loc_moves, loc_held
     saved_names = {merchant_key(o["merchant"]) for o in data["offers"]}
@@ -1579,7 +1577,7 @@ def show(out, limit=40):
     lst("Cuisine entries following a rename that adds no alias", out["cuisine_moves"],
         lambda m: f"{m['from']!r} -> {m['to']!r} ({'moved' if m['how'] == 'move' else 'copied: the old name is still on other Dining offers'})")
     lst("Approved location members following a rename (merchant-locations.json)", out["location_moves"],
-        lambda m: f"{m['group']}: {m['from']!r} -> {m['to']!r} ({'moved' if m['how'] == 'move' else 'added: the old name is still on other offers'})")
+        lambda m: f"{m['group']}: {m['from']!r} -> {m['to']!r}")
     lst("Approved location members renamed but NOT moved (owner review; the file keeps the old name)", out["location_held"],
         lambda m: f"{m['group']}: {m['from']!r} -> {m['to']!r}: {m['why']}")
     lst("Possible new locations for the owner to review (never added automatically; merchant-locations.json is unchanged)",
@@ -1637,10 +1635,7 @@ def apply(card, paths, given_date, decisions, part, complete_parts=False):
             lj = json.loads(locations_text)
             for m in out["location_moves"]:
                 ms = lj["groups"][m["group"]]
-                if m["how"] == "move":
-                    ms[ms.index(m["from"])] = m["to"]
-                else:
-                    ms.append(m["to"])
+                ms[ms.index(m["from"])] = m["to"]
             LOCATIONS.write_text(json.dumps(lj, indent=2, ensure_ascii=False) + "\n")
         code, txt = run(["tools/cuisines.py", "sync"])
         print(mask("\ncuisines.py sync:\n" + txt))

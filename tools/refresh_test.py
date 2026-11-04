@@ -609,6 +609,23 @@ class RefreshTest(unittest.TestCase):
         self.assertEqual([m["to"] for m in rep["location_held"]], ["eBay - La Habra"], out)
         self.assertEqual(self.t.read("merchant-locations.json"), before)
 
+    def test_member_whose_old_name_is_still_on_another_card_is_held(self):
+        # completing a cut-off member on one card while another card keeps the cut name: nothing is added, so a
+        # later read can't complete it a second way
+        def two(by, d):
+            by["capital-one/ebay"].update(merchant="eBay - Newport Be...")
+            by["bank-of-america/" + next(o["id"].split("/")[1] for o in d["offers"] if o["card"] == "Bank of America")].update(
+                merchant="eBay - Newport Be...", category="Marketplaces & Department Stores")
+        self.t.change_offers(two)
+        self.t.write_json("merchant-locations.json", {"groups": {"eBay": ["eBay - Newport Be..."]}})
+        before = self.t.read("merchant-locations.json")
+        p = self.t.csv("Capital One", lambda rows: [dict(r, merchant="eBay - Newport Beach") if r["merchant"] == "eBay" else r for r in rows])
+        out, rep = self.apply_ok("Capital One", [p])
+        self.assertEqual(rep["location_moves"], [], out)
+        self.assertEqual([(m["to"], m["why"]) for m in rep["location_held"]],
+                         [("eBay - Newport Beach", "another offer still has the old name (the approved member stays as it is)")], out)
+        self.assertEqual(self.t.read("merchant-locations.json"), before)
+
     def test_cut_off_member_completed_two_ways_is_held(self):
         def two(by, d):
             by["capital-one/ebay"].update(merchant="eBay - Newport Be...")
@@ -686,7 +703,7 @@ class RefreshTest(unittest.TestCase):
         out, rep = self.apply_ok("Capital One", [self.t.csv("Capital One", fn)])
         self.assertEqual(self.t.offers()["capital-one/ebay"]["merchant"], "eBay - Outlet Store")
         self.assertEqual(self.t.load("merchant-locations.json"), {"groups": {"eBay": ["eBay - Outlet Store"]}}, out)
-        self.assertEqual([(m["from"], m["to"], m["how"]) for m in rep["location_moves"]], [("eBay - Outlet St...", "eBay - Outlet Store", "move")])
+        self.assertEqual([(m["from"], m["to"]) for m in rep["location_moves"]], [("eBay - Outlet St...", "eBay - Outlet Store")])
         self.assertEqual(rep["location_candidates"], [], "an approved member's rename is not a new candidate")
 
     def test_renamed_location_member_that_no_longer_fits_is_held(self):
