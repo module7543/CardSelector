@@ -2751,9 +2751,13 @@
       }
       if (p.cond) {
         // "Citi Custom Cash 5% · conditional · +1 pt" when it would beat the ready rate; else the short muted line.
+        // The muted "5% · conditional" stays on one line. The strong line is too long for a narrow tile, so it may
+        // break before "conditional" (and before the gain chip if it must); each "·" stays with the word before it.
         var c = el("div", "qpx qpcond" + (p.cond.strong ? " strong" : ""), p.cond.e.card + " ");
-        var cg = c.appendChild(el("span", "qpkeep", pct(p.cond.rate) + "% · conditional" + (p.cond.strong ? " · " : "")));
-        if (p.cond.strong) cg.appendChild(el("span", "usegain", p.cond.gain));
+        if (p.cond.strong) {
+          c.appendChild(document.createTextNode(pct(p.cond.rate) + "%\u00a0· conditional\u00a0· "));
+          c.appendChild(el("span", "usegain", p.cond.gain));
+        } else c.appendChild(el("span", "qpkeep", pct(p.cond.rate) + "% · conditional"));
         c.appendChild(el("span", "sr-only", ", " + condWhy(p.cond.e)));
         li.appendChild(c);
       }
