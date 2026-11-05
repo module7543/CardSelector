@@ -2676,8 +2676,8 @@
   function tileDate(iso) { return fmtDate(iso).replace(/ /g, "\u00a0"); }
   // "Incl. 75% Preferred Rewards (50% after Dec 15)": the boost in the leading rate r, worded as the bonus rows
   // ("incl. 75% Preferred Rewards") and the boost note ("50% after Dec 15") word it. The percent is the one the
-  // rate was worked out with (a bonus group's rate is boosted when the file is readied), so the note always
-  // matches the rate shown.
+  // rate was worked out with (a bonus group's rate is boosted when the file is readied and again at the day
+  // redraw), so the note always matches the rate shown.
   function boostShort(name, r) {
     var p = cardsRaw && cardsRaw.preferred_rewards, b = r && r.e ? r.e._boost : boostPct(name);
     if (!b) return null;
@@ -2708,7 +2708,8 @@
     return {
       rate: p.total, card: lead.C.name, more: p.wins.length - 1, cat: !!lead.base.cat, dated: datedLabel(lead.base.e),
       after: L.after ? { names: L.after.wins.map(function (c) { return (c.base.e && c.base.e.short) || c.C.name; }),
-        cards: L.after.wins.map(function (c) { return c.C.name; }), rate: L.after.total, gain: aLine.gain } : null,
+        cards: L.after.wins.map(function (c) { return c.C.name; }), rate: L.after.total, gain: aLine.gain,
+        cat: L.after.wins.some(function (c) { return !!(c.base && c.base.cat); }) } : null,
       cond: L.cond || null, note: quickNote(p)
     };
   }
@@ -2744,6 +2745,8 @@
         a.setAttribute("data-cards", p.after.cards.join("|"));
         ag.appendChild(el("span", "usegain", p.after.gain));
         a.appendChild(ag);
+        // "Likely" when that better rate is a category rate (merchant coding decides it), as on Step 2's After activating.
+        if (p.after.cat) a.appendChild(likelyTag());
         li.appendChild(a);
       }
       if (p.cond) {
@@ -3279,10 +3282,12 @@
     var f = document.activeElement;
     return !!f && (main.contains(f) || blist.contains(f)) && f.matches("select, .edsm, .edfill, .edlink");
   }
+  // Is t a day the results or the strip weren't drawn for yet? (No strip drawn yet, e.g. its file didn't load: only
+  // the results count.)
+  function newDay(t) { return lastDay !== null && (t !== lastDay || (stripDay !== null && t !== stripDay)); }
   function checkDay() {
     var t = todayISO();
-    // (No strip drawn yet, e.g. its file didn't load: only the results count.)
-    if (!data || lastDay === null || (!dayPending && t === lastDay && (stripDay === null || t === stripDay))) return;
+    if (!data || lastDay === null || (!dayPending && !newDay(t))) return;
     if (dayBlocked()) { dayPending = true; return; }
     dayPending = false;
     dayRedraw();
@@ -3350,6 +3355,9 @@
       var b = sel.parentNode.querySelector("button");
       return b && !b.hidden;
     }).map(function (sel) { return [sel.id, sel.value]; });
+    // Rates prepared from today's date (the Preferred Rewards boost on bonus and standing groups) are prepared
+    // again, so the new day's rates match a fresh load; then the Best offer totals are worked out again.
+    cardsCfg = null; prepCards();
     totalCache = {}; totalSig = ""; // Best offer totals, worked out again for today
     renderCats(); renderCards(); renderStrip(); renderCuisines(); render();
     var ex2 = main.querySelector("details.expired");
@@ -3702,6 +3710,9 @@
     }
   }
   function redraw() {
+    // A new day not drawn yet (a save, sign-in or sign-out just after midnight, before the midnight timer) counts as
+    // held: drawing it here would use up the day without the day redraw's rates (Preferred Rewards).
+    if (data && newDay(todayISO())) dayPending = true;
     // A new day held back by the save: the full day redraw instead (once).
     if (dayPending && !dayBlocked()) { dayPending = false; dayRedraw(); return; }
     renderStrip();
