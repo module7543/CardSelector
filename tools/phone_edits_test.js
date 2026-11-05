@@ -411,9 +411,15 @@ async function usedChecks(page, load, search, testEdits) {
     if ((await h.getAttribute("aria-expanded")) !== "true") await h.click();
   };
   const openAll = () => page.evaluate(() => document.querySelectorAll("#main > ul.results > li.mc > button.mchead[aria-expanded=false]").forEach(b => b.click()));
-  const usedBtn = () => page.$eval("#used-filter", e => e.hidden ? null : e.innerText.trim()).catch(() => null);
-  const openFilters = async () => { if (await page.$eval("#ftoggle", b => b.getAttribute("aria-expanded")) !== "true") await page.click("#ftoggle"); };
-  const clickUsed = async () => { await openFilters(); await page.click("#used button"); await page.waitForTimeout(100); };
+  const usedBtn = () => page.$eval("#used-filter", e => e.hidden ? null : e.querySelector("#used button").textContent.trim()).catch(() => null);
+  // Step 5: on phones the filters are in the filter sheet (the Filters button opens it, Show results closes it; a person's
+  // next tap comes after the double-tap guard's 400 ms). inFilters opens it, runs fn, and closes it.
+  const sheetUp = () => page.$eval("#fsheet", e => !e.hidden);
+  const openFilters = async () => { if (!(await sheetUp())) { await page.click("#ftoggle"); await page.waitForTimeout(420); } };
+  const closeFilters = async () => { if (await sheetUp()) { await page.click("#fsdone"); await page.waitForTimeout(420); } };
+  const inFilters = async fn => { await openFilters(); await fn(); await closeFilters(); };
+  const pickCard = name => inFilters(() => page.locator("#cards button", { hasText: new RegExp("^" + name.replace(/[.+]/g, "\\$&") + "( \\d+)?$") }).click());
+  const clickUsed = () => inFilters(async () => { await page.click("#used button"); await page.waitForTimeout(100); });
   const stub = (recs) => page.evaluate(([recs, today]) => {
     window.__recs = recs;
     CardStore.save = function (change) {
@@ -464,8 +470,7 @@ async function usedChecks(page, load, search, testEdits) {
 
   // Deep in a long list (card filter, after Show more), a mark used keeps every row shown and the row in its place.
   await search("");
-  await openFilters();
-  await page.locator("#cards button", { hasText: /^Capital One$/ }).click();
+  await pickCard("Capital One");
   await page.click("#main button.more");
   await page.waitForTimeout(150);
   const long = await rows(), deep = 150, dm = long[deep] && long[deep].key.split(" | ")[0];
@@ -478,7 +483,7 @@ async function usedChecks(page, load, search, testEdits) {
   const long2 = await rows();
   ok(long.length >= 200 && long2.length === long.length && long2[deep].key === long[deep].key && long2[deep].gone && USED_RE("Quicksilver").test(long2[deep].text),
      "after Show more: mark used on row " + (deep + 1) + " (" + dm + ") keeps all " + long2.length + " rows shown, that row dimmed in place");
-  await page.locator("#cards button", { hasText: /^All cards$/ }).click();
+  await pickCard("All cards");
 
   // 2. The Used filter: count and list, blank search and with a search, card filter, sort ignored, toggled off.
   const realUsed = offersData.offers.filter(o => o.status === "used" && !testEdits[o.id]);
@@ -504,15 +509,15 @@ async function usedChecks(page, load, search, testEdits) {
   const urow = list.find(r => r.key === keyOf(U)), crow = list.find(r => r.key === keyOf(C));
   ok(urow && USED_RE("Smartly").test(urow.text) && crow && USED_RE(null).test(crow.text) && !/\(on /.test(crow.text), "labels: \"Used <date> (on Smartly)\" for U.S. Bank, \"Used <date>\" for " + C.card);
   ok(await page.$eval("#count", e => e.innerText) === "" && /Used/.test(await page.$eval("#ftoggle", e => e.innerText)), "count line empty (the button shows N), Filters summary: " + JSON.stringify(await page.$eval("#count", e => e.innerText)) + ", " + JSON.stringify(await page.$eval("#ftoggle", e => e.innerText)));
-  await page.selectOption("#sort", "az");
+  await inFilters(() => page.selectOption("#sort", "az"));
   await page.waitForTimeout(100);
   ok((await rows()).map(r => r.key).join("\n") === wantMc.map(keyOf).join("\n"), "sort menu (A to Z) does not reorder the Used list");
-  await page.selectOption("#sort", "best");
+  await inFilters(() => page.selectOption("#sort", "best"));
   await search(U.merchant);
   list = await rows();
   ok(list.length === 1 && list[0].key === keyOf(U) && await usedBtn() === "Used (1)", "with a search: " + JSON.stringify(await usedBtn()) + ", rows " + JSON.stringify(list.map(r => r.key)));
   await search("");
-  await page.locator("#cards button", { hasText: /^U\.S\. Bank$/ }).click();
+  await pickCard("U.S. Bank");
   await page.waitForTimeout(100);
   const usb = wantMc.filter(o => o.card === "U.S. Bank");
   list = await rows();
@@ -526,42 +531,55 @@ async function usedChecks(page, load, search, testEdits) {
   const after = await rows();
   ok(after.length === list.length && after[ui].key === keyOf(N) && !after[ui].gone && !after[ui].restore && await usedBtn() === "Used (" + (usb.length - 1) + ")",
      "Restore in the Used list: row back to normal in place, count " + JSON.stringify(await usedBtn()));
-  await page.locator("#cards button", { hasText: /^All cards$/ }).click();
+  await pickCard("All cards");
   await page.waitForTimeout(100);
   ok(!(await rows()).some(r => r.key === keyOf(N)), "after a filter change the restored offer leaves the Used list");
   // A save-bar Undo of an edit made in another view: the Used list keeps its card filter.
   await search(C.merchant);
-  await page.locator("#cards button", { hasText: /^U\.S\. Bank$/ }).click();
+  await pickCard("U.S. Bank");
   await page.waitForTimeout(100);
   await search("");
-  await page.locator("#cards button", { hasText: /^All cards$/ }).click();
+  await pickCard("All cards");
   await page.waitForTimeout(100);
   await openMc(C);
   await rowLoc(C).locator(".details button", { hasText: "Restore offer" }).click({ timeout: 3000 });
   await page.waitForTimeout(150);
-  await page.locator("#cards button", { hasText: /^U\.S\. Bank$/ }).click();
+  await pickCard("U.S. Bank");
   await page.waitForTimeout(100);
   await page.click("#savebtns button:has-text('Undo')");
   await page.waitForTimeout(200);
   list = await rows();
   ok(list.length && list.every(r => /Smartly \/ Cash\+|U\.S\. Bank/.test(r.key)), "Used list on U.S. Bank after a save-bar Undo of a " + C.card + " edit: only U.S. Bank rows (" + list.map(r => r.key.split(" | ")[1]).join(", ") + ")");
-  await page.locator("#cards button", { hasText: /^All cards$/ }).click();
+  await pickCard("All cards");
   // In store / Online and Activation don't apply to the Used list: not in the summary, and it lists the same rows.
   const nUsed = (await rows()).length; // the Used list is on here
-  await clickUsed();
-  await page.locator("#chans button", { hasText: /^In store$/ }).click();
-  await page.locator("#acts button", { hasText: /^Ready now/ }).click();
-  await clickUsed();
-  ok(nUsed > 0 && (await rows()).length === nUsed && await page.$eval("#ftoggle", e => e.innerText.trim()) === "Filters: Used",
-     "Used list ignores In store and Ready now: every used offer listed, summary " + JSON.stringify(await page.$eval("#ftoggle", e => e.innerText.trim())));
+  await inFilters(async () => {
+    await page.click("#used button");
+    await page.locator("#chans button", { hasText: /^In store/ }).click();
+    await page.locator("#acts button", { hasText: /^Ready now/ }).click();
+    await page.click("#used button");
+    await page.waitForTimeout(100);
+  });
+  const fb = () => page.$eval("#ftoggle", e => [e.innerText.trim(), e.getAttribute("aria-label"), [...document.querySelectorAll("#fbar .flchip")].map(c => c.textContent)]);
+  ok(nUsed > 0 && (await rows()).length === nUsed && JSON.stringify(await fb()) === JSON.stringify(["Used", "Filters, showing used offers", []]),
+     "Used list ignores In store and Ready now: every used offer listed; the Filters button reads Used, no In store or Ready now chip " + JSON.stringify(await fb()));
   ok(await page.$$eval("#chans button, #acts button", bs => bs.every(b => b.disabled)) && await page.$eval("#acts", e => e.parentNode.classList.contains("off")),
      "while Used is on, the In store / Online and Activation buttons are greyed out and disabled");
+  // Reset in the sheet clears the sheet's filters (In store, Ready now back to Any) but leaves the Used list on.
+  await inFilters(() => page.click("#fsreset"));
+  ok(await page.$eval("#used button", b => b.getAttribute("aria-pressed")) === "true" && (await rows()).length === nUsed &&
+     JSON.stringify(await page.evaluate(() => [localStorage.getItem("cardselector.channel"), localStorage.getItem("cardselector.activation")])) === JSON.stringify(["any", "any"]),
+     "s5 Reset with the Used list on: Where you're paying and Activation back to Any (remembered), the Used list stays on with every used offer");
   await clickUsed();
   ok(await page.$$eval("#chans button, #acts button", bs => bs.every(b => !b.disabled)), "Used off: those buttons work again");
-  await page.locator("#chans button", { hasText: /^Any$/ }).click();
-  await page.locator("#acts button", { hasText: /^Any/ }).click();
-  await clickUsed();
-  await clickUsed();
+  await inFilters(async () => {
+    await page.locator("#chans button", { hasText: /^Any/ }).click();
+    await page.locator("#acts button", { hasText: /^Any/ }).click();
+    await page.click("#used button");
+    await page.waitForTimeout(100);
+    await page.click("#used button");
+    await page.waitForTimeout(100);
+  });
   ok(await page.$eval("#used button", b => b.getAttribute("aria-pressed")) === "false" && /active offers loaded/.test(await page.$eval("#main", e => e.innerText)), "picking Used again returns to normal results");
 
   // 3. Recently unavailable: dropped and expired offers only.

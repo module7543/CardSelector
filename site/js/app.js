@@ -77,7 +77,9 @@
   // Activation: "any", "ready" (nothing to do first) or "needs". Shop-link offers stay under Any only,
   // because they need the issuer's "Shop now" link rather than an activation tap.
   var ACT_KEY = "cardselector.activation";
-  var ACTS = [["any", "Any"], ["ready", "Ready now"], ["needs", "Needs activation"]];
+  // "Activate or add" (step 5's name for the old "Needs activation"): the same rule, needs_activation and Capital One's
+  // add-to-card offers.
+  var ACTS = [["any", "Any"], ["ready", "Ready now"], ["needs", "Activate or add"]];
   var ACT_OK = {
     ready: ["already_activated", "auto_enrolled", "none_shown"],
     needs: ["needs_activation", "add_to_card"]
@@ -1053,6 +1055,7 @@
       var b = el("button", "cat cardbtn", c || "All cards");
       if (c) withDot(b, c);
       b.type = "button";
+      b.dataset.v = c === null ? "" : c;
       b.setAttribute("aria-pressed", String(c === card));
       b.addEventListener("click", function () {
         card = c;
@@ -1069,6 +1072,7 @@
     [null].concat(data.categories || []).forEach(function (c) {
       var b = el("button", "cat", c || "All");
       b.type = "button";
+      b.dataset.v = c === null ? "" : c;
       b.setAttribute("aria-pressed", String(c === category));
       b.addEventListener("click", function () {
         category = c;
@@ -1088,6 +1092,25 @@
     cuisEl.textContent = "";
     cuisFilter.hidden = !(category === "Dining" && cuisines);
     if (cuisFilter.hidden) return;
+    cuisineChoices().forEach(function (x) {
+      var c = x.c;
+      var b = el("button", "cat cuisbtn", c || "All cuisines");
+      if (c) b.appendChild(el("span", "n", " " + x.n));
+      b.type = "button";
+      b.dataset.v = c === null ? "" : c;
+      b.setAttribute("aria-pressed", String(c === cuisine));
+      b.addEventListener("click", function () { setCuisine(c); });
+      cuisEl.appendChild(b);
+    });
+  }
+  function setCuisine(c) {
+    cuisine = c;
+    renderCuisines();
+    render();
+  }
+  // The cuisine row's choices (the row in the filters and the compact picker alike): [{ c: null (All cuisines) or the
+  // cuisine, n: its count }].
+  function cuisineChoices() {
     var today = todayISO(), counts = {}, base = {};
     // In What changed the chips count the New or Gone list instead of every live offer.
     var listed = !wc ? function (o) { return isLive(o, today); } : wc.tab === "new" ? function (o) { return isNew(o, today); } : isDropped;
@@ -1098,18 +1121,7 @@
     data.offers.forEach(function (o) { if (keep(o)) tally(base)(o); });
     if (compact(input.value) !== "") search(input.value, keep).forEach(tally(counts)); else counts = base;
     var list = (cuisines.cuisines || []).filter(function (c) { return counts[c] || c === cuisine; });
-    [null].concat(list).forEach(function (c) {
-      var b = el("button", "cat cuisbtn", c || "All cuisines");
-      if (c) b.appendChild(el("span", "n", " " + (counts[c] || 0)));
-      b.type = "button";
-      b.setAttribute("aria-pressed", String(c === cuisine));
-      b.addEventListener("click", function () {
-        cuisine = c;
-        renderCuisines();
-        render();
-      });
-      cuisEl.appendChild(b);
-    });
+    return [null].concat(list).map(function (c) { return { c: c, n: c === null ? null : counts[c] || 0 }; });
   }
 
   // The count line's head and channel parts, from the same channel rules as the list (chanIn), over the offers it
@@ -1144,6 +1156,7 @@
     CHANNELS.forEach(function (c) {
       var b = el("button", "cat", c[1]);
       b.type = "button";
+      b.dataset.v = c[0];
       b.setAttribute("aria-pressed", String(c[0] === chanMode));
       b.addEventListener("click", function () { setChan(c[0]); });
       chansEl.appendChild(b);
@@ -1153,7 +1166,7 @@
   // focus back on the answer card's selector segment for the new value (the tapped control is drawn again).
   function setChan(mode, refocus) {
     chanMode = mode;
-    if (!wc && !ending) try { localStorage.setItem(CHANNEL_KEY, chanMode); } catch (e) {} // nothing picked in What changed or Ending soon is kept
+    saveChan();
     renderChans();
     renderCuisines();
     render();
@@ -1165,23 +1178,34 @@
 
   // "Activation" buttons with how many of the current matches each keeps, and a note on shop-link offers.
   // counts: { any, ready, needs, shop }.
-  var actsEl = document.getElementById("acts"), actNote = document.getElementById("acts-note");
+  var actsEl = document.getElementById("acts"), actNote = document.getElementById("acts-note"), actExplain = document.getElementById("acts-explain");
+  // The remembered channel and activation choices (cardselector.channel, cardselector.activation): nothing picked in
+  // What changed or Ending soon is kept.
+  function saveChan() { if (!wc && !ending) try { localStorage.setItem(CHANNEL_KEY, chanMode); } catch (e) {} }
+  function saveAct() { if (!wc && !ending) try { localStorage.setItem(ACT_KEY, actMode); } catch (e) {} }
+  function setAct(mode) {
+    actMode = mode;
+    saveAct();
+    renderCuisines();
+    render();
+  }
   function renderActs(counts) {
     actsEl.textContent = "";
     ACTS.forEach(function (a) {
       var b = el("button", "cat", a[1]);
       if (counts) b.appendChild(el("span", "n", " " + counts[a[0]]));
       b.type = "button";
+      b.dataset.v = a[0];
       b.setAttribute("aria-pressed", String(a[0] === actMode));
       b.disabled = usedMode && editing() && !wc; // the Used list ignores Activation
-      b.addEventListener("click", function () {
-        actMode = a[0];
-        if (!wc && !ending) try { localStorage.setItem(ACT_KEY, actMode); } catch (e) {}
-        renderCuisines();
-        render();
-      });
+      b.addEventListener("click", function () { setAct(a[0]); });
       actsEl.appendChild(b);
     });
+    // In the sheet: what "Activate or add" keeps (the offer lists whose offers are added to a card, from cards.json).
+    var adds = cardsRaw && cardsRaw.offer_lists ? Object.keys(cardsRaw.offer_lists).filter(addToCard) : [];
+    actExplain.textContent = "Activate or add: offers to activate" + (adds.length ? ", and " + adds.join(" and ") +
+      " offers to add to a card." : ".");
+    actExplain.hidden = false;
     var shop = counts ? counts.shop : 0;
     actNote.hidden = !shop;
     actNote.textContent = shop ? shop + (shop === 1 ? " offer pays" : " offers pay") +
@@ -1207,6 +1231,7 @@
     var b = el("button", "cat", "Used");
     b.appendChild(el("span", "n", " (" + n + ")"));
     b.type = "button";
+    b.dataset.v = "used";
     b.setAttribute("aria-pressed", String(usedMode));
     b.addEventListener("click", function () {
       usedMode = !usedMode;
@@ -1215,26 +1240,297 @@
     usedEl.appendChild(b);
   }
 
-  // "Filters: Dining, Chase Freedom" on the phone's Filters button.
-  function renderFilterSummary() {
-    var on = [];
-    if (category !== null) on.push(category + (category === "Dining" && cuisine !== null ? ": " + cuisine : ""));
-    if (card !== null) on.push(card);
-    var usedOn = usedMode && editing() && !wc; // the Used list ignores In store / Online and Activation (What changed ignores Used)
-    if (chanMode !== "any" && !usedOn) on.push(chanMode === "store" ? "In store" : "Online");
-    if (actMode !== "any" && !usedOn) on.push(actMode === "ready" ? "Ready now" : "Needs activation");
-    if (usedOn) on.push("Used");
-    if (sortMode !== "best") on.push(SORTS.filter(function (o) { return o[0] === sortMode; })[0][1]);
-    ftoggle.textContent = "";
-    var t = el("span", "fsumm", "Filters" + (on.length ? ": " : ""));
-    if (on.length) t.appendChild(el("span", "on", on.join(", ")));
-    ftoggle.appendChild(t);
+  // ---- Filters on phones (redesign step 5): the compact control row and the filter sheet ----
+  // Under 700px wide the filters panel (#filters: Sort, Where you're paying, Activation, Used, Card, Category, Cuisine)
+  // lives in a bottom sheet opened from the Filters button; wide screens keep it in the page as before. Every control
+  // in it is the one the wide panel uses, so a choice applies at once through the same state, remembered settings and
+  // redraw; "Show results" only closes the sheet. The row under the search box shows the Filters button, one removable
+  // chip per active filter, the cuisine picker under Dining and the Sort button. Opening a sheet adds no history entry.
+  var phoneMQ = window.matchMedia("(max-width: 699px)");
+  function isPhone() { return phoneMQ.matches; }
+  var fbar = document.getElementById("fbar"), fbn = document.getElementById("fbn"), fsortBtn = document.getElementById("fsortbtn");
+  var fsheet = document.getElementById("fsheet"), fsBody = document.getElementById("fsbody");
+  var psheet = document.getElementById("psheet"), plist = document.getElementById("plist"), psH = document.getElementById("ps-h");
+  var chansNote = document.getElementById("chans-note"), usedNote = document.getElementById("used-note");
+  // The open sheet: null, or { el: the sheet, opener: the id of the control that opened it (focus goes back to it) }.
+  var sheetOpen = null;
+  // What the last redraw listed, for the sheet's counts (render sets it): { query, cuis, used, listed(o) }.
+  var facetCtx = null;
+  // A tap that opens or closes a sheet, or removes a chip, changes what is under the finger: the double-tap guard drops
+  // a second tap anywhere on the page or the sheets for a moment (dtSwapped), so it can't land on a Mark activated.
+  var FS_GUARD = ".wrap, #fsheet, #psheet, #savebar";
+
+  // Phones: the panel in the sheet. Wide screens: back in the page, above the count line (placeHome may move it down
+  // with the home screen's utilities), and no sheet open.
+  function placeFilters() {
+    if (isPhone()) { if (filtersEl.parentNode !== fsBody) fsBody.appendChild(filtersEl); }
+    else {
+      closeSheet(null, true);
+      if (filtersEl.parentNode === fsBody) countEl.parentNode.insertBefore(filtersEl, countEl);
+    }
   }
-  ftoggle.addEventListener("click", function () {
-    var open = !filtersEl.classList.contains("open");
-    filtersEl.classList.toggle("open", open);
-    ftoggle.setAttribute("aria-expanded", String(open));
+
+  // The sheet filters that are on, in the sheet's order (the Used list ignores Where you're paying and Activation).
+  function activeFilters(usedOn) {
+    var on = [];
+    if (chanMode !== "any" && !usedOn) on.push({ k: "chan", label: chanName(chanMode) });
+    if (actMode !== "any" && !usedOn) on.push({ k: "act", label: actMode === "ready" ? "Ready now" : "Activate or add" });
+    if (card !== null) on.push({ k: "card", label: card });
+    if (category !== null) on.push({ k: "cat", label: category });
+    if (category === "Dining" && cuisine !== null) on.push({ k: "cuis", label: cuisine });
+    return on;
+  }
+  // The row under the search box (phones). listShown: a list is on the page (the Sort button shows with it). quiet: the
+  // plain home screen (no list, so no filter is on): the Filters button is just an icon at the end of the search field and
+  // the row isn't drawn, so Quick picks stay right under the search box.
+  var searchBarEl = document.querySelector(".searchbar");
+  function renderFbar(usedOn, listShown, quiet) {
+    var inSearch = quiet && isPhone();
+    if (inSearch && ftoggle.parentNode !== searchBarEl) searchBarEl.appendChild(ftoggle);
+    else if (!inSearch && ftoggle.parentNode !== fbar) fbar.insertBefore(ftoggle, fbar.firstChild);
+    searchBarEl.classList.toggle("withf", inSearch);
+    fbar.hidden = !data || !!dt || inSearch;
+    // Under the search box (and the Ending chip); in What changed, under its panel.
+    var anchor = wc ? wcEl : endBar;
+    if (anchor.nextElementSibling !== fbar) anchor.parentNode.insertBefore(fbar, anchor.nextSibling);
+    var on = activeFilters(usedOn), n = on.length;
+    fbn.textContent = inSearch ? "" : usedOn ? "Used" + (n ? " · " + n : "") : n ? String(n) : "Filters";
+    ftoggle.classList.toggle("on", n > 0 || usedOn);
+    ftoggle.setAttribute("aria-label", "Filters" + (n ? ", " + n + " on" : "") + (usedOn ? ", showing used offers" : ""));
+    fsortBtn.hidden = !listShown || usedOn; // the Used list ignores the sort
+    var sl = SORTS.filter(function (o) { return o[0] === sortMode; })[0];
+    fsortBtn.setAttribute("aria-label", "Sort: " + sl[1]);
+    // The chips are drawn again on every redraw; focus on one stays on it (by its filter) when it is still there.
+    var fa = document.activeElement, fkey = fa && fbar.contains(fa) && fa !== ftoggle && fa !== fsortBtn ? fa.id || fa.dataset.k : null;
+    Array.prototype.slice.call(fbar.querySelectorAll(".flchip, .fcuis")).forEach(function (c) { c.parentNode.removeChild(c); });
+    on.forEach(function (f) {
+      if (f.k === "cuis") return; // the cuisine picker below carries it
+      var b = el("button", "flchip");
+      b.type = "button";
+      b.dataset.k = f.k;
+      b.setAttribute("aria-label", "Remove " + f.label + " filter");
+      b.appendChild(el("span", null, f.label));
+      b.appendChild(xMark());
+      b.addEventListener("click", function (ev) { removeFilter(f.k, ev); });
+      fbar.insertBefore(b, fsortBtn);
+    });
+    // Under Dining: the cuisine picker ("All cuisines" or the picked one); a picked cuisine has its own × too.
+    if (category === "Dining" && cuisines) {
+      var w = el("span", "fcuis" + (cuisine !== null ? " on" : "")), name = cuisine === null ? "All cuisines" : cuisine;
+      var pb = el("button", "fcuisb");
+      pb.type = "button";
+      pb.id = "fcuisbtn";
+      pb.setAttribute("aria-label", "Cuisine: " + name + ". Change cuisine");
+      pb.setAttribute("aria-haspopup", "dialog");
+      pb.setAttribute("aria-controls", "psdialog");
+      pb.setAttribute("aria-expanded", String(!!sheetOpen && sheetOpen.opener === "fcuisbtn"));
+      pb.appendChild(el("span", null, name));
+      var dn = el("span", "fdown");
+      dn.setAttribute("aria-hidden", "true");
+      pb.appendChild(dn);
+      pb.addEventListener("click", openCuisinePicker);
+      w.appendChild(pb);
+      if (cuisine !== null) {
+        var x = el("button", "fcuisx");
+        x.type = "button";
+        x.dataset.k = "cuis";
+        x.setAttribute("aria-label", "Remove " + cuisine + " filter");
+        x.appendChild(xMark());
+        x.addEventListener("click", function (ev) { removeFilter("cuis", ev); });
+        w.appendChild(x);
+      }
+      fbar.insertBefore(w, fsortBtn);
+    }
+    if (fkey) {
+      var back = fkey === "fcuisbtn" ? document.getElementById("fcuisbtn") : fbar.querySelector("[data-k=\"" + fkey + "\"]");
+      if (back) back.focus({ preventScroll: true });
+    }
+  }
+  // The sheet's filters as they are (the sort apart: a new order keeps the scroll).
+  function filterSig() { return JSON.stringify([chanMode, actMode, card, category, cuisine, usedMode]); }
+  function xMark() { var x = el("span", "fx", "×"); x.setAttribute("aria-hidden", "true"); return x; }
+  // A chip's ×: that one filter back to its default (Dining also clears the cuisine), through the same setters as the
+  // sheet. Focus moves to the control now in its place, else the Filters button.
+  function removeFilter(k, ev) {
+    dtSwapped(ev, FS_GUARD);
+    var ctl = function () { return Array.prototype.slice.call(fbar.querySelectorAll(".flchip, .fcuisb, .fcuisx")); };
+    var at = ev && ev.currentTarget ? ctl().indexOf(ev.currentTarget) : -1;
+    if (k === "chan") setChan("any");
+    else if (k === "act") setAct("any");
+    else if (k === "card") { card = null; renderCards(); renderCuisines(); render(); }
+    else if (k === "cat") { category = null; cuisine = null; renderCats(); renderCuisines(); render(); }
+    else if (k === "cuis") setCuisine(null);
+    var now = ctl(), f = at !== -1 && now.length ? now[Math.min(at, now.length - 1)] : ftoggle;
+    if (f && f.offsetParent) f.focus({ preventScroll: true });
+  }
+
+  // The sheet's counts, from the same scope as the list (facetCtx): each channel's count with the card and activation
+  // choices applied, each card's count with the channel and activation choices applied (All cards: the list's own
+  // count), and how many show no channel. Drawn only while the filter sheet is open (wide screens show none).
+  function renderFacets() {
+    chansNote.hidden = true;
+    var x = facetCtx;
+    usedNote.hidden = !(x && x.used);
+    if (!sheetOpen || sheetOpen.el !== fsheet || !x || !data || x.used) {
+      // Outside the sheet the channel and card buttons carry no counts (as the wide-screen panel always was).
+      Array.prototype.forEach.call(document.querySelectorAll("#chans .n, #cards .n"), function (n) { n.parentNode.removeChild(n); });
+      return;
+    }
+    var pred = function (o) {
+      return x.listed(o) && (category === null || o.category === category) && (x.cuis === null || cuisineLabel(o) === x.cuis);
+    };
+    var base = compact(x.query) !== "" ? search(x.query, pred) : data.offers.filter(pred);
+    var byChan = {}, byCard = {}, all = 0, none = 0;
+    CHANNELS.forEach(function (c) { byChan[c[0]] = 0; });
+    base.forEach(function (o) {
+      if (!actOk(o)) return;
+      if (card === null || o.card === card) {
+        CHANNELS.forEach(function (c) { if (chanIn(c[0], o)) byChan[c[0]]++; });
+        if ((o.channel || "none_shown") === "none_shown") none++;
+      }
+      if (chanOk(o)) { all++; byCard[o.card] = (byCard[o.card] || 0) + 1; }
+    });
+    var setN = function (b, n) {
+      var s = b.querySelector(".n");
+      if (!s) { s = el("span", "n"); b.appendChild(s); }
+      s.textContent = " " + n;
+    };
+    Array.prototype.forEach.call(chansEl.querySelectorAll("button"), function (b) { setN(b, byChan[b.dataset.v] || 0); });
+    Array.prototype.forEach.call(cardsEl.querySelectorAll("button"), function (b) { setN(b, b.dataset.v === "" ? all : byCard[b.dataset.v] || 0); });
+    if (none) {
+      chansNote.textContent = none + (category !== null ? " " + category : "") + (none === 1 ? " offer shows no channel. It stays" :
+        " offers show no channel. They stay") + " under both In store and Online, marked Channel not shown.";
+      chansNote.hidden = false;
+    }
+  }
+
+  // Opening a sheet changes nothing: it shows the current choices. The page behind it is inert (no taps, no focus)
+  // and doesn't scroll; Escape, the dimmed page, "Show results" or Close shut it, and focus goes back to the control
+  // that opened it.
+  function openSheet(sheet, openerId, ev) {
+    if (sheetOpen || !isPhone() || !data) return;
+    dtSwapped(ev, FS_GUARD);
+    sheetOpen = { el: sheet, opener: openerId, was: filterSig() };
+    wrapEl.setAttribute("inert", "");
+    savebar.setAttribute("inert", "");
+    document.documentElement.classList.add("fsopen");
+    sheet.classList.add("rise");
+    sheet.hidden = false;
+    void sheet.offsetHeight; // start below the screen, then rise
+    sheet.classList.remove("rise");
+    var op = document.getElementById(openerId);
+    if (op) op.setAttribute("aria-expanded", "true");
+    if (sheet === fsheet) { fsBody.scrollTop = 0; renderFacets(); }
+    sheet.querySelector(".fspanel").focus({ preventScroll: true });
+  }
+  // ev: the tap that closed it (the double-tap guard); noFocus: leave focus alone (the page is changing anyway).
+  function closeSheet(ev, noFocus) {
+    if (!sheetOpen) return;
+    var s = sheetOpen;
+    sheetOpen = null;
+    if (ev) dtSwapped(ev, FS_GUARD);
+    s.el.hidden = true;
+    wrapEl.removeAttribute("inert");
+    savebar.removeAttribute("inert");
+    document.documentElement.classList.remove("fsopen");
+    // A filter changed in the sheet (not just the sort): the view it opened on is gone, so the page goes back to the top,
+    // where the control row shows the new chips and focus returns to the Filters button in view (on the home screen with
+    // a list under it, as a reload shows it).
+    if (s.was !== filterSig() && !noFocus) window.scrollTo(0, 0);
+    [ftoggle, fsortBtn, document.getElementById("fcuisbtn")].forEach(function (b) { if (b) b.setAttribute("aria-expanded", "false"); });
+    renderFacets();
+    if (noFocus) return;
+    var op = document.getElementById(s.opener);
+    if (!op || !op.offsetParent) op = ftoggle;
+    if (op.offsetParent) op.focus({ preventScroll: true });
+  }
+  ftoggle.addEventListener("click", function (ev) { openSheet(fsheet, "ftoggle", ev); });
+  document.getElementById("fsdone").addEventListener("click", function (ev) { closeSheet(ev); });
+  document.getElementById("fsback").addEventListener("click", function (ev) { closeSheet(ev); });
+  document.getElementById("psback").addEventListener("click", function (ev) { closeSheet(ev); });
+  document.getElementById("psclose").addEventListener("click", function (ev) { closeSheet(ev); });
+  document.addEventListener("keydown", function (ev) {
+    if (sheetOpen && (ev.key === "Escape" || ev.key === "Esc")) { ev.preventDefault(); closeSheet(null); }
   });
+  // The phone's back button while a sheet is open: the sheet closes and the page goes back as it would have.
+  window.addEventListener("popstate", function () { closeSheet(null, true); });
+  // Reset: Where you're paying and Activation back to Any (remembered as usual), All cards, All categories, no cuisine.
+  // Search, sort, Ending soon, What changed and the Used list stay.
+  function resetFilters() {
+    chanMode = "any";
+    saveChan();
+    actMode = "any";
+    saveAct();
+    card = null; category = null; cuisine = null;
+    renderChans(); renderCats(); renderCards(); renderCuisines(); render();
+  }
+  document.getElementById("fsreset").addEventListener("click", resetFilters);
+  // A pick inside the sheet redraws its row of buttons; keyboard focus stays on the same choice in the new row.
+  var fsFocus = null;
+  fsheet.addEventListener("click", function (ev) {
+    var b = ev.target.closest ? ev.target.closest("button[data-v]") : null;
+    fsFocus = b && b === document.activeElement && b.parentNode && b.parentNode.id ? { g: b.parentNode.id, v: b.dataset.v } : null;
+  }, true);
+  fsheet.addEventListener("click", function () {
+    var f = fsFocus;
+    fsFocus = null;
+    if (!f || (document.activeElement && document.activeElement !== document.body && fsheet.contains(document.activeElement))) return;
+    var g = document.getElementById(f.g), b = g && g.querySelector("button[data-v=\"" + CSS.escape(f.v) + "\"]");
+    if (b) b.focus({ preventScroll: true });
+  });
+
+  // The picker sheet (the Sort button, the cuisine picker): one button per choice, the current one ticked. A pick
+  // applies through the same setter as the filters and closes it; nothing changes until a choice is picked.
+  function openPicker(title, choices, current, apply, openerId, ev) {
+    if (sheetOpen) return;
+    psH.textContent = title;
+    plist.textContent = "";
+    var picked = null;
+    choices.forEach(function (x) {
+      var li = el("li"), b = el("button", "popt");
+      b.type = "button";
+      b.setAttribute("aria-pressed", String(x.v === current));
+      var t = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+      t.setAttribute("viewBox", "0 0 20 20");
+      t.setAttribute("class", "ptick");
+      t.setAttribute("aria-hidden", "true");
+      t.setAttribute("focusable", "false");
+      var p = document.createElementNS("http://www.w3.org/2000/svg", "path");
+      p.setAttribute("d", "M4 10.5l4 4 8-9");
+      p.setAttribute("fill", "none");
+      p.setAttribute("stroke", "currentColor");
+      p.setAttribute("stroke-width", "2.2");
+      p.setAttribute("stroke-linecap", "round");
+      p.setAttribute("stroke-linejoin", "round");
+      t.appendChild(p);
+      b.appendChild(t);
+      b.appendChild(el("span", "pl", x.label));
+      if (x.n != null) b.appendChild(el("span", "pn", String(x.n)));
+      b.addEventListener("click", function (e) {
+        if (x.v !== current) apply(x.v);
+        closeSheet(e);
+      });
+      if (x.v === current) picked = b;
+      li.appendChild(b);
+      plist.appendChild(li);
+    });
+    openSheet(psheet, openerId, ev);
+    if (picked && sheetOpen) {
+      var body = plist.parentNode;
+      body.scrollTop = Math.max(0, picked.offsetTop - body.clientHeight / 2);
+    }
+  }
+  fsortBtn.addEventListener("click", function (ev) {
+    openPicker("Sort", SORTS.map(function (o) { return { v: o[0], label: o[1] }; }), sortMode, setSort, "fsortbtn", ev);
+  });
+  function openCuisinePicker(ev) {
+    if (category !== "Dining" || !cuisines) return;
+    openPicker("Cuisine", cuisineChoices().map(function (x) { return { v: x.c, label: x.c || "All cuisines", n: x.n }; }),
+      cuisine, setCuisine, "fcuisbtn", ev);
+  }
+  if (phoneMQ.addEventListener) phoneMQ.addEventListener("change", function () { placeFilters(); if (data) render(); });
+  else if (phoneMQ.addListener) phoneMQ.addListener(function () { placeFilters(); if (data) render(); });
+  placeFilters();
 
   // ---- Bonus categories (data/bonus-categories.json) ----
   // An entry is shown only between its start and end dates (standing ones have none).
@@ -2941,7 +3237,7 @@
     setCount(n, n);
     if (!list.length) {
       var chw = chanMode !== "any" ? (chanMode === "store" ? ", in store" : ", online") : "";
-      var actw = actMode !== "any" ? (actMode === "ready" ? ", ready now" : ", needs activation") : "";
+      var actw = actMode !== "any" ? (actMode === "ready" ? ", ready now" : ", to activate or add") : "";
       var p = el("p", "empty", "No " + (isNewTab ? "new" : "gone") + " offers" +
         (scope.slice(0, scope.length - actw.length) + chw + actw).replace(/^,/, ""));
       if (compact(query) !== "") {
@@ -3143,35 +3439,35 @@
   // A reload starts outside it, as What changed does.
   try { if (history.state && history.state.cardselectorEnd) history.back(); } catch (e) {}
   // ---- The home screen's order (finalised in step 4D): search, Quick picks, Card bonuses, the shortcuts, Offer
-  // freshness, then the quieter utilities (Recently unavailable, the Filters button, Edit mode). Offer freshness moves up
-  // from the footer, and the Filters button and its panel move down under the results area, on the home screen only;
-  // everywhere else they are where they were (freshness in the footer, Filters under the answer card). The Filters
-  // control here is the pre-step-5 one, kept as it is until the step 5 filter sheet replaces it.
+  // freshness, then the quieter utilities (Recently unavailable, Edit mode). Offer freshness moves up from the footer on
+  // the home screen only (elsewhere it is in the footer). Filters (step 5): on phones the Filters button is in the row
+  // under the search box and opens the filter sheet; on wide screens the panel moves down with the utilities on the
+  // home screen, and is under the answer card everywhere else.
   var homeFresh = document.getElementById("homefresh"), homeUtil = document.getElementById("homeutil");
   var freshEl = document.getElementById("fresh"), filterTapT = -1e9;
   filtersEl.addEventListener("click", function () { filterTapT = Date.now(); }, true);
-  // filtersDown: the home screen shows no list (no channel or activation choice), so Filters can sit with the utilities;
-  // with a list (a remembered In store, say) it stays above the list, where it always was.
+  // filtersDown: the home screen shows no list (no channel or activation choice), so on wide screens the filters panel
+  // sits with the utilities; with a list (a remembered In store, say) it stays above the list, where it always was.
   function placeHome(home, filtersDown) {
     wrapEl.classList.toggle("home", home);
     if (home && freshEl.parentNode !== homeFresh) homeFresh.appendChild(freshEl);
     if (!home && freshEl.parentNode !== foot) foot.insertBefore(freshEl, foot.firstChild);
     homeFresh.hidden = !home;
-    if (filtersDown && ftoggle.parentNode !== homeUtil) { homeUtil.appendChild(ftoggle); homeUtil.appendChild(filtersEl); }
-    else if (!filtersDown && ftoggle.parentNode === homeUtil) {
-      countEl.parentNode.insertBefore(ftoggle, countEl);
+    var wide = !isPhone();
+    if (wide && filtersDown && filtersEl.parentNode !== homeUtil) homeUtil.appendChild(filtersEl);
+    else if (wide && !filtersDown && filtersEl.parentNode === homeUtil) {
       countEl.parentNode.insertBefore(filtersEl, countEl);
       // A filter picked down there: a category or card opens the list at the top; a channel or activation choice keeps
       // the home screen with a list under it, so the panel (now just above the list) is brought into view.
       if (Date.now() - filterTapT < 1500) {
         if (!home) window.scrollTo(0, 0);
         else requestAnimationFrame(function () {
-          var top = ftoggle.getBoundingClientRect().top - document.querySelector(".searchbar").getBoundingClientRect().height - 8;
+          var top = filtersEl.getBoundingClientRect().top - document.querySelector(".searchbar").getBoundingClientRect().height - 8;
           window.scrollTo(0, Math.max(0, window.scrollY + top));
         });
       }
     }
-    homeUtil.hidden = !filtersDown;
+    homeUtil.hidden = !(wide && filtersDown);
   }
 
   window.__ending = function () { return ending ? { sort: sortMode } : null; }; // for the tests
@@ -3195,16 +3491,21 @@
   // A page swap (into, between or out of the details) under a finger: the second tap of a double tap must not land on
   // whatever the new page has there (a Mark activated would save). Pointer clicks (detail > 0; keyboard clicks are 0)
   // on the details, Quick picks, Card bonuses or the search box within 400 ms of the event that swapped the page are dropped.
-  var dtSwapT = -1e9;
-  // A keyboard click (detail 0) has no second tap to guard against.
-  function dtSwapped(ev) { dtSwapT = ev && typeof ev.timeStamp === "number" && !(ev.type === "click" && ev.detail === 0) ? ev.timeStamp : -1e9; }
+  var dtSwapT = -1e9, dtSwapSel = null;
+  // A keyboard click (detail 0) has no second tap to guard against. sel: the region the window covers (default DT_GUARD;
+  // the filter and picker sheets pass FS_GUARD, the whole page and both sheets, since one covers or uncovers all of it).
+  function dtSwapped(ev, sel) {
+    dtSwapT = ev && typeof ev.timeStamp === "number" && !(ev.type === "click" && ev.detail === 0) ? ev.timeStamp : -1e9;
+    dtSwapSel = sel || null;
+  }
   // The search box counts too: it sits under the back arrow, so a double tap on Back would focus it (and pop up the keyboard).
   // Since step 4D also the shortcuts, the Ending chip, What changed's panel and the results, which the shortcuts and their
   // way back swap in and out.
   var DT_GUARD = "#dt, #qp, #cb, #sc, #endbar, #wc, #main, .searchbar", dtPressDropped = false;
-  var inGuard = function (ev) { return ev.timeStamp - dtSwapT >= 0 && ev.timeStamp - dtSwapT < 400 && !!ev.target.closest && !!ev.target.closest(DT_GUARD); };
+  var guardSel = function () { return dtSwapSel || DT_GUARD; };
+  var inGuard = function (ev) { return ev.timeStamp - dtSwapT >= 0 && ev.timeStamp - dtSwapT < 400 && !!ev.target.closest && !!ev.target.closest(guardSel()); };
   document.addEventListener("click", function (ev) {
-    if (ev.detail > 0 && (dtPressDropped || inGuard(ev)) && ev.target.closest && ev.target.closest(DT_GUARD)) {
+    if (ev.detail > 0 && (dtPressDropped || inGuard(ev)) && ev.target.closest && ev.target.closest(guardSel())) {
       ev.preventDefault();
       ev.stopPropagation();
     }
@@ -3806,14 +4107,20 @@
     // 7 days", ", ready now" (the channel choice has its own words on the count line: countLine).
     var scope = (category !== null ? " in " + category + (cuis !== null ? ": " + cuis : "") : "") +
       (card !== null ? " on " + card : "") + (ending ? " ending in the next 7 days" : "") +
-      (actMode !== "any" ? (actMode === "ready" ? ", ready now" : ", needs activation") : "");
-    renderFilterSummary();
+      (actMode !== "any" ? (actMode === "ready" ? ", ready now" : ", to activate or add") : "");
+    // The filter sheet's counts follow what this view lists: What changed's New or Gone list, else live offers (within
+    // Ending soon's window); the Used list has none.
+    facetCtx = { query: query, cuis: cuis, used: usedOn, listed: wc ? (wc.tab === "new" ? function (o) { return isNew(o, today); } : isDropped) :
+      function (o) { return isLive(o, today) && inEnd(o); } };
+    var listShown = !!wc || hasQuery || narrowed;
+    renderFbar(usedOn, listShown, !listShown && !usedOn && !ending && category === null && card === null);
     renderUsed(editing() && !wc && !ending ? search(query, function (o) { return o.status === "used" && inUsedScope(o); }).length : null);
     // The Used list ignores In store / Online and Activation: their rows are greyed out and can't be changed.
     [chansEl, actsEl].forEach(function (g) {
       g.parentNode.classList.toggle("off", usedOn);
       Array.prototype.forEach.call(g.querySelectorAll("button"), function (b) { b.disabled = usedOn; });
     });
+    renderFacets();
     renderWcPanel();
     renderEndBar();
     renderDetail(); // an open Quick Pick or Card Bonus detail follows every redraw
@@ -4181,7 +4488,9 @@
     if (!q || q === settledQuery || document.activeElement !== input) return;
     settledQuery = q;
     var bar = document.querySelector(".searchbar");
-    var target = wc ? wcEl : useEl.hidden ? countEl : useEl; // in What changed, its panel (New / Gone stay in view)
+    // In What changed, its panel (New / Gone stay in view); on phones the filter control row (step 5) right under the
+    // search box stays in view above the answer card.
+    var target = wc ? wcEl : isPhone() && !fbar.hidden ? fbar : useEl.hidden ? countEl : useEl;
     var y = window.scrollY + target.getBoundingClientRect().top - bar.getBoundingClientRect().height - 4;
     if (Math.abs(window.scrollY - y) > 2) window.scrollTo({ top: Math.max(0, y), behavior: "smooth" });
   }
@@ -4217,12 +4526,15 @@
   SORTS.forEach(function (o) { sortEl.appendChild(new Option(o[1], o[0])); });
   sortEl.value = sortMode;
   showSortHelp();
-  sortEl.addEventListener("change", function () {
-    sortMode = sortEl.value;
+  // One sort setting for the Sort select (in the filters) and the Sort button's picker (phones).
+  function setSort(mode) {
+    sortMode = mode;
+    sortEl.value = sortMode;
     showSortHelp();
     if (!wc && !ending) try { localStorage.setItem(SORT_KEY, sortMode); } catch (e) {}
     render();
-  });
+  }
+  sortEl.addEventListener("change", function () { setSort(sortEl.value); });
 
   // The data files, each read by one function, used on the first load and again when a newer saved copy is
   // swapped in (swapIn below). loaded: the text of each file as the page has it, to tell what a swap changes.
@@ -4788,14 +5100,14 @@
   }
   // Nothing the owner picked would be lost by a reload: an empty search box (any typed character counts, not
   // only letters and digits), no save running or save bar showing (the "Live" pill aside), not in What changed, no category, card,
-  // cuisine or Used filter, no open details, Filters panel or Edit mode panel, not in a Quick Pick or Card Bonus
+  // cuisine or Used filter, no open details, filter or picker sheet or Edit mode panel, not in a Quick Pick or Card Bonus
   // detail (an unsaved Focus or Choice pick lives there), and no form field in use other than the empty search box.
   function idle() {
     var f = document.activeElement;
     return !saving && !wc && !dt && !ending && input.value.trim() === "" && category === null && card === null && cuisine === null && !usedMode &&
       // a save bar still showing (Deploying with Undo, an error with Retry); the small "Live" pill doesn't block
       (savebar.hidden || savebar.classList.contains("live")) &&
-      !main.querySelector("button.mchead[aria-expanded=true]") && !filtersEl.classList.contains("open") &&
+      !main.querySelector("button.mchead[aria-expanded=true]") && !sheetOpen &&
       !editDet.open && // a half-typed password
       // The search box is autofocused on every open, so it counts as idle while focused (it must be empty, above);
       // any other field in use blocks the reload.

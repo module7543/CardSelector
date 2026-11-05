@@ -156,6 +156,15 @@ class Hub {
   await site.start();
   const base = () => "http://127.0.0.1:" + site.port + "/";
   let ctx, page, hub;
+  // Step 5: on phones the filters are in the filter sheet (the Filters button opens it, Show results closes it; a person's
+  // next tap comes after the double-tap guard's 400 ms). inFilters opens it, runs fn, and closes it.
+  const inFilters = async fn => {
+    await page.click("#ftoggle");
+    await page.waitForTimeout(420);
+    await fn();
+    await page.click("#fsdone");
+    await page.waitForTimeout(420);
+  };
   const fresh = async (opts = {}) => {
     if (ctx) await ctx.close();
     site.over = Object.assign({ "data/phone-edits.json": opts.edits || "{}\n" }, opts.over || {}); site.fail = {}; site.delay = {}; site.hook = null;
@@ -307,8 +316,7 @@ class Hub {
   await check();
   ok(!(await remembered())[k2] && !shows(await search(U2.merchant), U2), "the site now shows the save: entry dropped, offer still hidden");
   // Restoring it replaces the entry; after a reload during the restore's deploy, the offer is back.
-  await page.click("#ftoggle");
-  await page.locator("#used button").click();
+  await inFilters(() => page.locator("#used button").click());
   await openMcOf(U2.id);
   await page.locator("#main li.offer[data-oid='" + U2.id + "']").locator("button", { hasText: "Restore offer" }).click();
   await waitBar(/Deploying/);
@@ -420,11 +428,11 @@ class Hub {
   // 7. A swap keeps the search, filters, sort and open details, and waits for a save in progress.
   console.log("-- 7. swap while in use");
   await fresh({ token: "test-token-offline" });
-  await page.click("#ftoggle").catch(() => {});
-  await page.selectOption("#sort", "percent");
-  await page.locator("#cats button", { hasText: /^Dining/ }).first().click();
-  await page.locator("#chans button", { hasText: /^In store/ }).click();
-  await page.click("#ftoggle").catch(() => {});
+  await inFilters(async () => {
+    await page.selectOption("#sort", "percent");
+    await page.locator("#cats button", { hasText: /^Dining/ }).first().click();
+    await page.locator("#chans button", { hasText: /^In store/ }).click();
+  });
   let rows = await search("pizza");
   const opened = rows[1];
   await page.evaluate(() => document.querySelectorAll("#main li.offer")[1].closest("li.mc").querySelector(".mchead").click());
@@ -489,15 +497,18 @@ class Hub {
   await stays("with the save bar showing (" + (await bar()).slice(0, 20) + "…)");
   await page.click("#savebar button.xbtn");
   await page.fill("#q", "");
-  await page.click("#ftoggle");
-  await page.locator("#cats button", { hasText: /^Dining/ }).first().click();
-  await page.click("#ftoggle");
+  await inFilters(() => page.locator("#cats button", { hasText: /^Dining/ }).first().click());
   await page.focus("#q");
   await comeBack8();
   await stays("with the Dining category picked (empty search box focused)");
+  await inFilters(() => page.locator("#cats button", { hasText: /^All$/ }).click());
+  // The filter sheet open (step 5): no reload, even with nothing picked.
   await page.click("#ftoggle");
-  await page.locator("#cats button", { hasText: /^All$/ }).click();
-  await page.click("#ftoggle");
+  await page.waitForTimeout(420);
+  await comeBack8();
+  await stays("with the filter sheet open");
+  await page.click("#fsdone");
+  await page.waitForTimeout(420);
   await page.evaluate(() => { document.getElementById("editmode").open = true; });
   await page.focus("#q");
   await comeBack8();
@@ -530,7 +541,7 @@ class Hub {
   await page.waitForTimeout(100);
   await page.focus("#q");
   // Another field in use blocks it too. At phone width every other field is inside a panel that already blocks
-  // the reload (Filters, Edit mode), so this one case runs wide, where the sort select is visible.
+  // the reload (the filter sheet, Edit mode), so this one case runs wide, where the sort select is visible.
   await page.setViewportSize({ width: 1000, height: 844 });
   await page.focus("#sort");
   ok(await page.evaluate(() => document.activeElement.id === "sort"), "wide screen: the sort select has focus");

@@ -47,6 +47,10 @@
     --tile-line: #e6e9ee;
     --tile-shadow: 0 1px 2px rgba(16, 24, 40, .06), 0 2px 8px rgba(16, 24, 40, .06);
     --soon-bg: #fdeee3;
+    /* Filter sheet (phones): the dimmed page behind it, and a segmented control's picked segment. */
+    --scrim: rgba(16, 22, 32, .45);
+    --seg-sel: #ffffff;
+    --seg-shadow: 0 1px 2px rgba(16, 24, 40, .14), 0 1px 4px rgba(16, 24, 40, .08);
   }
   @media (prefers-color-scheme: dark) {
     :root {
@@ -84,6 +88,9 @@
       --tile-line: #2c333d;
       --tile-shadow: inset 0 1px 0 rgba(255, 255, 255, .06);
       --soon-bg: #3a2616;
+      --scrim: rgba(0, 0, 0, .62);
+      --seg-sel: #3a414d;
+      --seg-shadow: none;
     }
   }
   * { box-sizing: border-box; }
@@ -204,35 +211,135 @@
   .ratesnc { margin-top: 8px; padding: 8px 14px; background: var(--neutral-bg); border-radius: 12px; font-size: 13px; }
   .ratesnch { font-weight: 700; color: var(--neutral-text); }
 
-  /* Filters: one summary button on phones, the full panel on wide screens. On phones the Filters button and the
-     open filters join into one panel (square corners where they meet). */
-  .ftoggle {
-    display: flex; align-items: center; gap: 8px; width: 100%; min-height: 44px; margin: 0; padding: 0 14px;
-    font: inherit; font-size: 15px; font-weight: 600; color: var(--text); text-align: left;
-    background: var(--surface); border: 1px solid var(--line); border-radius: 12px; margin-top: 8px; cursor: pointer;
+  /* Filters: on wide screens the full panel sits in the page as it always has. On phones (under 700px) the same panel
+     lives in the filter sheet (below), opened from the compact control row under the search box. */
+  .filters { margin-top: 12px; }
+  /* Sheet-only text (the channel and activation notes, the Used note): never in the wide-screen panel. */
+  .sheetonly { display: none; }
+
+  /* The compact control row (phones): the Filters button, one removable chip per active sheet filter, the cuisine
+     picker under Dining, and the Sort button. It wraps onto more lines; it never scrolls sideways. */
+  .fbar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 2px 0 8px; }
+  /* Phones: the panel belongs in the sheet; it never shows in the page (not even before app.js moves it there). */
+  @media (max-width: 699px) { .wrap > .filters { display: none; } }
+  .fbar[hidden] { display: none; }
+  @media (min-width: 700px) { .fbar { display: none !important; } }
+  .fbtn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-width: 44px; min-height: 40px; margin: 0;
+    padding: 0 12px; font: inherit; font-size: 14px; font-weight: 650; line-height: 1.2; color: var(--text);
+    background: var(--surface); border: 1px solid var(--tile-line); border-radius: 999px; box-shadow: var(--tile-shadow);
+    cursor: pointer; -webkit-tap-highlight-color: transparent;
+  }
+  .fbtn svg { width: 18px; height: 18px; flex: none; }
+  .fbtn:active { background: var(--neutral-bg); }
+  .fbtn:focus-visible, .flchip:focus-visible, .fcuisb:focus-visible, .fcuisx:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+  .fbtn .fbn { font-variant-numeric: tabular-nums; }
+  /* Filters are on: the count in the accent color. */
+  .fbtn.on .fbn { color: var(--accent); }
+  .fbtn.fsort { margin-left: auto; padding: 0; width: 44px; }
+  /* The plain home screen: the Filters button is only an icon at the end of the search field (no row of its own). */
+  .searchbar.withf #q { padding-right: 50px; }
+  .searchbar > #ftoggle {
+    position: absolute; right: 4px; top: 16px; width: 44px; min-width: 44px; height: 40px; min-height: 40px; padding: 0; gap: 0;
+    color: var(--muted); background: transparent; border: 0; border-radius: 10px; box-shadow: none;
+  }
+  .searchbar > #ftoggle svg { width: 20px; height: 20px; }
+  .searchbar > #ftoggle .fbn:empty { display: none; }
+  @media (min-width: 700px) { .searchbar > #ftoggle { display: none; } .searchbar.withf #q { padding-right: 18px; } }
+  .fbtn.fsort[hidden] { display: none; }
+  /* A chip is one button: the filter's name and a ×; the whole chip removes that filter. */
+  .flchip {
+    display: inline-flex; align-items: center; gap: 6px; max-width: 100%; min-height: 40px; margin: 0; padding: 4px 10px 4px 14px;
+    font: inherit; font-size: 14px; font-weight: 650; line-height: 1.2; text-align: left; color: var(--bg); background: var(--accent);
+    border: 0; border-radius: 999px; overflow-wrap: anywhere; cursor: pointer; -webkit-tap-highlight-color: transparent;
+  }
+  .flchip .fx, .fcuisx .fx { flex: none; font-size: 19px; font-weight: 500; line-height: 1; }
+  /* Cuisine (under Dining): the name opens the cuisine picker; a picked cuisine also has its own × button. */
+  .fcuis { display: inline-flex; align-items: stretch; max-width: 100%; border: 1px solid var(--cuis-line); border-radius: 999px; background: var(--surface); }
+  .fcuis.on { background: var(--cuis-bg); }
+  .fcuisb, .fcuisx {
+    display: inline-flex; align-items: center; gap: 6px; min-height: 38px; margin: 0; font: inherit; font-size: 14px; font-weight: 650;
+    line-height: 1.2; text-align: left; color: var(--cuis); background: none; border: 0; border-radius: 999px; cursor: pointer;
     -webkit-tap-highlight-color: transparent;
   }
-  .ftoggle .fsumm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .ftoggle .fsumm .on { color: var(--accent); }
-  .ftoggle::after {
-    content: ""; width: 7px; height: 7px; margin: -3px 4px 0 0; flex: none;
-    border-right: 1.5px solid var(--muted); border-bottom: 1.5px solid var(--muted); transform: rotate(45deg);
+  .fcuisb { min-width: 0; padding: 4px 10px 4px 14px; overflow-wrap: anywhere; }
+  .fcuisb .fdown { flex: none; width: 7px; height: 7px; margin: -3px 2px 0 2px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: rotate(45deg); }
+  .fcuisx { flex: none; justify-content: center; min-width: 40px; padding: 0 10px 0 4px; }
+
+  /* The filter sheet (phones): a dimmed page and a sheet rising from the bottom (Filters, Reset, the filters, Show
+     results). The picker sheet (Sort, Cuisine) is the same shape, sized to its list. */
+  html.fsopen { overflow: hidden; }
+  .fsheet { position: fixed; inset: 0; z-index: 40; }
+  .fsheet[hidden] { display: none; }
+  .fsback { position: absolute; inset: 0; background: var(--scrim); -webkit-tap-highlight-color: transparent; }
+  .fspanel {
+    position: absolute; left: 0; right: 0; bottom: 0; display: flex; flex-direction: column; max-width: 640px; margin: 0 auto;
+    height: 88vh; height: 88dvh; max-height: calc(100vh - 24px); max-height: calc(100dvh - 24px);
+    color: var(--text); background: var(--surface); border-radius: 18px 18px 0 0; box-shadow: 0 -6px 24px rgba(16, 24, 40, .18);
+    transform: translateY(0); transition: transform 200ms ease-out;
   }
-  .ftoggle[aria-expanded="true"]::after { margin-top: 3px; transform: rotate(-135deg); }
-  .ftoggle:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
-  /* Open: the filters hang under the button; the panel's top border is the one line between them. */
-  .ftoggle[aria-expanded="true"] { border-bottom: 0; border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
-  .filters { margin-top: 12px; }
-  @media (max-width: 699px) {
-    .filters:not(.open) { display: none; }
-    .filters.open {
-      margin: 0; padding: 12px 14px 14px; background: var(--surface);
-      border: 1px solid var(--line); border-top: 1px solid var(--line); border-radius: 0 0 12px 12px;
-    }
+  .fspanel:focus { outline: none; }
+  .fsheet.rise .fspanel { transform: translateY(100%); transition: none; }
+  @media (prefers-reduced-motion: reduce) { .fspanel { transition: none; } }
+  .psheet .fspanel { height: auto; max-height: 80vh; max-height: 80dvh; }
+  .fshandle { flex: none; width: 40px; height: 5px; margin: 8px auto 0; border-radius: 3px; background: var(--line); }
+  .fshead { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 4px 8px 6px 20px; }
+  .fshead h2 { margin: 0; font-size: 20px; font-weight: 750; letter-spacing: -0.01em; }
+  .fslink {
+    min-height: 44px; margin: 0; padding: 0 12px; font: inherit; font-size: 16px; font-weight: 650; color: var(--accent);
+    background: none; border: 0; border-radius: 10px; cursor: pointer; -webkit-tap-highlight-color: transparent;
   }
-  @media (min-width: 700px) {
-    .ftoggle { display: none; }
+  .fslink:focus-visible, #fsdone:focus-visible, .popt:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+  .fsbody { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; padding: 2px 20px 18px; }
+  .fsfoot { flex: none; padding: 10px 20px calc(10px + env(safe-area-inset-bottom)); background: var(--surface); border-top: 1px solid var(--line); }
+  #fsdone {
+    display: block; width: 100%; min-height: 50px; margin: 0; font: inherit; font-size: 17px; font-weight: 700; color: #fff;
+    background: var(--accent); border: 0; border-radius: 12px; cursor: pointer; -webkit-tap-highlight-color: transparent;
   }
+  @media (prefers-color-scheme: dark) {
+    #fsdone { color: #0f1115; }
+    .fspanel { box-shadow: inset 0 1px 0 rgba(255, 255, 255, .08); }
+  }
+  /* The filters inside the sheet: bolder labels, segmented controls with counts, a two-column card grid. */
+  .fsbody .filters { margin: 0; }
+  .fsbody .sheetonly { display: block; }
+  .fsbody .sheetonly[hidden] { display: none; }
+  .fsbody .filter + .filter { margin-top: 18px; }
+  .fsbody .flabel { margin: 0 0 8px; font-size: 15px; font-weight: 700; color: var(--text); }
+  .fsbody #chans, .fsbody #acts { display: flex; flex-wrap: nowrap; gap: 2px; margin: 0; padding: 3px; background: var(--neutral-bg); border-radius: 12px; }
+  .fsbody #chans .cat, .fsbody #acts .cat {
+    flex: 1 1 0; min-width: 0; min-height: 52px; padding: 4px 4px; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    font-size: 14.5px; font-weight: 650; text-align: center; color: var(--text); background: transparent; border: 0; border-radius: 9px;
+  }
+  .fsbody #chans .cat .n, .fsbody #acts .cat .n { display: block; margin-top: 1px; font-size: 12.5px; font-weight: 500; opacity: .75; font-variant-numeric: tabular-nums; }
+  .fsbody #chans .cat[aria-pressed="true"], .fsbody #acts .cat[aria-pressed="true"] { color: var(--text); background: var(--seg-sel); box-shadow: var(--seg-shadow); }
+  .fsbody .sorthelp { margin-top: 8px; font-size: 13px; line-height: 1.4; }
+  /* The sort's long description stays on wide screens; the sheet shows just the select (the approved sheet design). */
+  .fsbody #sort-help { display: none; }
+  .fsbody #cards { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; margin: 0; }
+  .fsbody .cat.cardbtn {
+    display: flex; align-items: center; gap: 0; min-width: 0; min-height: 50px; padding: 6px 10px; font-size: 14.5px; font-weight: 650;
+    text-align: left; border-radius: 10px; overflow-wrap: anywhere;
+  }
+  /* The issuer dot drawn as a small card in the issuer's color (the home screen's card glyph). */
+  .fsbody .cat.cardbtn .idot { width: 22px; height: 15px; margin-right: 8px; border-radius: 3px; vertical-align: 0; }
+  .fsbody .cat.cardbtn .n { flex: none; margin-left: auto; padding-left: 8px; font-size: 13px; font-variant-numeric: tabular-nums; }
+  .fsbody #cats { gap: 6px; }
+  .fsbody #cats .cat, .fsbody .cat.cuisbtn, .fsbody #used .cat { min-height: 40px; padding: 0 12px; font-size: 14px; }
+  .fsbody .filter.cuis { padding: 10px 12px 12px; }
+  /* The picker sheet: one button per choice, the picked one ticked. */
+  .plist { list-style: none; margin: 0; padding: 0; }
+  .popt {
+    display: flex; align-items: center; gap: 10px; width: 100%; min-height: 48px; margin: 0; padding: 8px 4px; font: inherit; font-size: 16px;
+    text-align: left; color: var(--text); background: none; border: 0; border-top: 1px solid var(--line); cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .plist li:first-child .popt { border-top: 0; }
+  .popt .pl { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+  .popt .pn { flex: none; font-size: 14px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .popt .ptick { flex: none; width: 18px; height: 18px; color: var(--accent); visibility: hidden; }
+  .popt[aria-pressed="true"] { font-weight: 700; }
+  .popt[aria-pressed="true"] .ptick { visibility: visible; }
 
   /* Sort: one native select (opens the phone's own picker), always visible above the filters. */
   .selwrap { position: relative; }
@@ -396,8 +503,8 @@
   .filter.off .cats, .filter.off .flabel, .filter.off .sorthelp { opacity: .4; }
   .filter.off .cat { cursor: default; }
 
-  /* What changed: a panel under the search box (back arrow, card, reads compared, New / Gone). On phones the Filters
-     button joins its bottom. Quick picks and Card bonuses are hidden while the mode is on. */
+  /* What changed: a panel under the search box (back arrow, card, reads compared, New / Gone). On phones the filter
+     control row follows it. Quick picks and Card bonuses are hidden while the mode is on. */
   .wcpanel { margin: 8px 0 0; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; }
   .wcpanel[hidden] { display: none; }
   .wctop { display: flex; align-items: center; gap: 2px; padding: 4px 14px 0 4px; }
@@ -415,11 +522,7 @@
   .wctabs .cat.wctab { flex: 1 1 0; min-width: 0; min-height: 44px; font-size: 15px; }
   h3.wcgroup { margin: 18px 2px 0; font-size: 13px; font-weight: 700; letter-spacing: .03em; color: var(--muted); }
   h3.wcgroup .n { font-weight: 600; }
-  @media (max-width: 699px) {
-    .wcpanel { border-radius: 12px 12px 0 0; }
-    .wrap.wcon .ftoggle { margin-top: 0; border-top: 0; border-radius: 0 0 12px 12px; }
-    .wrap.wcon .ftoggle[aria-expanded="true"] { border-bottom: 0; border-radius: 0; }
-  }
+  .wrap.wcon .fbar { margin-top: 8px; }
 
   /* Quick picks (home screen): six compact topic tiles in two columns, then the full-width Everyday default.
      Quieter than the answer card and offer containers: plain surface tiles, one green rate each. */
@@ -561,9 +664,9 @@
   .homefresh[hidden], .homeutil[hidden] { display: none; }
   .wrap.home .count:empty { min-height: 0; margin: 0; }
   .wrap.home .hint.homehint { margin: 14px 4px 4px; font-size: 13px; line-height: 1.4; }
-  /* Recently unavailable, Filters (closed) and Edit mode (closed): plain muted rows, each with its expand chevron. */
+  /* Recently unavailable and Edit mode (closed): plain muted rows, each with its expand chevron. */
   .wrap.home details.expired { margin-top: 0; }
-  .wrap.home details.expired > summary, .homeutil .ftoggle[aria-expanded="false"], .wrap.home .editmode:not([open]) > summary {
+  .wrap.home details.expired > summary, .wrap.home .editmode:not([open]) > summary {
     min-height: 44px; padding: 0 4px; font-size: 14px; font-weight: 600; color: var(--muted);
   }
   .wrap.home details.expired > summary { list-style: none; -webkit-tap-highlight-color: transparent; }
@@ -574,8 +677,6 @@
   }
   .wrap.home details.expired[open] > summary::after { margin-top: 3px; transform: rotate(-135deg); }
   .wrap.home details.expired > summary:focus-visible { outline: 3px solid var(--accent); outline-offset: -3px; border-radius: 10px; }
-  .homeutil .ftoggle[aria-expanded="false"] { margin-top: 0; background: transparent; border-color: transparent; }
-  .homeutil .ftoggle[aria-expanded="false"] .fsumm .on { color: var(--muted); }
   .wrap.home footer { margin-top: 0; }
   .wrap.home .editmode:not([open]) { background: transparent; border-color: transparent; box-shadow: none; }
 
@@ -897,6 +998,12 @@
   <div class="endbar" id="endbar" hidden>
     <button class="endchip" id="endchip" type="button">Ends within 7 days<span class="endx" aria-hidden="true">×</span><span class="sr-only">, remove filter</span></button>
   </div>
+  <!-- Phones: the compact filter controls (the Filters button opens the filter sheet; a chip per active filter removes
+       it; the cuisine picker under Dining; the Sort button opens the sort picker). Wide screens show the panel instead. -->
+  <div class="fbar" id="fbar" hidden>
+    <button class="fbtn" id="ftoggle" type="button" aria-haspopup="dialog" aria-expanded="false" aria-controls="fsdialog"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true" focusable="false"><path d="M3 5.5h14M5.5 10h9M8 14.5h4"/></svg><span class="fbn" id="fbn">Filters</span></button>
+    <button class="fbtn fsort" id="fsortbtn" type="button" aria-haspopup="dialog" aria-expanded="false" aria-controls="psdialog" aria-label="Sort" hidden><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M6.5 16V4M3.5 7l3-3 3 3M13.5 4v12M10.5 13l3 3 3-3"/></svg></button>
+  </div>
   <div class="use" id="use" aria-live="polite" hidden></div>
   <!-- What changed (a mode of this page): opened from an Offer freshness row with changes. -->
   <section class="wcpanel" id="wc" aria-label="What changed" hidden>
@@ -929,8 +1036,7 @@
   </section>
   <!-- Home screen only: Offer freshness moves up here from the footer (placeHome in app.js). -->
   <div class="homefresh" id="homefresh" hidden></div>
-  <!-- On phones the filters fold behind one button that summarises what is active; wide screens show them all. -->
-  <button class="ftoggle" id="ftoggle" type="button" aria-expanded="false" aria-controls="filters"></button>
+  <!-- The filters: shown here on wide screens; on phones this same panel lives in the filter sheet (below). -->
   <div class="filters" id="filters">
   <div class="filter">
     <label class="flabel" for="sort" id="sort-label">Sort</label>
@@ -938,17 +1044,20 @@
     <p class="sorthelp" id="sort-help"></p>
   </div>
   <div class="filter">
-    <div class="flabel" id="chans-label">In store or online</div>
+    <div class="flabel" id="chans-label">Where you’re paying</div>
     <div class="cats" id="chans" role="group" aria-labelledby="chans-label"></div>
+    <p class="sorthelp sheetonly" id="chans-note" hidden></p>
   </div>
   <div class="filter">
     <div class="flabel" id="acts-label">Activation</div>
     <div class="cats" id="acts" role="group" aria-labelledby="acts-label"></div>
+    <p class="sorthelp sheetonly" id="acts-explain" hidden></p>
     <p class="sorthelp" id="acts-note" hidden></p>
   </div>
   <!-- Signed in only: "Used (N)" lists the used offers. -->
   <div class="filter" id="used-filter" hidden>
     <div class="cats" id="used" role="group" aria-label="Used offers"></div>
+    <p class="sorthelp sheetonly" id="used-note" hidden>The Used list shows every used offer: Where you’re paying and Activation don’t apply to it.</p>
   </div>
   <div class="filter">
     <div class="flabel" id="cards-label">Card</div>
@@ -966,8 +1075,7 @@
   <div class="count" id="count" aria-live="polite"></div>
   <p class="offline" id="offline" hidden></p>
   <main id="main"></main>
-  <!-- Home screen only: the Filters button and panel move down here with the other utilities. They are the pre-step-5
-       Filters, kept as they are until the step 5 filter sheet replaces them. -->
+  <!-- Wide screens, home screen only: the filters panel moves down here with the other utilities. -->
   <div class="homeutil" id="homeutil" hidden></div>
   <footer id="foot" hidden>
     <details class="fresh" id="fresh">
@@ -993,6 +1101,24 @@
       </div>
     </details>
   </footer>
+</div>
+<!-- Phones: the filter sheet (the filters panel moves into its body) and the picker sheet (Sort, Cuisine). -->
+<div class="fsheet" id="fsheet" hidden>
+  <div class="fsback" id="fsback"></div>
+  <div class="fspanel" id="fsdialog" role="dialog" aria-modal="true" aria-labelledby="fs-h" tabindex="-1">
+    <div class="fshandle" aria-hidden="true"></div>
+    <div class="fshead"><h2 id="fs-h">Filters</h2><button class="fslink" id="fsreset" type="button">Reset</button></div>
+    <div class="fsbody" id="fsbody"></div>
+    <div class="fsfoot"><button id="fsdone" type="button">Show results</button></div>
+  </div>
+</div>
+<div class="fsheet psheet" id="psheet" hidden>
+  <div class="fsback" id="psback"></div>
+  <div class="fspanel" id="psdialog" role="dialog" aria-modal="true" aria-labelledby="ps-h" tabindex="-1">
+    <div class="fshandle" aria-hidden="true"></div>
+    <div class="fshead"><h2 id="ps-h"></h2><button class="fslink" id="psclose" type="button">Close</button></div>
+    <div class="fsbody"><ul class="plist" id="plist"></ul></div>
+  </div>
 </div>
 <div class="savebar" id="savebar" role="status" aria-live="polite" hidden>
   <div class="savein"><p class="savemsg" id="savemsg"></p><div class="savebtns" id="savebtns"></div></div>
