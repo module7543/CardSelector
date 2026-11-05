@@ -3049,6 +3049,9 @@
     if (ev.detail > 0 && ev.timeStamp - dtSwapT >= 0 && ev.timeStamp - dtSwapT < 400 && ev.target.closest && ev.target.closest("#dt, #qp, #cb")) {
       ev.preventDefault();
       ev.stopPropagation();
+      // The press already focused the control under the finger; that focus isn't the owner using it (it mustn't hold
+      // the day redraw).
+      dtAutoFocus = document.activeElement;
     }
   }, true);
   function openDetail(view, from, ev) {
@@ -3105,10 +3108,10 @@
     var st = ev.state, d = dt && st && st.cardselectorDt === dt.token ? st.depth : 0;
     dtHist = d;
     if (!dt) return;
-    dtSwapped(ev);
-    if (d < dt.stack.length) dtTo(d);
+    if (d < dt.stack.length) { dtSwapped(ev); dtTo(d); }
     else if (d > dt.stack.length && dt.ahead.length >= d - dt.stack.length) {
       // Forward again into a detail left with Back: shown again as it was.
+      dtSwapped(ev);
       while (dt.stack.length < d) dt.stack.push(dt.ahead.shift());
       dt.focus = null;
       renderDetail();
@@ -3133,6 +3136,17 @@
   // The keyword lists a rate group names ("list": one name or several).
   function listsOf(g) {
     return g.list == null || !bonus ? [] : [].concat(g.list).map(function (n) { return bonus.keyword_lists[n]; }).filter(Boolean);
+  }
+  // Does another live rate group of card C (its bonus entries' groups and its standing groups, not g) name merchant n?
+  // Names compared as whole words either way ("BJ's" and "BJ's Wholesale").
+  function ownCovers(C, g, n, today) {
+    var a = normKw(n), gs = (C.standing || []).slice();
+    bonus.entries.forEach(function (e) { if (e.card === C.bonus_card && bonusLive(e, today)) gs = gs.concat(e.match); });
+    return gs.some(function (h) {
+      return h !== g && h.name !== g.name && !!h._list && h._list.kws.some(function (k) {
+        return k.c === a.c || k.s.indexOf(a.s + " ") === 0 || a.s.indexOf(k.s + " ") === 0;
+      });
+    });
   }
   function uniq(a) { return a.filter(function (x, i) { return x && a.indexOf(x) === i; }); }
   function dtSec(title, cls) {
@@ -3176,7 +3190,13 @@
       var q = function (k) { return dtBody.querySelector("[data-f=\"" + CSS.escape(k) + "\"]"); };
       var t = q(keep);
       if ((!t || t.hidden) && /^save-/.test(keep)) t = q(keep.replace(/^save-/, "pick-"));
-      if (t && !t.hidden && !t.disabled) { t.focus({ preventScroll: true }); dt.focus = null; dtAutoFocus = t; }
+      if (t && !t.hidden && !t.disabled) {
+        // Focus the owner had stays theirs (it holds the day redraw as before); focus put back after it was lost isn't.
+        var own = !!fk && a !== dtAutoFocus;
+        t.focus({ preventScroll: true });
+        dt.focus = null;
+        dtAutoFocus = own ? null : t;
+      }
     }
     if (window.scrollY !== y) window.scrollTo(0, y);
   }
@@ -3316,7 +3336,10 @@
       [].concat(g.list == null ? [] : g.list).forEach(function (ln) {
         var l = bonus.keyword_lists[ln];
         if (!l) return;
-        if ((l.exclude || []).length) put("ex|" + ln, who, "excludes " + l.exclude.join(", ") + ".");
+        // Names another of this card's own live rates covers aren't excluded for it (Costco for Costco Visa, which pays at
+        // Costco gas and Costco; Costco, Sam's Club and BJ's for Customized Cash's wholesale clubs).
+        var ex = (l.exclude || []).filter(function (n) { return !ownCovers(x.C, g, n, today); });
+        if (ex.length) put("ex|" + ex.join("|"), who, "excludes " + ex.join(", ") + ".");
         // "Speedway, Circle K and Wawa may not count: convenience-store chains may code as …" (names sharing a reason).
         var m = {}, mo = [];
         Object.keys(l.may_not_count || {}).forEach(function (k) {

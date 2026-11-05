@@ -2424,9 +2424,10 @@ function listRows(sel) {
     ok(/Not the same as Groceries & Food Delivery/.test(D.cat) && /Grocery stores only, not meal kits, wine clubs or delivery services\./.test(D.cat) &&
       /Top offer in Groceries & Food Delivery: Zqgrocer Market 14% with Smartly\./.test(D.cat) && /not every merchant in Groceries & Food Delivery/.test(D.cat),
       "dt Grocery stores: not the same as Groceries & Food Delivery, with that category's top offer (" + D.cat + ")");
-    ok(D.counts.includes("Freedom Flex, Freedom, Citi Custom Cash (grocery stores) and Customized Cash: excludes Walmart, Target, Costco, Sam's Club, BJ's.") &&
+    ok(D.counts.includes("Freedom Flex, Freedom and Citi Custom Cash (grocery stores): excludes Walmart, Target, Costco, Sam's Club, BJ's.") &&
+      D.counts.includes("Customized Cash: excludes Walmart, Target.") &&
       D.counts.includes("Freedom Flex, Freedom, Citi Custom Cash (grocery stores) and Customized Cash: Instacart and Shipt may not count: delivery services can code as delivery, not as a grocery store.") &&
-      !D.counts.some(l => /^Excluded:/.test(l)), "dt Grocery stores: What counts names the cards each exclusion and may-not-count line applies to (" + J(D.counts) + ")");
+      !D.counts.some(l => /^Excluded:/.test(l)), "dt Grocery stores: What counts names the cards each exclusion and may-not-count line applies to; Customized Cash's own wholesale clubs rate keeps Costco, Sam's Club and BJ's off its line (" + J(D.counts) + ")");
     ok(J(D.links) === J(["CardSelector focus: restaurants"]), "dt Grocery stores: links to the Custom Cash focus only (grocery isn't a Customized Cash choice) (" + J(D.links) + ")");
     await dtBackArrow();
 
@@ -2465,6 +2466,8 @@ function listRows(sel) {
       await dtBackArrow();
     }
     D = await qpGo("Gas stations");
+    ok(D.counts.includes("Citi Custom Cash (gas stations): excludes Costco, Sam's Club, BJ's, Walmart.") && D.counts.includes("Costco Visa: excludes Sam's Club, BJ's, Walmart."),
+      "dt Gas stations: Costco Visa's line leaves out Costco (its own Costco gas and Costco rates) (" + J(D.counts) + ")");
     ok(/Not the same as Auto & Gas/.test(D.cat) && D.counts.some(l => /^Citi Custom Cash \(gas stations\) and Costco Visa: Speedway, Circle K, Wawa, Sheetz, QuikTrip, Casey's and Quik Stop may not count: /.test(l)) &&
       J(rk(D).slice(0, 2)) === J([["5%", "Citi Custom Cash", "Conditional", true], ["4%", "Smartly", "Always on", false]]),
       "dt Gas stations: Custom Cash conditional above Smartly, Costco Visa tied; names sharing a reason on one line; not the same as Auto & Gas (" + J([rk(D), D.cat]) + ")");
@@ -2986,6 +2989,38 @@ function listRows(sel) {
       ok(f0 === "act" && f1.text === "This card bonus isn't live today." && f1.d && f1.d.view === "cb:chase-freedom-flex/2026-q4",
         "dt rollover after a save in the detail: the control the page refocused doesn't hold the day redraw; the detail follows Jan 1 (" + J([f0, f1.text]) + ")");
       await ctx11.close();
+      // The same, reached by a double tap whose second tap lands on Mark activated and is dropped: the focus that tap
+      // left there doesn't hold the day redraw either.
+      const ctx12 = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: "block" });
+      await ctx12.clock.install({ time: new Date(2026, 11, 31, 23, 58, 0) });
+      const p5 = await ctx12.newPage();
+      p5.on("pageerror", e => errs.push(e.message));
+      await rollRoutes(p5);
+      await p5.route("https://api.github.com/**", r => r.abort());
+      await p5.goto(base);
+      await p5.evaluate(() => { try { localStorage.clear(); localStorage.setItem("cardselector.token", "test"); } catch (e) {} });
+      await p5.goto(base);
+      await p5.waitForFunction(() => window.__cardsReady && window.__bonusReady && !document.getElementById("cb").hidden);
+      await p5.evaluate(() => { window.__n = 0; CardStore.save = () => { window.__n++; return new Promise(() => {}); }; });
+      const row5 = "#cb li[data-eid='chase-freedom-flex/2026-q4'] .cbgo";
+      await p5.click(row5);
+      await p5.waitForTimeout(450);
+      const mb = await p5.locator("#dtbody button[data-f='act']").boundingBox();
+      await p5.click("#dtback");
+      await p5.waitForTimeout(450);
+      const rb = await p5.locator(row5).boundingBox();
+      await p5.evaluate(dy => window.scrollBy(0, dy), Math.round(rb.y + rb.height / 2 - (mb.y + mb.height / 2)));
+      const rb2 = await p5.locator(row5).boundingBox();
+      await p5.mouse.dblclick(mb.x + mb.width / 2, rb2.y + rb2.height / 2);
+      await p5.waitForTimeout(450);
+      const g0 = await p5.evaluate(() => [window.__n, document.activeElement.getAttribute("data-f"), JSON.stringify(window.__detail())]);
+      await ctx12.clock.pauseAt(new Date(2026, 11, 31, 23, 59, 50));
+      await ctx12.clock.runFor(15000);
+      await p5.waitForTimeout(50);
+      const g1 = await st9(p5);
+      ok(g0[0] === 0 && g1.text === "This card bonus isn't live today." && g1.d && g1.d.view === "cb:chase-freedom-flex/2026-q4",
+        "dt rollover after a double tap (second tap dropped on Mark activated): no save, and the focus it left doesn't hold the day redraw (" + J([g0, g1.text]) + ")");
+      await ctx12.close();
       CASE = {};
     }
     ok(errs.length === 0, "qp rollover: no page errors (" + errs.join("; ") + ")");
