@@ -2465,7 +2465,7 @@ function listRows(sel) {
       await dtBackArrow();
     }
     D = await qpGo("Gas stations");
-    ok(/Not the same as Auto & Gas/.test(D.cat) && D.counts.some(l => /^Citi Custom Cash \(gas stations\), Costco Visa and Customized Cash: Speedway, Circle K, Wawa, Sheetz, QuikTrip, Casey's and Quik Stop may not count: /.test(l)) &&
+    ok(/Not the same as Auto & Gas/.test(D.cat) && D.counts.some(l => /^Citi Custom Cash \(gas stations\) and Costco Visa: Speedway, Circle K, Wawa, Sheetz, QuikTrip, Casey's and Quik Stop may not count: /.test(l)) &&
       J(rk(D).slice(0, 2)) === J([["5%", "Citi Custom Cash", "Conditional", true], ["4%", "Smartly", "Always on", false]]),
       "dt Gas stations: Custom Cash conditional above Smartly, Costco Visa tied; names sharing a reason on one line; not the same as Auto & Gas (" + J([rk(D), D.cat]) + ")");
     await dtBackArrow();
@@ -2669,8 +2669,12 @@ function listRows(sel) {
     D = await dtv();
     ok(D.detail.view === "cb:" + CC && !D.over.length, "dt history: Forward shows the Custom Cash detail again (" + J(D.detail) + ")");
     await page.dblclick("#dtback");
-    await page.waitForTimeout(400);
-    ok(page.url() === base && await page.evaluate(() => window.__detail() === null && !document.getElementById("qp").hidden), "dt history: a double tap on the back arrow from two levels in returns home and stays on the page (" + page.url() + ")");
+    await page.waitForTimeout(450);
+    ok(page.url() === base && await page.evaluate(() => window.__detail() && window.__detail().depth === 1 && window.__detail().view === "qp:Dining"),
+      "dt history: a double tap on the back arrow from two levels in steps back one page (the second tap, within 400 ms of the swap, is dropped) and stays on the page (" + page.url() + ")");
+    await dtBackArrow();
+    ok(await page.evaluate(() => window.__detail() === null && !document.getElementById("qp").hidden) && await page.evaluate(() => !(history.state && history.state.cardselectorDt)),
+      "dt history: one more Back returns home, off the details' entries");
     await page.goForward().catch(() => {});
     await page.waitForTimeout(200);
     ok(page.url() === base && await page.evaluate(() => window.__detail() === null && !document.getElementById("qp").hidden && !document.querySelector(".wrap").classList.contains("dton")),
