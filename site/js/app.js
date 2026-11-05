@@ -3045,15 +3045,21 @@
   var dtSwapT = -1e9;
   // A keyboard click (detail 0) has no second tap to guard against.
   function dtSwapped(ev) { dtSwapT = ev && typeof ev.timeStamp === "number" && !(ev.type === "click" && ev.detail === 0) ? ev.timeStamp : -1e9; }
+  // The search box counts too: it sits under the back arrow, so a double tap on Back would focus it (and pop up the keyboard).
+  var DT_GUARD = "#dt, #qp, #cb, .searchbar", dtPressDropped = false;
+  var inGuard = function (ev) { return ev.timeStamp - dtSwapT >= 0 && ev.timeStamp - dtSwapT < 400 && !!ev.target.closest && !!ev.target.closest(DT_GUARD); };
   document.addEventListener("click", function (ev) {
-    if (ev.detail > 0 && ev.timeStamp - dtSwapT >= 0 && ev.timeStamp - dtSwapT < 400 && ev.target.closest && ev.target.closest("#dt, #qp, #cb")) {
+    if (ev.detail > 0 && (dtPressDropped || inGuard(ev)) && ev.target.closest && ev.target.closest(DT_GUARD)) {
       ev.preventDefault();
       ev.stopPropagation();
     }
+    dtPressDropped = false;
   }, true);
-  // The press of that second tap is cancelled too, so it neither focuses nor opens anything (a picker opens on the press).
+  // The press of that second tap is cancelled too, so it neither focuses nor opens anything (a picker opens on the
+  // press); its click is dropped even when the press is released after the window (a slow mouse press).
   document.addEventListener("mousedown", function (ev) {
-    if (ev.timeStamp - dtSwapT >= 0 && ev.timeStamp - dtSwapT < 400 && ev.target.closest && ev.target.closest("#dt, #qp, #cb")) ev.preventDefault();
+    dtPressDropped = inGuard(ev);
+    if (dtPressDropped) ev.preventDefault();
   }, true);
   function openDetail(view, from, ev) {
     if (wc) return;
@@ -3139,15 +3145,18 @@
     return g.list == null || !bonus ? [] : [].concat(g.list).map(function (n) { return bonus.keyword_lists[n]; }).filter(Boolean);
   }
   // Does another live rate group of card C (its bonus entries' groups and its standing groups, not g) name merchant n?
-  // Names compared as whole words either way ("BJ's" and "BJ's Wholesale").
+  // Names compared as whole words ("BJ's" is covered by "BJ's Wholesale").
   // Only a rate at least the one shown counts (a lower one doesn't make the shown rate true there), and an online-only
   // rate never covers a topic that isn't online.
   function ownCovers(C, g, n, today, rate) {
     var a = normKw(n), gs = (C.standing || []).slice();
-    bonus.entries.forEach(function (e) { if (e.card === C.bonus_card && bonusLive(e, today)) gs = gs.concat(e.match); });
+    // A top-category card (Custom Cash) pays one category at a time, so its focus never covers its other categories.
+    bonus.entries.forEach(function (e) { if (e.card === C.bonus_card && bonusLive(e, today) && !e.eligible) gs = gs.concat(e.match); });
     return gs.some(function (h) {
       return h !== g && h.name !== g.name && h._rate >= rate && !(h.channel === "online" && g.channel !== "online") && !!h._list && h._list.kws.some(function (k) {
-        return k.c === a.c || k.s.indexOf(a.s + " ") === 0 || a.s.indexOf(k.s + " ") === 0;
+        // The name itself, or a longer name starting with it ("Costco Gas" for Costco); a shorter keyword ("Alamo",
+        // car rental) never covers a longer different merchant ("Alamo Drafthouse").
+        return k.c === a.c || k.s.indexOf(a.s + " ") === 0;
       });
     });
   }

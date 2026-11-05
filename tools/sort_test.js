@@ -2452,6 +2452,16 @@ function listRows(sel) {
     D = await qpGo("Online shopping");
     ok(J(D.ranks[0]) === J({ rate: "4.5%", card: "Customized Cash", status: "Always on", why: "incl. 50% Preferred Rewards", muted: false, go: true }), "dt Online shopping on Dec 20: 4.5%, incl. 50% Preferred Rewards (" + J(D.ranks[0]) + ")");
     await dtBackArrow();
+    // Custom Cash's focus never "covers" its other categories, and a shorter keyword ("Alamo", car rental) never covers a
+    // longer merchant ("Alamo Drafthouse").
+    {
+      const ccE = ENTRIES.find(e => e.id === CC);
+      await cbOpen({ set: { "Citi Custom Cash": { planned: "select transit", eligible: ccE.eligible.concat([{ name: "select transit", topic: "transit", list: ["select_transit", "car_rental"] }]) } } });
+      D = await qpGo("Entertainment");
+      ok(D.counts.includes("Citi Custom Cash (live entertainment): excludes AMC, Regal, Cinemark, Fandango, Landmark Theatres, Alamo Drafthouse."),
+        "dt Entertainment, focus select transit: the live entertainment line keeps Alamo Drafthouse (" + J(D.counts) + ")");
+      await dtBackArrow();
+    }
     // The other three topics: the tile's answer, a ranked list and an app category line each.
     await cbOpen({});
     for (const t of ["Gas stations", "Entertainment", "Utilities"]) {
@@ -2595,9 +2605,28 @@ function listRows(sel) {
     ok(await page.evaluate(() => window.__detail() && window.__detail().view === "cb:citi-custom-cash/standing" && document.activeElement.tagName !== "SELECT" &&
       !document.querySelector("#dtbody .bfocus select").matches(":open")), "dt double tap: a second tap landing on the focus picker neither focuses nor opens it");
     await dtBackArrow();
-    await page.mouse.dblclick(30, 30); // the back arrow, twice: home, and nothing opened by the second tap
+    // A double tap on the back arrow: home, focus on the row that opened the page (the second tap, landing on the search
+    // box under the arrow, focuses nothing and brings up no keyboard).
+    D = await cbGo(SMART);
+    const bBox = await page.locator("#dtback").boundingBox();
+    await page.mouse.dblclick(bBox.x + bBox.width / 2, bBox.y + bBox.height / 2);
     await page.waitForTimeout(450);
-    ok(await page.evaluate(() => window.__detail() === null && document.activeElement !== document.body), "dt double tap on the back arrow: home, nothing reopened");
+    ok(await page.evaluate(id => window.__detail() === null && document.activeElement.classList.contains("cbgo") && document.activeElement.closest("li").dataset.eid === id, SMART),
+      "dt double tap on the back arrow: home, focus on the row that opened it, not the search box under the arrow (" + await page.evaluate(() => document.activeElement.id || document.activeElement.className) + ")");
+    // A slow mouse press: pressed inside the 400 ms window on Mark not activated, released after it: no save.
+    const nS = await page.evaluate(() => window.__saves.length);
+    await page.click("#cb li[data-eid='" + FREE + "'] .cbgo");
+    const t0 = Date.now(), aBox = await page.locator("#dtbody button[data-f='act']").boundingBox();
+    await page.mouse.move(aBox.x + aBox.width / 2, aBox.y + aBox.height / 2);
+    await page.mouse.down();
+    const tDown = Date.now() - t0;
+    await page.waitForTimeout(500);
+    await page.mouse.up();
+    await page.waitForTimeout(100);
+    if (tDown < 300) ok(await page.evaluate(() => window.__saves.length) === nS && J((await dtv()).controls) === J(["BUTTON:Mark not activated"]),
+      "dt slow press: a press inside the window released after it saves nothing (pressed " + tDown + " ms after the tap)");
+    else skip("dt slow press: the press came " + tDown + " ms after the tap (too slow to test the window)");
+    await dtBackArrow();
     D = await cbGo(FREE);
     ok(J(D.controls) === J(["BUTTON:Mark not activated"]), "dt: the activated entry's detail has Mark not activated");
     await page.click("#dtbody button[data-f='act']");
