@@ -196,12 +196,12 @@
   .ratesnc { margin-top: 8px; padding: 8px 14px; background: var(--neutral-bg); border-radius: 12px; font-size: 13px; }
   .ratesnch { font-weight: 700; color: var(--neutral-text); }
 
-  /* Filters: one summary button on phones, the full panel on wide screens. On phones the bonus strip, the
-     Filters button and the open filters join into one panel (strip on top, square corners where they meet). */
+  /* Filters: one summary button on phones, the full panel on wide screens. On phones the Filters button and the
+     open filters join into one panel (square corners where they meet). */
   .ftoggle {
     display: flex; align-items: center; gap: 8px; width: 100%; min-height: 44px; margin: 0; padding: 0 14px;
     font: inherit; font-size: 15px; font-weight: 600; color: var(--text); text-align: left;
-    background: var(--surface); border: 1px solid var(--line); border-top: 0; border-radius: 0 0 12px 12px; cursor: pointer;
+    background: var(--surface); border: 1px solid var(--line); border-radius: 12px; margin-top: 8px; cursor: pointer;
     -webkit-tap-highlight-color: transparent;
   }
   .ftoggle .fsumm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -212,10 +212,8 @@
   }
   .ftoggle[aria-expanded="true"]::after { margin-top: 3px; transform: rotate(-135deg); }
   .ftoggle:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
-  /* No bonus strip above: the button stands alone. */
-  details.bstrip[hidden] + .ftoggle { margin-top: 8px; border-top: 1px solid var(--line); border-radius: 12px; }
   /* Open: the filters hang under the button; the panel's top border is the one line between them. */
-  .ftoggle[aria-expanded="true"], details.bstrip[hidden] + .ftoggle[aria-expanded="true"] { border-bottom: 0; border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
+  .ftoggle[aria-expanded="true"] { border-bottom: 0; border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
   .filters { margin-top: 12px; }
   @media (max-width: 699px) {
     .filters:not(.open) { display: none; }
@@ -391,7 +389,7 @@
   .filter.off .cat { cursor: default; }
 
   /* What changed: a panel under the search box (back arrow, card, reads compared, New / Gone). On phones the Filters
-     button joins its bottom, as it joins the bonus strip. The strip itself is hidden while the mode is on. */
+     button joins its bottom. Quick picks and Card bonuses are hidden while the mode is on. */
   .wcpanel { margin: 8px 0 0; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; }
   .wcpanel[hidden] { display: none; }
   .wctop { display: flex; align-items: center; gap: 2px; padding: 4px 14px 0 4px; }
@@ -407,13 +405,12 @@
   .wcsub { font-size: 13px; color: var(--muted); }
   .wctabs { display: flex; gap: 8px; padding: 8px 14px 12px; }
   .wctabs .cat.wctab { flex: 1 1 0; min-width: 0; min-height: 44px; font-size: 15px; }
-  .wrap.wcon details.bstrip { display: none; }
   h3.wcgroup { margin: 18px 2px 0; font-size: 13px; font-weight: 700; letter-spacing: .03em; color: var(--muted); }
   h3.wcgroup .n { font-weight: 600; }
   @media (max-width: 699px) {
     .wcpanel { border-radius: 12px 12px 0 0; }
-    .wrap.wcon details.bstrip + .ftoggle { margin-top: 0; border-top: 0; border-radius: 0 0 12px 12px; }
-    .wrap.wcon details.bstrip + .ftoggle[aria-expanded="true"] { border-bottom: 0; border-radius: 0; }
+    .wrap.wcon .ftoggle { margin-top: 0; border-top: 0; border-radius: 0 0 12px 12px; }
+    .wrap.wcon .ftoggle[aria-expanded="true"] { border-bottom: 0; border-radius: 0; }
   }
 
   /* Quick picks (home screen): six compact topic tiles in two columns, then the full-width Everyday default.
@@ -450,52 +447,27 @@
   .qpe .qpn { font-size: 14px; }
   .qpe .qpc { font-size: 15px; font-weight: 750; color: var(--bonus); }
 
-  /* Bonus categories strip (under the search box): one summary line, tap to expand. On phones it is the top
-     of one panel with the Filters button under it. */
-  details.bstrip {
-    margin: 8px 0 0; background: var(--surface);
-    border: 1px solid var(--line); border-radius: 12px;
+  /* Card bonuses (home screen, under Quick picks): a quiet status list, one compact row per live bonus entry. */
+  .cb { margin: 10px 0 0; }
+  .cb[hidden] { display: none; }
+  .cbhead { flex-wrap: wrap; gap: 2px 8px; }
+  .cbpend { font-size: 12.5px; }
+  .cbpend.bwarn { padding: 0 6px; }
+  .cbnone { color: var(--muted); }
+  .cblist {
+    list-style: none; margin: 0; padding: 0 12px; background: var(--surface);
+    border: 1px solid var(--line); border-radius: 10px;
   }
-  @media (max-width: 699px) {
-    details.bstrip { border-radius: 12px 12px 0 0; }
-  }
-  details.bstrip[hidden] { display: none; }
-  details.bstrip > summary {
-    min-height: 44px; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px;
-    padding: 6px 14px; font-size: 15px; font-weight: 600; cursor: pointer; list-style: none;
-    -webkit-tap-highlight-color: transparent;
-  }
-  details.bstrip > summary::-webkit-details-marker { display: none; }
-  details.bstrip > summary::before {
-    content: ""; width: 8px; height: 8px; flex: none; border-radius: 2px; background: var(--bonus);
-  }
-  details.bstrip > summary::after {
-    content: ""; width: 7px; height: 7px; margin: -3px 4px 0 auto; flex: none;
-    border-right: 1.5px solid var(--muted); border-bottom: 1.5px solid var(--muted); transform: rotate(45deg);
-  }
-  details.bstrip[open] > summary::after { margin-top: 3px; transform: rotate(-135deg); }
-  details.bstrip > summary:focus-visible { outline: 3px solid var(--accent); outline-offset: -3px; }
-  details.bstrip ul { list-style: none; margin: 0; padding: 0 14px 4px; display: grid; gap: 0; font-size: 14px; }
-  details.bstrip li { padding: 9px 0; border-top: 1px solid var(--line); overflow-wrap: anywhere; }
-  .bstrip .bcard { font-weight: 650; }
-  .bstrip .brate { font-weight: 700; color: var(--bonus); }
-  .bstrip .bmeta { color: var(--muted); }
-  /* Status line: inline text flow, so the control sits right after the status, on its last line. */
-  .bstrip .bstat { margin-top: 4px; font-size: 13px; line-height: 2; }
-  .bstrip .bstat .bwarn { display: inline; padding: 2px 6px; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
-  .bstrip .bstat .edfill, .bstrip .bstat .edlink { margin-left: 6px; vertical-align: middle; }
-  .bstrip .bstat .edlink { margin-top: -8px; margin-bottom: -8px; }
-  .bstrip .bstat .bby { margin-left: 8px; }
-  details.bmore { margin-top: 2px; font-size: 13.5px; color: var(--muted); }
-  details.bmore > summary {
-    display: inline-flex; align-items: center; min-height: 32px; font-size: 13px; color: var(--accent); font-weight: 600;
-    cursor: pointer; list-style: none; -webkit-tap-highlight-color: transparent;
-  }
-  details.bmore > summary::-webkit-details-marker { display: none; }
-  details.bmore > summary::after { content: "▾"; margin-left: 4px; font-size: 12px; }
-  details.bmore[open] > summary::after { content: "▴"; }
-  details.bmore > summary:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
-  details.bmore p { margin: 0 0 4px; line-height: 1.4; }
+  .cbrow { padding: 7px 0 8px; font-size: 14px; line-height: 1.35; overflow-wrap: anywhere; }
+  .cbrow + .cbrow { border-top: 1px solid var(--line); }
+  .cbcard { font-weight: 650; }
+  .cbcard .idot { width: 7px; height: 7px; margin-right: 5px; }
+  .cb .brate { font-weight: 700; color: var(--bonus); }
+  .cbst { margin-top: 2px; font-size: 12.5px; line-height: 1.5; }
+  .cbinfo { color: var(--muted); }
+  .cbst .bwarn { display: inline; padding: 1px 6px; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
+  /* A slim button after the warning (it wraps under it when the line is full). */
+  .cbst .edfill { margin: 2px 0 0 2px; padding: 0 8px; font-size: 13px; vertical-align: middle; }
   .bwarn {
     display: inline-block; padding: 1px 8px; border-radius: 6px;
     background: var(--warn-bg); color: var(--warn-text); font-weight: 600;
@@ -532,7 +504,7 @@
   .bonusrow .bout { display: none; }
   .bonusrow .bplus { flex: none; font-size: 13px; font-weight: 600; color: var(--muted); }
   .bonusrow .bcn { font-weight: 600; }
-  /* Not activated: a "⚠" before the name, the color and size of the strip's "⚠ N not activated". */
+  /* Not activated: a "⚠" before the name, in the Card bonuses warning color. */
   .bonusrow .bwarnmk { margin-right: 3px; font-size: 15px; font-weight: 600; color: var(--warn-text); }
   /* Closed: the row's caveats on one line, cut with "…"; open, they show in full below. */
   .bonusrow .bcav {
@@ -718,10 +690,8 @@
   </section>
   <!-- Quick picks: the card to use for a type of purchase with no offer (home screen only). -->
   <section class="qp" id="qp" aria-labelledby="qp-h" hidden></section>
-  <details class="bstrip" id="bstrip" hidden>
-    <summary id="bsum"></summary>
-    <ul id="blist"></ul>
-  </details>
+  <!-- Card bonuses: every live bonus entry and its status (home screen only). -->
+  <section class="cb" id="cb" aria-labelledby="cb-h" hidden></section>
   <!-- On phones the filters fold behind one button that summarises what is active; wide screens show them all. -->
   <button class="ftoggle" id="ftoggle" type="button" aria-expanded="false" aria-controls="filters"></button>
   <div class="filters" id="filters">

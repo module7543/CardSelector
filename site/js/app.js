@@ -14,13 +14,10 @@
   var sortEl = document.getElementById("sort");
   var cuisFilter = document.getElementById("cuis-filter");
   var cuisEl = document.getElementById("cuis");
-  var bstrip = document.getElementById("bstrip");
   var useEl = document.getElementById("use");
   var ftoggle = document.getElementById("ftoggle");
   var filtersEl = document.getElementById("filters");
   var chansEl = document.getElementById("chans");
-  var bsum = document.getElementById("bsum");
-  var blist = document.getElementById("blist");
   var bonus = null; // data/bonus-categories.json once loaded (keyword lists pre-normalised)
   var data = null;
   var cuisines = null; // data/cuisines.json once loaded: { cuisines: [...], merchants: { name: entry } }
@@ -2547,108 +2544,125 @@
     });
   }
 
-  // The strip: every live entry; tap the summary to expand (collapsed by default on every screen).
-  // Each entry is one line, card and rates first ("Freedom: 5% grocery, dining, Red Cross"); its activation
-  // status and controls stay visible under it, and the issuer wording, dates, caps and notes go behind
-  // "More details".
-  function renderStrip() {
-    blist.textContent = "";
+  // ---- Card bonuses (home screen): every live bonus entry, in file order, as one compact status row ----
+  // Each row: the card (issuer dot), its one-line summary ("5% grocery, dining, Red Cross"; Smartly's "Everyday 4% ·
+  // first $10,000 per billing cycle, some categories 2%"; "5% on top category") and exactly one state line. The
+  // only edit here is "Mark activated" on a pending entry (signed in); reversal, the Focus and Choice pickers and
+  // the longer issuer wording (bonusDetails) belong to the Card Bonus detail pages (step 4C). Rows don't open yet.
+  var cbEl = document.getElementById("cb"), cbHome = false;
+  // The summary line's parts, appended to node: the rates in green, the rest plain.
+  function bonusSummary(e, node) {
+    var rate = function (r) { node.appendChild(el("span", "brate", pct(r) + "%")); };
+    if (e.everyday) {
+      node.appendChild(document.createTextNode("Everyday "));
+      rate(e.rate);
+      if (e.strip_note) node.appendChild(document.createTextNode(" · " + e.strip_note));
+    } else if (e.eligible) {
+      rate(e.rate);
+      node.appendChild(document.createTextNode(" on top category"));
+    } else {
+      // "5% grocery, dining, Red Cross"; "5.25% online shopping, 3.5% grocery & wholesale clubs".
+      rateSummary(e).forEach(function (r, i) {
+        if (i) node.appendChild(document.createTextNode(", "));
+        rate(r[0]);
+        node.appendChild(document.createTextNode(" " + r[1]));
+      });
+    }
+    return node;
+  }
+  // The one state line. Custom Cash: "CardSelector focus: restaurants" (CardSelector's assumption only; it elects
+  // nothing at Citi). Customized Cash: "Choice: online shopping" (the stored choice; set at Bank of America).
+  // Otherwise the activation: "✓ Activated · ends Dec 31", "⚠ Not activated, activate by Dec 14" (plus its short
+  // activation_note from the data, and "Mark activated" when signed in and the entry has a deadline, as the save
+  // rules allow), or "No activation needed".
+  function bonusState(e, ed) {
+    var st = el("div", "cbst");
+    if (e.eligible && e.planned) st.appendChild(el("span", "cbinfo", "CardSelector focus: " + e.planned));
+    else if (e.choices && e.choice) st.appendChild(el("span", "cbinfo", "Choice: " + e.choice));
+    else if (e.activation === "activated") {
+      st.appendChild(el("span", "bok", "✓ Activated"));
+      if (e.end) st.appendChild(el("span", "cbinfo", " · ends " + fmtDate(e.end)));
+    } else if (e.activation === "not_confirmed") {
+      st.appendChild(el("span", "bwarn", "⚠ Not activated" + (e.activate_by ? ", activate by " + fmtDate(e.activate_by) : "")));
+      if (e.activation_note) st.append(" ", el("span", "cbinfo", cap(e.activation_note) + "."));
+      if (ed && e.activate_by) st.append(" ", editBtn("Mark activated", { type: "bonus.activation", id: e.id, from: "not_confirmed", to: "activated" }, "edfill"));
+    } else st.appendChild(el("span", "cbinfo", "No activation needed"));
+    return st;
+  }
+  // The issuer wording, dates, caps, eligible list with "(also …)" notes and other notes the old Bonus categories strip kept behind
+  // "More details", as lines of text: kept for the Card Bonus detail pages (step 4C); not drawn on the home screen.
+  function bonusDetails(e, live) {
+    var more = [], ev = live.filter(function (x) { return x.everyday; })[0];
+    if (e.everyday) more.push(cap(e.categories_text));
+    else if (e.eligible) more.push(cap(e.categories_text.replace(/^on\s+/, "")) + ".");
+    else if (e.choices) {
+      // Base rates here; the boost note follows.
+      more.push(pct(e.rate) + "% " + e.categories_text + " (choice now: " + e.choice + "), before any Preferred Rewards boost.");
+      more.push("Choices: " + e.choices_text);
+    } else more.push(e.rate !== null ? pct(e.rate) + "% " + e.categories_text + "." : cap(e.categories_text) + ".");
+    if (e.start && e.end) more.push(rangeText(e.start, e.end) + ".");
+    if (!e.everyday) more.push(cap(e.cap_text) + ".");
+    if (e.strip_note && !e.everyday) more.push(cap(e.strip_note) + ".");
+    var bn = e._boost ? boostNote(boostCard(e)) : null;
+    if (bn) more.push(bn);
+    if (e.eligible) more.push("Eligible: " + e.eligible.map(function (it) {
+      // Other live entries paying on the same topic, highest rate first; a lower rate is shown.
+      var also = [];
+      live.forEach(function (o) {
+        if (o === e) return;
+        var g = o.match.filter(function (g) { return g.name === (it.topic || it.name); })[0];
+        if (g) also.push({ name: o.short || o.card, rate: g._rate });
+      });
+      also = byRateDesc(also, function (a) { return a.rate; }).map(function (a) {
+        return a.name + (a.rate < e.rate ? " " + pct(a.rate) + "%" : "");
+      });
+      return it.name + (also.length ? " (also " + also.join(", ") + ")" : "");
+    }).join(", "));
+    // The everyday card is not listed under every category; one note instead.
+    if (e.eligible && ev && ev.rate < e.rate) more.push(ev.card + "'s usual everyday rate is " + pct(ev.rate) + "%, so only a " + pct(e.rate) + "% " + e.card + " result normally beats it.");
+    if (e.activation === "not_needed") more.push("No activation needed.");
+    return more;
+  }
+  window.__bonusDetails = function (id) { // for the tests (4C will draw these)
+    var t = todayISO(), live = bonus ? bonus.entries.filter(function (e) { return bonusLive(e, t); }) : [];
+    var e = live.filter(function (x) { return x.id === id; })[0];
+    return e ? bonusDetails(e, live) : null;
+  };
+  // Shown on the home screen only (render() says when); empty (no live entry, or the file didn't load) stays hidden.
+  function showBonuses(home) {
+    if (home !== undefined) cbHome = home;
+    cbEl.hidden = !(cbHome && cbEl.querySelector("li[data-eid]"));
+  }
+  // Drawn where the old Bonus categories strip was (load, save, sign-in, swap, the day redraw), so the day redraw's
+  // checks are unchanged.
+  function renderBonuses() {
+    cbEl.textContent = "";
     var today = todayISO();
-    stripDay = today; // a render() alone doesn't redraw the strip, so the day redraw checks this too
+    bonusDay = today; // a render() alone doesn't redraw this section, so the day redraw checks this too
     var live = bonus ? bonus.entries.filter(function (e) { return bonusLive(e, today); }) : [];
-    bstrip.hidden = !live.length;
-    if (!live.length) return;
-    var pending = live.filter(function (e) { return e.activation === "not_confirmed"; }).length;
-    bsum.textContent = "";
-    bsum.appendChild(document.createTextNode("Bonus categories"));
-    if (pending) bsum.appendChild(el("span", "bwarn", "⚠ " + pending + " not activated"));
-    var ev = live.filter(function (e) { return e.everyday; })[0];
-    var ed = editing();
-    live.forEach(function (e) {
-      var li = el("li"), head = el("div"), more = [];
-      li.setAttribute("data-eid", e.id); // the day redraw finds the entry again by it (More details, focus)
-      li.appendChild(head);
-      head.appendChild(withDot(el("span", "bcard", e.card + ": "), e.card));
-      var rate = function (r) { head.appendChild(el("span", "brate", pct(r) + "%")); };
-      if (e.everyday) {
-        // "Smartly: Everyday 4% · first $10,000 per billing cycle, some categories 2%" (its usual everyday rate).
-        head.appendChild(document.createTextNode("Everyday "));
-        rate(e.rate);
-        if (e.strip_note) head.appendChild(document.createTextNode(" · " + e.strip_note));
-        more.push(cap(e.categories_text));
-      } else if (e.eligible) {
-        // "5% on top category, CardSelector focus: restaurants" (signed in, the picker below shows it). The focus is
-        // CardSelector's assumption only; it elects nothing at Citi.
-        rate(e.rate);
-        head.appendChild(document.createTextNode(" on top category" + (e.planned && !ed ? ", CardSelector focus: " + e.planned : "")));
-        more.push(cap(e.categories_text.replace(/^on\s+/, "")) + ".");
-      } else {
-        // "5% grocery, dining, Red Cross"; "5.25% online shopping, 3.5% grocery & wholesale clubs".
-        rateSummary(e).forEach(function (r, i) {
-          if (i) head.appendChild(document.createTextNode(", "));
-          rate(r[0]);
-          head.appendChild(document.createTextNode(" " + r[1]));
-        });
-        if (e.choices) {
-          // Base rates here; the boost note follows.
-          more.push(pct(e.rate) + "% " + e.categories_text + " (choice now: " + e.choice + "), before any Preferred Rewards boost.");
-          more.push("Choices: " + e.choices_text);
-        } else more.push(e.rate !== null ? pct(e.rate) + "% " + e.categories_text + "." : cap(e.categories_text) + ".");
-      }
-      if (e.start && e.end) more.push(rangeText(e.start, e.end) + ".");
-      if (!e.everyday) more.push(cap(e.cap_text) + ".");
-      if (e.strip_note && !e.everyday) more.push(cap(e.strip_note) + ".");
-      var bn = e._boost ? boostNote(boostCard(e)) : null;
-      if (bn) more.push(bn);
-      if (e.eligible) more.push("Eligible: " + e.eligible.map(function (it) {
-        // Other live entries paying on the same topic, highest rate first; a lower rate is shown.
-        var also = [];
-        live.forEach(function (o) {
-          if (o === e) return;
-          var g = o.match.filter(function (g) { return g.name === (it.topic || it.name); })[0];
-          if (g) also.push({ name: o.short || o.card, rate: g._rate });
-        });
-        also = byRateDesc(also, function (a) { return a.rate; }).map(function (a) {
-          return a.name + (a.rate < e.rate ? " " + pct(a.rate) + "%" : "");
-        });
-        return it.name + (also.length ? " (also " + also.join(", ") + ")" : "");
-      }).join(", "));
-      // The everyday card is not listed under every category; one note instead.
-      if (e.eligible && ev && ev.rate < e.rate) more.push(ev.card + "'s usual everyday rate is " + pct(ev.rate) + "%, so only a " + pct(e.rate) + "% " + e.card + " result normally beats it.");
-      if (e.activation === "not_needed") more.push("No activation needed.");
-      // Activation: the control follows the status ("⚠ Not activated … [Mark activated]", "Activated Undo").
-      if (e.activation === "not_confirmed" || e.activation === "activated") {
-        var st = el("div", "bstat");
-        if (e.activation === "not_confirmed") {
-          var by = e.activate_by ? "activate by " + fmtDate(e.activate_by) : "";
-          var note = e.activation_note ? e.activation_note : "";
-          if (ed && e.activate_by) {
-            // Signed in: the button sits on the warning line, the deadline follows it.
-            st.appendChild(el("span", "bwarn", "⚠ Not activated"));
-            st.appendChild(editBtn("Mark activated", { type: "bonus.activation", id: e.id, from: "not_confirmed", to: "activated" }, "edfill"));
-            st.appendChild(el("span", "bmeta bby", cap(by) + "." + (note ? " " + note + "." : "")));
-          } else {
-            st.appendChild(el("span", "bwarn", "⚠ Not activated" + (by ? ", " + by : "") + (note ? ". " + note : "")));
-          }
-        } else {
-          st.appendChild(el("span", "bok", "Activated"));
-          if (ed && e.activate_by) st.appendChild(editBtn("Undo", { type: "bonus.activation", id: e.id, from: "activated", to: "not_confirmed" }, "edlink"));
-        }
-        li.appendChild(st);
-      }
-      if (ed && e.eligible && e.planned) li.appendChild(focusPicker(e, "planned"));
-      if (ed && e.choices && e.choice) {
-        li.appendChild(focusPicker(e, "choice"));
-        li.appendChild(el("div", "bmeta bchoice", "Change it at Bank of America first, then here."));
-      }
-      if (more.length) {
-        var d = el("details", "bmore");
-        d.appendChild(el("summary", null, "More details"));
-        more.forEach(function (t) { d.appendChild(el("p", null, t)); });
-        li.appendChild(d);
-      }
-      blist.appendChild(li);
-    });
+    if (live.length) {
+      // "No activations pending", or "⚠ 2 activations pending": live entries whose activation is not_confirmed only.
+      var pending = live.filter(function (e) { return e.activation === "not_confirmed"; }).length;
+      var head = el("div", "qphead cbhead");
+      head.appendChild(el("h2", "qph", "Card bonuses")).id = "cb-h";
+      head.appendChild(el("span", pending ? "bwarn cbpend" : "cbpend cbnone",
+        pending ? "⚠ " + pending + " activation" + (pending === 1 ? "" : "s") + " pending" : "No activations pending"));
+      cbEl.appendChild(head);
+      var ul = el("ul", "cblist"), ed = editing();
+      live.forEach(function (e) {
+        var li = el("li", "cbrow");
+        li.setAttribute("data-eid", e.id); // the day redraw finds the entry again by it (focus)
+        var l1 = el("div", "cbl1");
+        l1.appendChild(withDot(el("span", "cbcard", e.card), e.card));
+        l1.appendChild(document.createTextNode(" "));
+        l1.appendChild(bonusSummary(e, el("span", "cbsumm")));
+        li.appendChild(l1);
+        li.appendChild(bonusState(e, ed));
+        ul.appendChild(li);
+      });
+      cbEl.appendChild(ul);
+    }
+    showBonuses();
   }
 
   // ---- Quick picks (home screen): the card to use for a type of purchase, with no merchant offer ----
@@ -3033,8 +3047,10 @@
     });
     renderWcPanel();
     renderFreshness(); // its New and Gone counts follow saves and new data
-    // Quick picks: the home screen only (a search, category or card answers in the answer card instead).
-    renderQuickPicks(!wc && !usedOn && !hasQuery && category === null && card === null, today);
+    // Quick picks and Card bonuses: the home screen only (a search, category or card answers in the answer card instead).
+    var home = !wc && !usedOn && !hasQuery && category === null && card === null;
+    renderQuickPicks(home, today);
+    showBonuses(home);
     if (wc) return renderWcList(query, today, inScope, inUsedScope, scope, narrowed);
     if (usedOn) return renderUsedList(query, today, inUsedScope,
       (category !== null ? " in " + category + (cuis !== null ? ": " + cuis : "") : "") + (card !== null ? " on " + card : ""));
@@ -3277,18 +3293,18 @@
   window.addEventListener("focus", comeBackDay);
 
   // ---- A new local day (midnight, or the tab coming back the next day): offers that ended yesterday leave the
-  // list, the Ends badges, the bonus strip and the headline follow today. Never during a save or while an edit
+  // list, the Ends badges, Card bonuses and the headline follow today. Never during a save or while an edit
   // control has focus (then dayPending, redrawn when the save ends or the focus leaves). Everything the owner
   // has open or picked stays, and focus and scroll stay where they are.
-  var lastDay = null, stripDay = null, dayPending = false, tapping = false, tapTimer = 0;
+  var lastDay = null, bonusDay = null, dayPending = false, tapping = false, tapTimer = 0;
   function dayBlocked() {
     if (saving || tapping) return true;
     var f = document.activeElement;
-    return !!f && (main.contains(f) || blist.contains(f)) && f.matches("select, .edsm, .edfill, .edlink");
+    return !!f && (main.contains(f) || cbEl.contains(f)) && f.matches("select, .edsm, .edfill, .edlink");
   }
-  // Is t a day the results or the strip weren't drawn for yet? (No strip drawn yet, e.g. its file didn't load: only
+  // Is t a day the results or Card bonuses weren't drawn for yet? (Card bonuses not drawn yet, e.g. its file didn't load: only
   // the results count.)
-  function newDay(t) { return lastDay !== null && (t !== lastDay || (stripDay !== null && t !== stripDay)); }
+  function newDay(t) { return lastDay !== null && (t !== lastDay || (bonusDay !== null && t !== bonusDay)); }
   function checkDay() {
     var t = todayISO();
     if (!data || lastDay === null || (!dayPending && !newDay(t))) return;
@@ -3315,7 +3331,7 @@
   function tapGone() { clearTimeout(tapTimer); tapping = false; }
   document.addEventListener("visibilitychange", function () { if (document.hidden) tapGone(); });
   window.addEventListener("pagehide", tapGone);
-  // Where focus is, as something that can be found again after the redraw: the offer row, bonus row or strip
+  // Where focus is, as something that can be found again after the redraw: the offer row, bonus row or Card bonuses
   // entry it sits in (else its container), and its kind, text and place among its kind there.
   function focusSpot() {
     var f = document.activeElement;
@@ -3333,7 +3349,7 @@
   function findSpot(s) {
     var scope = s.at.oid ? main.querySelector("[data-oid=\"" + CSS.escape(s.at.oid) + "\"]") :
       s.at.ck ? main.querySelector("[data-ck=\"" + CSS.escape(s.at.ck) + "\"]") :
-      s.at.eid ? blist.querySelector("[data-eid=\"" + CSS.escape(s.at.eid) + "\"]") :
+      s.at.eid ? cbEl.querySelector("[data-eid=\"" + CSS.escape(s.at.eid) + "\"]") :
       s.at.lead != null ? Array.prototype.filter.call(useEl.querySelectorAll("details.bonusrow"), function (d) {
         return d.querySelector(".bhead").textContent === s.at.lead;
       })[0] || Array.prototype.filter.call(useEl.querySelectorAll("details.bonusrow"), function (d) {
@@ -3345,25 +3361,17 @@
   }
   function dayRedraw() {
     var y = window.scrollY, spot = focusSpot();
-    // What render() and renderStrip() would draw closed again: Recently unavailable, the open bonus rows (by
-    // lead, else by topic when the lead changed: "Dining at <merchant>" names what matched), the strip's open
-    // "More details" and an unsaved Focus or Choice pick (by entry).
+    // What render() would draw closed again: Recently unavailable and the open bonus rows (by lead, else by topic
+    // when the lead changed: "Dining at <merchant>" names what matched). (Card bonuses has nothing to open or pick.)
     var ex = main.querySelector("details.expired"), exOpen = ex ? ex.open : null;
     var rowsOpen = Array.prototype.map.call(useEl.querySelectorAll("details.bonusrow[open]"), function (d) {
       return { lead: d.querySelector(".bhead").textContent, topic: d.getAttribute("data-topic") };
     });
-    var moreOpen = Array.prototype.map.call(blist.querySelectorAll("li[data-eid] > details.bmore[open]"), function (d) { return d.parentNode.getAttribute("data-eid"); });
-    // An unsaved pick shows its Save; a picker that only shows an older stored value (redrawn before a save of it
-    // ended) has none and takes the stored value.
-    var picks = Array.prototype.filter.call(blist.querySelectorAll(".bfocus select"), function (sel) {
-      var b = sel.parentNode.querySelector("button");
-      return b && !b.hidden;
-    }).map(function (sel) { return [sel.id, sel.value]; });
     // Rates prepared from today's date (the Preferred Rewards boost on bonus and standing groups) are prepared
     // again, so the new day's rates match a fresh load; then the Best offer totals are worked out again.
     cardsCfg = null; prepCards();
     totalCache = {}; totalSig = ""; // Best offer totals, worked out again for today
-    renderCats(); renderCards(); renderStrip(); renderCuisines(); render();
+    renderCats(); renderCards(); renderBonuses(); renderCuisines(); render();
     var ex2 = main.querySelector("details.expired");
     if (ex2 && exOpen !== null) ex2.open = exOpen;
     var rowsNow = Array.prototype.slice.call(useEl.querySelectorAll("details.bonusrow"));
@@ -3371,17 +3379,6 @@
       var d = rowsNow.filter(function (x) { return x.querySelector(".bhead").textContent === r.lead; })[0] ||
         rowsNow.filter(function (x) { return x.getAttribute("data-topic") === r.topic; })[0];
       if (d) d.open = true;
-    });
-    moreOpen.forEach(function (id) {
-      var d = blist.querySelector("li[data-eid=\"" + CSS.escape(id) + "\"] > details.bmore");
-      if (d) d.open = true;
-    });
-    picks.forEach(function (p) {
-      var sel = document.getElementById(p[0]);
-      if (sel && sel.value !== p[1] && Array.prototype.some.call(sel.options, function (op) { return op.value === p[1]; })) {
-        sel.value = p[1];
-        sel.dispatchEvent(new Event("change")); // shows its Save
-      }
     });
     if (spot && !spot.el.isConnected) {
       var f = findSpot(spot);
@@ -3531,7 +3528,7 @@
       if (f[0] in loaded) return;
       if (!f[1](parsed(t))) return;
       loaded[f[0]] = t;
-      if (f[0] !== "data/cuisines.json" && bonus) renderStrip(); // Preferred Rewards rates
+      if (f[0] !== "data/cuisines.json" && bonus) renderBonuses(); // Preferred Rewards rates
       if (data) f[2]();
     }).catch(function () {});
   });
@@ -3640,6 +3637,7 @@
   // Custom Cash, "CardSelector focus: [restaurants ▾]" (field "planned": CardSelector's assumption only, nothing
   // changes at Citi), and Customized Cash choice, "Choice: [online shopping ▾]" (field "choice": a real Bank of
   // America setting, changed there first); a small Save appears only once the value changes.
+  // Not drawn on the home screen since Card bonuses replaced the strip; kept for the Card Bonus detail pages (4C).
   function focusPicker(e, field) {
     var row = el("div", "bfocus");
     var id = field + "-" + compact(e.id), now = e[field];
@@ -3719,7 +3717,7 @@
     if (data && newDay(todayISO())) dayPending = true;
     // A new day held back by the save: the full day redraw instead (once).
     if (dayPending && !dayBlocked()) { dayPending = false; dayRedraw(); return; }
-    renderStrip();
+    renderBonuses();
     if (data) { renderCuisines(); render(); }
   }
 
@@ -3975,11 +3973,11 @@
       }
       var edits = editsOf({ status: 200, ok: true, text: t["data/phone-edits.json"] });
       var y = window.scrollY;
-      // Only what changed is put in again (an unchanged bonus file keeps the strip as it is, open details and
-      // an unsaved Focus or Choice pick included; its remembered saves were checked when it loaded).
+      // Only what changed is put in again (an unchanged bonus file keeps Card bonuses as it is; its remembered
+      // saves were checked when it loaded).
       var changed = function (p) { return t[p] !== loaded[p]; };
       var offersNew = changed("data/offers.json") || changed("data/phone-edits.json");
-      var stripNew = changed("data/bonus-categories.json") || changed("data/cards.json");
+      var bonusNew = changed("data/bonus-categories.json") || changed("data/cards.json");
       if (offersNew) useOffers(t["data/offers.json"], edits, j["data/offers.json"]);
       if (changed("data/card-links.json")) useLinks(j["data/card-links.json"]);
       if (changed("data/cuisines.json") || offersNew) useCuisines(j["data/cuisines.json"]);
@@ -3992,7 +3990,7 @@
       totalCache = {}; totalSig = ""; // Best offer totals, worked out again from the new rates
       if (category !== null && (data.categories || []).indexOf(category) === -1) category = null;
       if (card !== null && !data.offers.some(function (o) { return o.card === card; })) card = null;
-      renderCats(); renderCards(); if (stripNew) renderStrip(); renderCuisines(); render(); refreshFreshness();
+      renderCats(); renderCards(); if (bonusNew) renderBonuses(); renderCuisines(); render(); refreshFreshness();
       window.scrollTo(0, y);
       window.__swaps = (window.__swaps || 0) + 1;
       return true;
@@ -4000,7 +3998,7 @@
   }
   // Nothing the owner picked would be lost by a reload: an empty search box (any typed character counts, not
   // only letters and digits), no save running or save bar showing (the "Live" pill aside), not in What changed, no category, card,
-  // cuisine or Used filter, no open details, Filters panel, bonus strip or Edit mode panel, and no form field in
+  // cuisine or Used filter, no open details, Filters panel or Edit mode panel, and no form field in
   // use other than the empty search box.
   function idle() {
     var f = document.activeElement;
@@ -4008,7 +4006,7 @@
       // a save bar still showing (Deploying with Undo, an error with Retry); the small "Live" pill doesn't block
       (savebar.hidden || savebar.classList.contains("live")) &&
       !main.querySelector("button.mchead[aria-expanded=true]") && !filtersEl.classList.contains("open") &&
-      !bstrip.open && !editDet.open && // an unsaved Focus / Choice pick, a half-typed password
+      !editDet.open && // a half-typed password
       // The search box is autofocused on every open, so it counts as idle while focused (it must be empty, above);
       // any other field in use blocks the reload.
       !(f && f !== input && /^(INPUT|SELECT|TEXTAREA)$/.test(f.tagName));

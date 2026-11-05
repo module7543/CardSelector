@@ -490,8 +490,8 @@ function listRows(sel) {
   page = mainPage;
 
   // Day rollover: loaded at 23:59 on Oct 21 with a search, the Dining and Chase Freedom Flex filters, a cuisine,
-  // Online, Needs activation, A to Z, one offer's details, the Filters panel, the bonus strip with one "More
-  // details", one bonus row, Recently unavailable, Offer freshness and Edit mode open, scrolled down, focus on the open
+  // Online, Needs activation, A to Z, one offer's details, the Filters panel, one bonus row, Recently unavailable,
+  // Offer freshness and Edit mode open, scrolled down, focus on the open
   // offer's row. Crossing midnight (the timer; a tab hidden across it and shown again; a bfcache pageshow) redraws
   // once: the offer that ended Oct 21 moves to Recently unavailable, "Ends tomorrow" becomes "Ends today", and every
   // piece of state stays. visibilitychange, focus and pageshow on the same day draw nothing.
@@ -517,8 +517,7 @@ function listRows(sel) {
         f ? f.tagName + "#" + f.id + "." + f.className : null,
       cats: pressed("cats"), cards: pressed("cards"), cuis: pressed("cuis"), chans: pressed("chans"), acts: pressed("acts"), sort: document.getElementById("sort").value,
       open: [...document.querySelectorAll("li.mc > button.mchead[aria-expanded=true]")].map(b => b.querySelector(".mcname").textContent),
-      filters: document.getElementById("filters").classList.contains("open"), strip: document.getElementById("bstrip").open,
-      more: [...document.querySelectorAll("#blist li[data-eid] > details.bmore[open]")].map(d => d.parentNode.getAttribute("data-eid")),
+      filters: document.getElementById("filters").classList.contains("open"),
       rates: (document.querySelector("#use details.rates") || {}).open,
       rows: [...document.querySelectorAll("#use details.bonusrow[open]")].map(d => d.getAttribute("data-topic")),
       leads: [...document.querySelectorAll("#use details.bonusrow[open] .bhead")].map(h => h.textContent),
@@ -550,8 +549,6 @@ function listRows(sel) {
     await page.waitForTimeout(900); // past the after-typing scroll
     await page.locator("#cuis button", { hasText: /^Unclassified/ }).first().click();
     await page.locator("li.mc:has(li.offer[data-oid='test/zzday-1']) > button.mchead").first().click();
-    await page.click("#bstrip > summary");
-    await page.locator("#blist li[data-eid='citi-custom-cash/standing'] > details.bmore > summary").click();
     await page.click("#use details.rates > summary");
     await page.locator("#use details.bonusrow > summary").first().click();
     await page.locator("#main details.expired > summary").click(); // closed (it opens under a search)
@@ -561,7 +558,7 @@ function listRows(sel) {
     await page.evaluate(() => window.scrollTo(0, Math.min(700, document.documentElement.scrollHeight - innerHeight)));
     await page.clock.pauseAt(new Date(2026, 9, 21, 23, 59, 50));
   };
-  const sameState = (a, b) => ["q", "caret", "focus", "cats", "cards", "cuis", "chans", "acts", "sort", "open", "filters", "strip", "more", "rates", "rows", "expired", "fresh", "edit"]
+  const sameState = (a, b) => ["q", "caret", "focus", "cats", "cards", "cuis", "chans", "acts", "sort", "open", "filters", "rates", "rows", "expired", "fresh", "edit"]
     .filter(k => JSON.stringify(a[k]) !== JSON.stringify(b[k]));
   for (const how of ["midnight timer", "hidden across midnight, visibilitychange", "bfcache pageshow"]) {
     const ctx = await dayCtx(2026, 9, 21);
@@ -591,8 +588,8 @@ function listRows(sel) {
     ok(after.today === "gone" && after.gone.includes("Zzday Ends Today") && after.soonTomorrow === "Ends today",
       how + ": the offer that ended moved to Recently unavailable, \"Ends tomorrow\" -> \"" + after.soonTomorrow + "\"");
     const lost = sameState(before, after);
-    ok(!lost.length && before.open.length === 1 && before.rows.length === 1 && before.more.length === 1 && before.strip && before.filters && before.expired === false && before.fresh && before.edit,
-      how + ": search, caret, focus, filters, sort, open details, strip, More details, bonus row, Recently unavailable, freshness and Edit mode kept" + (lost.length ? " (lost: " + lost.map(k => k + " " + JSON.stringify(before[k]) + " -> " + JSON.stringify(after[k])).join("; ") + ")" : ""));
+    ok(!lost.length && before.open.length === 1 && before.rows.length === 1 && before.filters && before.expired === false && before.fresh && before.edit,
+      how + ": search, caret, focus, filters, sort, open details, bonus row, Recently unavailable, freshness and Edit mode kept" + (lost.length ? " (lost: " + lost.map(k => k + " " + JSON.stringify(before[k]) + " -> " + JSON.stringify(after[k])).join("; ") + ")" : ""));
     ok(Math.abs(after.y - before.y) <= 2, how + ": scroll kept (" + before.y + " -> " + after.y + ")");
     // A later visibilitychange, focus and pageshow on the new day draw nothing more.
     await page.evaluate(() => { document.dispatchEvent(new Event("visibilitychange")); window.dispatchEvent(new Event("focus")); window.dispatchEvent(new PageTransitionEvent("pageshow", { persisted: true })); });
@@ -616,31 +613,33 @@ function listRows(sel) {
     await ctx.close();
   }
   {
-    // Dec 31 -> Jan 1: the quarter's entries leave the bonus strip at midnight.
+    // Dec 31 -> Jan 1: the quarter's entries leave Card bonuses at midnight (and its header follows).
     const ctx = await dayCtx(2026, 11, 31);
     await page.clock.pauseAt(new Date(2026, 11, 31, 23, 59, 50));
-    const strip = () => page.$$eval("#blist li[data-eid]", ls => ls.map(l => l.getAttribute("data-eid")));
+    const strip = () => page.$$eval("#cb li[data-eid]", ls => ls.map(l => l.getAttribute("data-eid")));
     const s0 = await strip();
     await page.clock.runFor(15000);
     const s1 = await strip();
-    ok(s0.includes("chase-freedom-flex/2026-q4") && !s1.some(id => /2026-q4$/.test(id)) && s1.length > 0,
-      "Dec 31 -> Jan 1: the 2026 Q4 entries leave the bonus strip (" + s0.length + " -> " + s1.length + " entries)");
+    ok(s0.includes("chase-freedom-flex/2026-q4") && !s1.some(id => /2026-q4$/.test(id)) && s1.length > 0 && await page.isVisible("#cb"),
+      "Dec 31 -> Jan 1: the 2026 Q4 entries leave Card bonuses (" + s0.length + " -> " + s1.length + " entries)");
     await ctx.close();
   }
   {
     // Typing just after midnight, before the midnight timer: the results follow the new day at once, and the timer
-    // still redraws the strip.
+    // still redraws Card bonuses (hidden under the search, shown again once it is cleared).
     const ctx = await dayCtx(2026, 11, 31);
     await page.clock.pauseAt(new Date(2026, 11, 31, 23, 59, 59, 900));
     await page.clock.runFor(300); // 00:00:00.2, the timer (00:00:00.5) not yet run
     await page.fill("#q", "pi");
     await page.clock.runFor(5000);
-    const s2 = await page.$$eval("#blist li[data-eid]", ls => ls.map(l => l.getAttribute("data-eid")));
-    ok(!s2.some(id => /2026-q4$/.test(id)) && s2.length > 0, "typed at 00:00:00.2 on Jan 1: the timer still takes the 2026 Q4 entries out of the strip (" + s2.join(", ") + ")");
+    const hid = await page.$eval("#cb", e => e.hidden);
+    await page.fill("#q", "");
+    const s2 = await page.$$eval("#cb li[data-eid]", ls => ls.map(l => l.getAttribute("data-eid")));
+    ok(hid && await page.isVisible("#cb") && !s2.some(id => /2026-q4$/.test(id)) && s2.length > 0, "typed at 00:00:00.2 on Jan 1: the timer still takes the 2026 Q4 entries out of Card bonuses (" + s2.join(", ") + ")");
     await ctx.close();
   }
   {
-    // The bonus file didn't load (no strip): focus, visibilitychange and pageshow the same day draw nothing.
+    // The bonus file didn't load (no Card bonuses): focus, visibilitychange and pageshow the same day draw nothing.
     const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: "block" });
     page = await ctx.newPage();
     await page.clock.setFixedTime(new Date(2026, 9, 21, 12));
@@ -679,7 +678,7 @@ function listRows(sel) {
   page = mainPage;
 
   // Not activated: with the three quarterly entries forced to not_confirmed, the closed line puts a "⚠" (the
-  // strip warning's color and size) before exactly those cards, with a hidden ", not activated"; the line still
+  // Card bonuses warning's color, 15px) before exactly those cards, with a hidden ", not activated"; the line still
   // fits whole names and +N counts the rest, at 390 and 360px.
   const FORCE = new Set(["Freedom Flex", "Freedom", "Discover it"]);
   await page.route("**/data/bonus-categories.json", async route => {
@@ -688,12 +687,12 @@ function listRows(sel) {
     await route.fulfill({ json: d });
   });
   const marks = () => page.$$eval("#use details.bonusrow .bent", (es, force) => {
-    const ref = document.querySelector("#bsum .bwarn"), rs = ref && getComputedStyle(ref);
+    const ref = document.querySelector("#cb .cbhead .bwarn"), rs = ref && getComputedStyle(ref);
     return es.map(e => {
       const mk = e.querySelector(".bwarnmk"), ms = mk && getComputedStyle(mk), sr = e.querySelector(".sr-only:last-child");
       return { card: e.querySelector(".bcn").textContent, mk: !!mk, want: force.includes(e.querySelector(".bcn").textContent),
         sr: !!sr && sr.textContent === ", not activated", hidden: !!mk && mk.getAttribute("aria-hidden") === "true",
-        style: !mk || (!!rs && ms.color === rs.color && ms.fontSize === rs.fontSize), afterDot: !mk || !mk.previousElementSibling || mk.previousElementSibling.classList.contains("idot") };
+        style: !mk || (!!rs && ms.color === rs.color && ms.fontSize === "15px"), afterDot: !mk || !mk.previousElementSibling || mk.previousElementSibling.classList.contains("idot") };
     });
   }, [...FORCE]);
   for (const w of [390, 360]) {
@@ -821,7 +820,7 @@ function listRows(sel) {
           while (h && !h.matches("h3.wcgroup")) h = h.previousElementSibling;
           return (h ? h.textContent + ": " : "") + m.querySelector(".mcname").textContent + " [" + [...m.querySelectorAll("li.offer")].map(l => l.dataset.oid.replace(/^test\/wc-/, "")).join(", ") + "]";
         }),
-        headline: !document.getElementById("use").hidden, strip: document.getElementById("bstrip").checkVisibility(),
+        headline: !document.getElementById("use").hidden, strip: document.getElementById("cb").checkVisibility(),
         bonusRows: document.querySelectorAll(".bonusrows").length, expired: document.querySelectorAll("#main details.expired").length
       };
     });
@@ -899,7 +898,7 @@ function listRows(sel) {
     let s = await wcState();
     ok(s.on && s.name === "Chase Freedom Flex" && /i-chase/.test(s.dot) && s.sub === "Read Oct 31 · compared with Oct 18" && s.picked[0] === "New" &&
       JSON.stringify(s.tabs) === JSON.stringify(["New 2", "Gone 4"]) && !s.headline && !s.strip && !s.bonusRows && !s.expired,
-      "what changed: Freedom Flex row opens New, header and counts, no headline, strip, bonus rows or Recently unavailable (" + JSON.stringify(s) + ")");
+      "what changed: Freedom Flex row opens New, header and counts, no headline, Card bonuses, bonus rows or Recently unavailable (" + JSON.stringify(s) + ")");
     ok(JSON.stringify(s.rows.map(r => r.split(" | ")[0]).sort()) === JSON.stringify(["Zq Alpha Coffee", "Zq Bravo Books"]), "what changed: New lists Zq Alpha Coffee and Zq Bravo Books (" + s.rows.join("; ") + ")");
     ok(await page.evaluate(() => history.length) === hist0 + 1, "what changed: entering pushes one history entry");
     const geo = await page.evaluate(() => {
@@ -1938,7 +1937,7 @@ function listRows(sel) {
       fx("regal", "Regal", "Streaming & Entertainment", "in_store"), fx("socal", "SoCalGas", "Services & Utilities", "in_store")];
     ["Ralphs", "Temu", "Chevron", "Regal", "SoCalGas"].forEach(k => ok(Object.values(realBonus.keyword_lists).some(l => (l.keywords || []).includes(k)),
       "qp fixture: \"" + k + "\" is still a keyword in the real lists (the Step 2 comparison matches through it)"));
-    let CASE = {}; // { set: { card: activation | "ended" | {start, end} }, choice }
+    let CASE = {}; // { set: { card: activation | "ended" | {start, end} }, choice, entries: list => list (after set) }
     const ROUTES = {
       "offers.json": r => r.fulfill({ json: Object.assign({}, real, { offers: FX }) }),
       "phone-edits.json": r => r.fulfill({ json: {} }),
@@ -1952,6 +1951,7 @@ function listRows(sel) {
           if (b === "ended") { e.start = "2026-07-01"; e.end = "2026-09-30"; } else if (b && typeof b === "object") Object.assign(e, b); else if (b) e.activation = b;
           if (e.choices && CASE.choice) e.choice = CASE.choice;
         });
+        if (CASE.entries) d.entries = CASE.entries(d.entries);
         return r.fulfill({ json: d });
       }
     };
@@ -1977,7 +1977,7 @@ function listRows(sel) {
           over: li.scrollWidth > li.clientWidth + 1, h: Math.round(li.getBoundingClientRect().height) };
       });
       const sizes = [...q.querySelectorAll("*")].filter(x => x.textContent.trim() && !x.closest(".sr-only")).map(x => parseFloat(getComputedStyle(x).fontSize));
-      const ev = q.querySelector(".qpe"), r = q.getBoundingClientRect(), strip = document.getElementById("bstrip");
+      const ev = q.querySelector(".qpe"), r = q.getBoundingClientRect(), cb = document.getElementById("cb");
       return { head: q.querySelector(".qph").textContent, headLikely: !!q.querySelector(".qphead .likely"),
         order: [...q.querySelectorAll(".qpgrid > li.qpt")].map(li => li.dataset.topic), tiles,
         ev: ev ? ev.innerText.replace(/\s+/g, " ").trim() : null, evFull: ev ? Math.abs(ev.getBoundingClientRect().width - q.getBoundingClientRect().width) < 1 : false,
@@ -1985,7 +1985,8 @@ function listRows(sel) {
         actions: q.querySelectorAll("button, a, input, select, [tabindex], [role=button], [onclick]").length,
         minFont: Math.min.apply(null, sizes), top: Math.round(r.top), bottom: Math.round(r.bottom), pageW: document.documentElement.scrollWidth,
         afterSearch: !!(document.querySelector(".searchbar").compareDocumentPosition(q) & Node.DOCUMENT_POSITION_FOLLOWING),
-        beforeStrip: !!(q.compareDocumentPosition(strip) & Node.DOCUMENT_POSITION_FOLLOWING), stripShown: !strip.hidden && strip.getBoundingClientRect().height > 0 };
+        beforeCb: !!(q.compareDocumentPosition(cb) & Node.DOCUMENT_POSITION_FOLLOWING), cbShown: !cb.hidden && cb.getBoundingClientRect().height > 0,
+        oldStrip: !!document.querySelector("#bstrip, #blist, #bsum") };
     });
     // The Step 2 answer for one merchant: the Ready now card and rate, how many cards are ready at it (named, "+N more
     // ready", a Smartly tie's "also"), the After activating cards (named, "+N more at"), rate and gain, and the Citi
@@ -2075,14 +2076,7 @@ function listRows(sel) {
       "qp custom cash: muted line on its focus topic (with why, for screen readers), none on the other five");
     ok(Q.cols === 2 && Q.actions === 0 && Q.minFont >= 11.5 && Q.pageW <= 390,
       "qp 390px: a two-column grid, no buttons or links (no tap action in 4A), no text under 11.5px, no sideways scroll (" + J([Q.cols, Q.actions, Q.minFont, Q.pageW]) + ")");
-    ok(Q.afterSearch && Q.beforeStrip && Q.stripShown && Q.bottom < 844, "qp placement: after the search box, before the Bonus categories strip, which still shows; within the first screen (" + J([Q.top, Q.bottom]) + ")");
-    // The old strip still works under it: opens, lists every live entry, Smartly's line and the activation status.
-    await page.click("#bsum");
-    const strip = await page.evaluate(() => ({ open: document.getElementById("bstrip").open, n: document.querySelectorAll("#blist > li[data-eid]").length,
-      text: document.getElementById("blist").innerText.replace(/\s+/g, " ") }));
-    ok(strip.open && strip.n === 7 && /Smartly: Everyday 4% · first \$10,000 per billing cycle, some categories 2%/.test(strip.text) && /Activated/.test(strip.text),
-      "qp: the old Bonus categories strip opens with every live entry (" + strip.n + ")");
-    await page.click("#bsum");
+    ok(Q.afterSearch && Q.beforeCb && Q.cbShown && !Q.oldStrip && Q.bottom < 844, "qp placement: after the search box, before Card bonuses, which shows; the old Bonus categories strip is gone; within the first screen (" + J([Q.top, Q.bottom]) + ")");
     await parity("A", Q);
     // Not on a search, a category or a card (the answer card answers those), back on the home screen.
     const hiddenBy = async act => { await act(); await page.waitForTimeout(80); return page.$eval("#qp", q => q.hidden); };
@@ -2190,6 +2184,136 @@ function listRows(sel) {
     tileIs("G", Q, "Utilities", { rate: "5%", card: "Discover it", dated: "Through Nov 30" });
     // Dates in a tile stay on one line ("Dec 31", "Dec 15").
     ok(await page.evaluate(() => [...document.querySelectorAll("#qp .qpd, #qp .qpnote")].every(e => !/[A-Z][a-z]{2} \d/.test(e.textContent))), "qp: tile dates use a no-break space");
+    // ---- Card bonuses (step 4B): under Quick picks on the home screen, every live bonus entry in file order, the
+    // pending-activation count, one compact row each (card, its one-line summary, exactly one state line). The only
+    // control is "Mark activated" on a pending entry, signed in. Same fixture files and clock as Quick picks.
+    await page.route("https://api.github.com/**", r => r.abort());
+    const cbView = () => page.evaluate(() => {
+      const c = document.getElementById("cb");
+      const plain = e => e ? e.innerText.replace(/\s+/g, " ").trim() : null;
+      const rows = {};
+      c.querySelectorAll("li[data-eid]").forEach(l => {
+        rows[l.dataset.eid] = { card: plain(l.querySelector(".cbcard")), dot: !!l.querySelector(".cbcard .idot"), summary: plain(l.querySelector(".cbsumm")),
+          state: plain(l.querySelector(".cbst")), states: l.querySelectorAll(".cbst").length, buttons: [...l.querySelectorAll("button")].map(b => b.textContent),
+          h: Math.round(l.getBoundingClientRect().height), over: l.scrollWidth > l.clientWidth + 1, cursor: getComputedStyle(l).cursor };
+      });
+      const qp = document.getElementById("qp"), ft = document.getElementById("ftoggle");
+      return { shown: !c.hidden && c.getBoundingClientRect().height > 0, head: plain(c.querySelector("h2")), pend: plain(c.querySelector(".cbpend")),
+        pendWarn: !!c.querySelector(".cbpend.bwarn"), ids: [...c.querySelectorAll("li[data-eid]")].map(l => l.dataset.eid), rows,
+        controls: [...c.querySelectorAll("button, a, input, select, textarea, details, summary, [tabindex], [role=button], [role=link], [onclick]")].map(x => x.tagName + ":" + x.textContent.trim()),
+        text: plain(c), pageW: document.documentElement.scrollWidth,
+        afterQp: !!(qp.compareDocumentPosition(c) & Node.DOCUMENT_POSITION_FOLLOWING), beforeFilters: !!(c.compareDocumentPosition(ft) & Node.DOCUMENT_POSITION_FOLLOWING),
+        top: Math.round(c.getBoundingClientRect().top), height: Math.round(c.getBoundingClientRect().height),
+        minFont: Math.min.apply(null, [...c.querySelectorAll("*")].filter(x => x.textContent.trim()).map(x => parseFloat(getComputedStyle(x).fontSize))) };
+    });
+    const cbOpen = async (c, signedIn, when) => {
+      CASE = c || {};
+      await page.clock.setFixedTime(when || new Date(2026, 10, 4, 12, 0, 0));
+      await page.goto(base);
+      await page.evaluate(t => { try { localStorage.clear(); if (t) localStorage.setItem("cardselector.token", "test"); } catch (e) {} }, !!signedIn);
+      await page.goto(base);
+      await page.waitForFunction(() => window.__cardsReady && window.__bonusReady && !document.getElementById("qp").hidden && !document.getElementById("cb").hidden);
+      return cbView();
+    };
+    const IDS = ENTRIES.map(e => e.id), CC = "citi-custom-cash/standing", BOA = "bank-of-america-customized-cash/standing";
+    const FLEX = "chase-freedom-flex/2026-q4", FREE = "chase-freedom/2026-q4", DISC = "discover-it/2026-q4", SMART = "us-bank-smartly/standing", COSTCO = "costco-visa/standing";
+    const cbIs = (name, C, id, want) => {
+      const r = C.rows[id] || {}, got = {};
+      Object.keys(want).forEach(k => { got[k] = r[k]; });
+      ok(J(got) === J(want), "cb " + name + ": " + id + " " + J(want) + (J(got) === J(want) ? "" : " (got " + J(got) + ")"));
+    };
+    // A. Every live entry once, in file order; an ended entry (Q3) and a future one (2027 Q1), both in the middle of the
+    // file, are left out; a reordered file is shown in its own order.
+    const ENDED = Object.assign(JSON.parse(J(ENTRIES[1])), { id: "chase-freedom-flex/2026-q3", start: "2026-07-01", end: "2026-09-30", activation: "not_confirmed", activate_by: "2026-09-14" });
+    const FUTURE = Object.assign(JSON.parse(J(ENTRIES[3])), { id: "discover-it/2027-q1", start: "2027-01-01", end: "2027-03-31", activation: "not_confirmed", activate_by: "2027-03-31" });
+    let C = await cbOpen({ entries: l => l.slice(0, 2).concat([ENDED], l.slice(2, 4), [FUTURE], l.slice(4)) });
+    ok(J(C.ids) === J(IDS) && new Set(C.ids).size === C.ids.length, "cb A: every live entry exactly once, in file order; the ended and the future entry are absent (" + J(C.ids) + ")");
+    ok(C.shown && C.head === "Card bonuses" && C.afterQp && C.beforeFilters, "cb A: \"Card bonuses\" shows on the home screen, under Quick picks, above the Filters button");
+    ok(C.pend === "No activations pending" && !C.pendWarn, "cb A: the ended and the future not_confirmed entries are not counted as pending (" + C.pend + ")");
+    C = await cbOpen({ entries: l => l.slice().reverse() });
+    ok(J(C.ids) === J(IDS.slice().reverse()), "cb A: a reordered file shows in its own order, not sorted by rate or card (" + J(C.ids) + ")");
+    C = await cbOpen({ set: { "Freedom Flex": "ended", "Discover it": { start: "2026-11-05", end: "2026-12-31" } } });
+    ok(J(C.ids) === J(IDS.filter(i => i !== FLEX && i !== DISC)), "cb A: an entry that ended and one starting tomorrow leave the list (" + J(C.ids) + ")");
+    // B / C / D. The header: none, one, two pending. Only live not_confirmed entries count (not Custom Cash's
+    // conditional status, the Customized Cash choice, not_needed or an ended entry).
+    C = await cbOpen({});
+    ok(C.pend === "No activations pending" && !C.pendWarn, "cb B: no pending activations: \"" + C.pend + "\"");
+    C = await cbOpen({ set: { "Freedom Flex": "not_confirmed" } });
+    ok(C.pend === "⚠ 1 activation pending" && C.pendWarn, "cb C: one pending: \"" + C.pend + "\"");
+    C = await cbOpen({ set: { "Freedom Flex": "not_confirmed", "Freedom": "not_confirmed" }, entries: l => l.concat([ENDED]) });
+    ok(C.pend === "⚠ 2 activations pending" && C.pendWarn, "cb D: two pending (an ended not_confirmed entry not counted): \"" + C.pend + "\"");
+    C = await cbOpen({ set: { "Freedom Flex": "not_confirmed", "Freedom": "not_confirmed", "Discover it": "not_confirmed" } });
+    ok(C.pend === "⚠ 3 activations pending", "cb D: three pending: \"" + C.pend + "\"");
+
+    // Row states, signed out: one state line each, no controls at all.
+    C = await cbOpen({ set: { "Freedom Flex": "not_confirmed", "Discover it": "not_confirmed" } });
+    cbIs("states", C, SMART, { card: "Smartly", dot: true, summary: "Everyday 4% · first $10,000 per billing cycle, some categories 2%", state: "No activation needed", states: 1, buttons: [] });
+    cbIs("states", C, FLEX, { card: "Freedom Flex", dot: true, summary: "5% grocery, dining, Red Cross", state: "⚠ Not activated, activate by Dec 14", states: 1, buttons: [] });
+    cbIs("states", C, FREE, { card: "Freedom", summary: "5% grocery, dining, Red Cross", state: "✓ Activated · ends Dec 31", states: 1, buttons: [] });
+    cbIs("states", C, DISC, { card: "Discover it", summary: "5% dining, entertainment, utilities", state: "⚠ Not activated, activate by Dec 31 5% starts the day you activate.", states: 1, buttons: [] });
+    cbIs("states", C, CC, { card: "Citi Custom Cash", dot: true, summary: "5% on top category", state: "CardSelector focus: restaurants", states: 1, buttons: [] });
+    cbIs("states", C, COSTCO, { card: "Costco Visa", dot: true, summary: "5% Costco gas, 4% gas, 3% dining", state: "No activation needed", states: 1, buttons: [] });
+    cbIs("states", C, BOA, { card: "Customized Cash", dot: true, summary: "5.25% online shopping, 3.5% grocery & wholesale clubs", state: "Choice: online shopping", states: 1, buttons: [] });
+    ok(!C.controls.length && Object.values(C.rows).every(r => r.cursor !== "pointer"), "cb signed out: no button, picker, link or other tap target, and no row looks tappable (" + J(C.controls) + ")");
+    ok(!/More details|Undo|Save|Mark not activated|Change it at Bank of America/.test(C.text) && !/Citi elects|at Citi/.test(C.text),
+      "cb signed out: no More details, Undo, Save or picker wording; the focus line claims nothing at Citi (" + C.text + ")");
+    // Tapping a row does nothing (no navigation, no detail page yet: step 4C).
+    const r0 = await page.evaluate(() => [window.__renders, location.href, history.length]);
+    await page.click("#cb li[data-eid='" + FLEX + "']");
+    await page.click("#cb li[data-eid='" + CC + "']");
+    ok(J(await page.evaluate(() => [window.__renders, location.href, history.length])) === J(r0), "cb: tapping a row opens nothing and draws nothing");
+    // The focus and choice follow the data: Custom Cash on grocery stores, Customized Cash on dining.
+    C = await cbOpen({ set: { "Citi Custom Cash": { planned: "grocery stores" } }, choice: "dining" });
+    cbIs("focus/choice", C, CC, { summary: "5% on top category", state: "CardSelector focus: grocery stores", buttons: [] });
+    cbIs("focus/choice", C, BOA, { summary: "5.25% dining, 3.5% grocery & wholesale clubs", state: "Choice: dining", buttons: [] });
+    // After Dec 15 the Preferred Rewards tier is 50%: the Customized Cash summary follows.
+    C = await cbOpen({}, false, new Date(2026, 11, 20, 12, 0, 0));
+    cbIs("Dec 20", C, BOA, { summary: "4.5% online shopping, 3% grocery & wholesale clubs", state: "Choice: online shopping" });
+
+    // Signed in: "Mark activated" on each pending entry with a deadline only; nothing else (no Undo on an activated row,
+    // no Mark not activated, no Focus or Choice picker or Save, no More details).
+    const NODL = { activation: "not_confirmed", activate_by: null };
+    C = await cbOpen({ set: { "Freedom Flex": "not_confirmed", "Discover it": "not_confirmed", "Freedom": NODL } }, true);
+    cbIs("signed in", C, FLEX, { state: "⚠ Not activated, activate by Dec 14 Mark activated", buttons: ["Mark activated"] });
+    cbIs("signed in", C, DISC, { state: "⚠ Not activated, activate by Dec 31 5% starts the day you activate. Mark activated", buttons: ["Mark activated"] });
+    cbIs("signed in", C, FREE, { state: "⚠ Not activated", buttons: [] });
+    ok(J(C.controls) === J(["BUTTON:Mark activated", "BUTTON:Mark activated"]) && C.pend === "⚠ 3 activations pending",
+      "cb signed in: the only controls are the two Mark activated buttons (a pending entry with no deadline has none) (" + J(C.controls) + ")");
+    C = await cbOpen({}, true);
+    ok(!C.controls.length && [FLEX, FREE, DISC].every(id => C.rows[id].state === "✓ Activated · ends Dec 31") && C.rows[CC].state === "CardSelector focus: restaurants" &&
+      C.rows[BOA].state === "Choice: online shopping" && !/More details|Undo|Save|Mark not activated/.test(C.text),
+      "cb signed in, all activated: no Undo or Mark not activated beside an activated entry, no Custom Cash or Customized Cash <select>, no Save, no More details (" + J(C.controls) + ")");
+    // Hidden off the home screen: a search, a category, a card; back when cleared.
+    const cbHid = async act => { await act(); await page.waitForTimeout(80); return page.$eval("#cb", c => c.hidden); };
+    const cbH = [await cbHid(() => page.fill("#q", "ralphs")), await cbHid(() => page.fill("#q", "")),
+      await cbHid(async () => { await page.click("#ftoggle"); await page.locator("#cats button", { hasText: /^Dining/ }).first().click(); }),
+      await cbHid(() => page.locator("#cats button", { hasText: /^All/ }).first().click()),
+      await cbHid(() => page.locator("#cards button", { hasText: /^Capital One/ }).first().click()),
+      await cbHid(() => page.locator("#cards button", { hasText: /^All cards/ }).first().click())];
+    ok(J(cbH) === J([true, false, true, false, true, false]), "cb: hidden on a search, a category or a card, shown again when cleared (" + J(cbH) + ")");
+    // The bonus 4C detail text is still worked out (the old strip's More details), just not drawn.
+    const det = await page.evaluate(id => window.__bonusDetails(id), CC);
+    ok(Array.isArray(det) && det.some(t => /^Eligible: restaurants \(also /.test(t)) && det.some(t => /usual everyday rate is 4%/.test(t)), "cb: the detail lines for 4C are kept (" + J(det) + ")");
+
+    // Phone layout at 390 and 320px: signed in, three pending (two with Mark activated) and a long card name. Compact
+    // rows, no sideways scroll, nothing past its row, small buttons.
+    const LONG = Object.assign(JSON.parse(J(ENTRIES[2])), { id: "zz-long/2026-q4", card: "Bank of America Customized Cash Rewards Visa Signature", app_card: null });
+    for (const w of [390, 320]) {
+      await page.setViewportSize({ width: w, height: 844 });
+      C = await cbOpen({ set: { "Freedom Flex": "not_confirmed", "Discover it": "not_confirmed", "Freedom": "not_confirmed" }, entries: l => l.concat([Object.assign({}, LONG, { activation: "not_confirmed" })]) }, true);
+      const btn = await page.$$eval("#cb button", bs => bs.map(b => { const r = b.getBoundingClientRect(), li = b.closest("li").getBoundingClientRect(); return [Math.round(r.width), Math.round(r.height), r.right <= li.right + 0.5]; }));
+      const hs = Object.values(C.rows).map(r => r.h), maxH = Math.max.apply(null, hs);
+      ok(C.pageW <= w && Object.values(C.rows).every(r => !r.over) && btn.length === 4 && btn.every(b => b[1] >= 30 && b[1] <= 36 && b[0] <= 140 && b[2]) &&
+        maxH <= (w === 320 ? 130 : 110) && C.rows[FLEX].h <= (w === 320 ? 110 : 92) && C.minFont >= 12,
+        "cb " + w + "px: no sideways scroll, no row overflows, four small Mark activated buttons inside their rows, rows at most " + maxH + "px (the long name's four lines), a pending row " + C.rows[FLEX].h + "px, text 12px+ (" + J({ pageW: C.pageW, hs, btn, font: C.minFont, height: C.height }) + ")");
+      if (w === 390) {
+        if (process.env.SHOT_DIR) await page.screenshot({ path: path.join(process.env.SHOT_DIR, "cb-390-signed-in.png"), fullPage: true });
+        C = await cbOpen({}, false);
+        ok(C.top + C.height < 1400 && Object.values(C.rows).every(r => r.h <= 80), "cb 390px, signed out: seven rows of at most 80px (" + J([C.top, C.height, Object.values(C.rows).map(r => r.h)]) + ")");
+      }
+    }
+    await page.setViewportSize({ width: 390, height: 844 });
+    CASE = {};
     ok(errs.length === 0, "qp: no page errors (" + errs.join("; ") + ")");
     await ctx5.close();
     // The Preferred Rewards switch (Dec 15 -> 16) with the tab open: a day redraw prepares the boosted rates again, so
@@ -2214,7 +2338,7 @@ function listRows(sel) {
         tiles: q.hidden ? null : [...q.querySelectorAll("li.qpt")].map(plain),
         use: u.hidden ? null : [...u.children].filter(c => !c.matches(".chansel, details.rates")).map(plain),
         rates: u.hidden || !u.querySelector("details.rates > summary") ? null : plain(u.querySelector("details.rates > summary")),
-        strip: [...document.querySelectorAll("#blist li[data-eid]")].map(plain),
+        strip: [...document.querySelectorAll("#cb li[data-eid]")].map(plain), pend: plain(document.querySelector("#cb .cbpend") || document.body),
         totals: [...document.querySelectorAll("#main > ul.results li.offer")].map(li => li.dataset.oid + " " + plain(li.querySelector(".obig") || li) + " " + plain(li.querySelector(".obreak") || li))
       };
     });
@@ -2296,9 +2420,11 @@ function listRows(sel) {
       await ctx6.close();
     }
     // A save that ends just after midnight, before the midnight timer (00:00:00.5): its redraw must not use up the new
-    // day without preparing the rates again. Signed in (GitHub blocked, CardStore.save stubbed), a Focus pick saved at
-    // 00:00:00.2; then the timer and later comebacks. The tiles and strip must equal a fresh load on Dec 16.
+    // day without preparing the rates again. Signed in (GitHub blocked, CardStore.save stubbed), Freedom Flex not
+    // activated, its Card bonuses "Mark activated" saved at 00:00:00.2; then the timer and later comebacks. The tiles
+    // and Card bonuses must equal a fresh load on Dec 16 with Freedom Flex activated.
     {
+      CASE = { set: { "Freedom Flex": "not_confirmed" } };
       const ctx7 = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: "block" });
       await ctx7.clock.install({ time: new Date(2026, 11, 15, 23, 59, 0) });
       const p = await ctx7.newPage();
@@ -2311,35 +2437,31 @@ function listRows(sel) {
       await p.waitForFunction(() => window.__cardsReady && window.__bonusReady && !document.getElementById("qp").hidden);
       await p.evaluate(() => {
         window.__pend = [];
-        CardStore.save = change => new Promise(res => window.__pend.push(() => res({ status: "saved", message: "Focus: " + change.to,
-          undo: { type: change.type, id: change.id, from: change.to, to: change.from },
-          record: { activation: "not_needed", planned: change.type === "bonus.planned" ? change.to : null, choice: change.type === "bonus.choice" ? change.to : null } })));
+        CardStore.save = change => new Promise(res => window.__pend.push(() => res({ status: "saved", message: "Bonus categories activated",
+          undo: { type: change.type, id: change.id, from: change.to, to: change.from }, record: { activation: change.to } })));
         CardStore.liveStatus = () => Promise.resolve({ state: "live" });
       });
-      await p.click("#bstrip > summary");
-      const sel = "#blist li[data-eid='citi-custom-cash/standing'] .bfocus select";
-      await p.selectOption(sel, "gas stations");
       await p.evaluate(() => document.activeElement && document.activeElement.blur());
       await ctx7.clock.pauseAt(new Date(2026, 11, 15, 23, 59, 59, 900));
       const b7 = await rollView(p);
       await ctx7.clock.runFor(300); // 00:00:00.2: the midnight timer hasn't run
-      await p.locator("#blist li[data-eid='citi-custom-cash/standing'] .bfocus button", { hasText: /^Save$/ }).click();
+      await p.locator("#cb li[data-eid='chase-freedom-flex/2026-q4'] button", { hasText: /^Mark activated$/ }).click();
       await p.evaluate(() => window.__pend.shift()());
       await p.waitForTimeout(50);
       await ctx7.clock.runFor(15000);
       await p.evaluate(() => { window.dispatchEvent(new Event("focus")); document.dispatchEvent(new Event("visibilitychange")); });
       const a7 = await rollView(p);
       await ctx7.close();
-      // The fresh load: Dec 16, the same Focus (gas stations) saved in the file.
+      // The fresh load: Dec 16, Freedom Flex activated in the file. (Signed out: the rows have no button to compare.)
+      CASE = {};
       const ctx8 = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: "block" });
       await ctx8.clock.install({ time: new Date(2026, 11, 16, 0, 0, 30) });
-      CASE = { set: { "Citi Custom Cash": { planned: "gas stations" } } };
       const f8 = await rollView(await rollOpen(ctx8, null));
       await ctx8.close();
-      CASE = {};
-      const cc = v => (v.strip.find(x => /^Customized Cash:/.test(x)) || "").slice(0, 60);
-      ok(b7.tile.rate === "5.25%" && a7.tile.rate === "4.5%" && J(a7.tiles) === J(f8.tiles) && cc(a7) === cc(f8) && /4\.5% online shopping/.test(cc(a7)),
-        "qp rollover, a save just after midnight: tiles and the strip's Customized Cash equal a fresh load on Dec 16 (" + J([b7.tile.rate, a7.tile, cc(a7), cc(f8)]) + ")");
+      const cc = v => v.strip.find(x => /^Customized Cash /.test(x)) || "";
+      ok(b7.tile.rate === "5.25%" && a7.tile.rate === "4.5%" && J(a7.tiles) === J(f8.tiles) && J(a7.strip) === J(f8.strip) && a7.pend === f8.pend &&
+        /^⚠ 1 activation/.test(b7.pend) && a7.pend === "No activations pending" && /4\.5% online shopping/.test(cc(a7)),
+        "qp rollover, a Mark activated save just after midnight: tiles and Card bonuses equal a fresh load on Dec 16 (" + J([b7.tile.rate, b7.pend, a7.tile, a7.pend, cc(a7), cc(f8)]) + ")");
     }
     ok(errs.length === 0, "qp rollover: no page errors (" + errs.join("; ") + ")");
     page = mainPage;

@@ -656,23 +656,150 @@ async function containerEditChecks(br, base) {
   await ctx.close();
 }
 
+// Card bonuses fixture (bonus-categories.json in the standard layout): the real keyword lists and standing Citi Custom
+// Cash and Customized Cash entries, plus Smartly and two Q4 2026 Chase entries, so the checks don't follow the real
+// quarter. rot: [id, card, short, activation, end, activate_by]; extra entries go last.
+function bonusText(rots, extra) {
+  const real = JSON.parse(read(BONUS));
+  const base = { categories_text: "test quarter", cap_text: "up to $1,500 in combined purchases", activation_note: null, likely_note: null, strip_note: null,
+    search: true, source_url: "https://example.com/", unconfirmed: null, checked: "2026-10-19" };
+  const dining = { name: "dining", app_categories: ["Dining"], exclude_cuisines: ["Gift Cards & Dining Services"], list: "dining_chains" };
+  const grocery = { name: "grocery stores", list: "grocery_stores", button_categories: ["Groceries & Food Delivery"] };
+  const entries = [Object.assign({}, base, { id: "test/smartly", card: "Smartly", app_card: "U.S. Bank", kind: "fixed", start: null, end: null, rate: 4,
+    activation: "not_needed", activate_by: null, everyday: true, strip_note: "first $10,000 per billing cycle, some categories 2%", match: [] })];
+  rots.forEach(([id, card, short, activation, end, by]) => entries.push(Object.assign({}, base, { id, card, app_card: "Chase " + card,
+    kind: "rotating", start: "2026-10-01", end: end || "2026-12-31", rate: 5, activation, activate_by: by || "2026-12-14", match: [grocery, dining] }, short ? { short } : {})));
+  real.entries.filter(e => e.kind === "top_category" || e.kind === "chosen").forEach(e => entries.push(e));
+  return JSON.stringify({ keyword_lists: real.keyword_lists, entries: entries.concat(extra || []) }, null, 2) + "\n";
+}
+
+// Card bonuses' Mark activated (redesign step 4B), signed in at phone width, the real store.js saving to an in-memory
+// GitHub (the Hub above, routed in the browser): the pending row's button saves the bonus entry's activation through
+// the usual path (bonus-categories.json only, one fast-forward commit), the row, the header count and the Quick picks
+// follow at once, the save bar goes Saving… -> Saved · Deploying · Undo -> Live · Undo, and the bar's Undo puts all of
+// it back. A second activation that leaves the Quick pick winner as it is still updates the row and header. Signed
+// out the same rows show with no control.
+async function cardBonusChecks(br, base) {
+  console.log("-- Card bonuses: Mark activated (real store.js, mock GitHub)");
+  const FLEX = "test/flex-q4", FREE = "test/freedom-q4";
+  const text = bonusText([[FLEX, "Freedom Flex", "Flex", "not_confirmed"], [FREE, "Freedom", null, "not_confirmed"]]);
+  const hub = new Hub({ [OFFERS]: offersText, [BONUS]: text, [EDITS]: "{}\n" });
+  const start = hub.head, calls = [];
+  let deployed = false;
+  const ctx = await br.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: "block" });
+  const page = await ctx.newPage();
+  const errs = [];
+  page.on("pageerror", e => errs.push(e.message));
+  await page.clock.install({ time: new Date(2026, 10, 4, 12, 0, 0) });
+  await page.route("**/data/bonus-categories.json", r => r.fulfill({ status: 200, contentType: "application/json", body: text }));
+  await page.route("**/data/phone-edits.json", r => r.fulfill({ status: 200, contentType: "application/json", body: "{}\n" }));
+  await page.route("https://api.github.com/**", r => {
+    const req = r.request(), u = new URL(req.url()), p = u.pathname.replace("/repos/module7543/CardSelector", "");
+    calls.push(req.method() + " " + p);
+    if (/\/actions\/workflows\//.test(p)) return r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ workflow_runs: deployed ?
+      [{ status: "completed", conclusion: "success", head_sha: hub.head, html_url: "https://example.com/run", created_at: "2026-11-04T20:00:00Z" }] : [] }) });
+    const res = hub.route(req.method(), p, u.searchParams.get("ref"), req.postData() ? JSON.parse(req.postData()) : null, { Accept: req.headers().accept || "" });
+    return r.fulfill({ status: res.status || 200, contentType: "application/json", body: res.text !== undefined ? res.text : JSON.stringify(res.json) });
+  });
+  const load = async signedIn => {
+    await page.goto(base);
+    await page.evaluate(t => { try { localStorage.clear(); if (t) localStorage.setItem("cardselector.token", "test"); } catch (e) {} }, signedIn);
+    await page.goto(base);
+    await page.waitForFunction(() => window.__cardsReady && window.__bonusReady && !document.getElementById("cb").hidden && !document.getElementById("qp").hidden);
+  };
+  const view = () => page.evaluate(() => {
+    const plain = e => e ? e.innerText.replace(/\s+/g, " ").trim() : null, b = document.getElementById("savebar");
+    // A tile's rate, card, "+N more ready" and activation line (its Likely tag and screen-reader text left out).
+    const bare = e => { if (!e) return null; const c = e.cloneNode(true); c.querySelectorAll(".likely, .sr, .sr-only").forEach(x => x.remove()); return c.textContent.replace(/\s+/g, " ").trim(); };
+    const tile = t => { const li = document.querySelector("#qp li.qpt[data-topic='" + t + "']"); return [bare(li.querySelector(".qpr")), bare(li.querySelector(".qpc")),
+      bare(li.querySelector(".qpm:not(.qpd)")), bare(li.querySelector(".qpa"))]; };
+    return { pend: plain(document.querySelector("#cb .cbpend")),
+      rows: Object.fromEntries([...document.querySelectorAll("#cb li[data-eid]")].map(l => [l.dataset.eid, plain(l.querySelector(".cbst"))])),
+      buttons: [...document.querySelectorAll("#cb button")].map(x => x.closest("li").dataset.eid + ":" + x.textContent + (x.disabled ? " (disabled)" : "")),
+      grocery: tile("Grocery stores"), dining: tile("Dining"),
+      bar: b.hidden ? null : (btns => document.getElementById("savemsg").firstChild.textContent + (btns.length ? " · " + btns.join(" ") : ""))([...document.querySelectorAll("#savebtns button")].map(x => x.textContent)),
+      live: b.classList.contains("live") };
+  });
+  const fileAct = id => JSON.parse(hub.file(BONUS)).entries.find(e => e.id === id).activation;
+  const J = x => JSON.stringify(x);
+
+  // Signed out: the rows and their state lines, no control.
+  await load(false);
+  let v = await view();
+  ok(v.rows[FLEX] === "⚠ Not activated, activate by Dec 14" && v.rows[FREE] === "⚠ Not activated, activate by Dec 14" && !v.buttons.length && v.pend === "⚠ 2 activations pending",
+    "cb signed out: the pending rows show, with no Mark activated (" + J(v) + ")");
+
+  await load(true);
+  v = await view();
+  ok(J(v.buttons) === J([FLEX + ":Mark activated", FREE + ":Mark activated"]) && v.pend === "⚠ 2 activations pending" && v.rows[FLEX] === "⚠ Not activated, activate by Dec 14 Mark activated",
+    "cb signed in: Mark activated on both pending rows (" + J(v) + ")");
+  ok(J(v.grocery) === J(["4%", "Smartly", null, "Activate Flex or Freedom: 5% · +1 pt"]), "cb before: the Grocery stores Quick pick is Smartly 4%, activate Flex or Freedom (" + J(v.grocery) + ")");
+  const v0 = v, nCalls = calls.length;
+  // 1. Mark activated on Freedom Flex.
+  await page.locator("#cb li[data-eid='" + FLEX + "'] button", { hasText: /^Mark activated$/ }).click();
+  await page.waitForFunction(() => /Deploying/.test(document.getElementById("savemsg").textContent));
+  v = await view();
+  const commit = hub.commits[hub.head], wrote = calls.slice(nCalls).filter(c => !/^GET/.test(c));
+  ok(hub.since(start).length === 1 && J(hub.changed(hub.head)) === J([BONUS]) && commit.message.startsWith("Bonus categories activated: Freedom Flex") &&
+    fileAct(FLEX) === "activated" && fileAct(FREE) === "not_confirmed" && J(wrote) === J(["POST /git/blobs", "POST /git/trees", "POST /git/commits", "PATCH /git/refs/heads/main"]),
+    "cb Mark activated: one commit to bonus-categories.json only, that entry activated (blob, tree, commit, fast-forward) (" + J([commit.message, wrote]) + ")");
+  const after = JSON.parse(hub.file(BONUS)), want = JSON.parse(text);
+  want.entries.find(e => e.id === FLEX).activation = "activated";
+  ok(hub.file(BONUS) === JSON.stringify(want, null, 2) + "\n" && J(after) === J(want), "cb Mark activated: the saved file is the old one with that one field changed, in the standard layout");
+  ok(v.rows[FLEX] === "✓ Activated · ends Dec 31" && v.pend === "⚠ 1 activation pending" && J(v.buttons) === J([FREE + ":Mark activated"]),
+    "cb Mark activated: the row is activated at once, no Undo beside it, the header count drops (" + J([v.rows[FLEX], v.pend, v.buttons]) + ")");
+  ok(J(v.grocery) === J(["5%", "Freedom Flex", null, null]) && J(v.dining) !== J(v0.dining),
+    "cb Mark activated: Quick picks follow at once (Grocery stores " + J(v0.grocery) + " -> " + J(v.grocery) + "; Dining " + J(v0.dining) + " -> " + J(v.dining) + ")");
+  ok(v.bar === "Saved · Deploying · Undo ×" && !v.live, "cb Mark activated: save bar \"" + v.bar + "\"");
+  deployed = true;
+  await page.clock.runFor(6000);
+  await page.waitForFunction(() => document.getElementById("savebar").classList.contains("live"));
+  v = await view();
+  ok(v.bar === "Live · Undo ×" && v.live, "cb Mark activated: then \"" + v.bar + "\" as a pill");
+  // 2. The save bar's Undo: back to not_confirmed, the count and the Quick pick restored.
+  deployed = false;
+  await page.locator("#savebtns button", { hasText: /^Undo$/ }).click();
+  await page.waitForFunction(() => /Deploying/.test(document.getElementById("savemsg").textContent));
+  v = await view();
+  ok(fileAct(FLEX) === "not_confirmed" && hub.since(start).length === 2 && J(hub.changed(hub.head)) === J([BONUS]) && hub.file(BONUS) === text,
+    "cb Undo: a second commit puts the file back byte for byte (" + hub.commits[hub.head].message + ")");
+  ok(J(v.rows) === J(v0.rows) && v.pend === v0.pend && J(v.buttons) === J(v0.buttons) && J(v.grocery) === J(v0.grocery) && J(v.dining) === J(v0.dining) && v.bar === "Saved · Deploying · Undo ×",
+    "cb Undo: the row, the header (" + v.pend + "), Mark activated and the Quick picks are back as before (" + J(v.grocery) + ")");
+  // 3. An activation that doesn't change a Quick pick winner: Flex first, then Freedom (Flex 5% still leads).
+  await page.locator("#cb li[data-eid='" + FLEX + "'] button", { hasText: /^Mark activated$/ }).click();
+  await page.waitForFunction(() => document.querySelectorAll("#cb button").length === 1 && /Deploying/.test(document.getElementById("savemsg").textContent));
+  const v1 = await view();
+  await page.locator("#cb li[data-eid='" + FREE + "'] button", { hasText: /^Mark activated$/ }).click();
+  await page.waitForFunction(() => document.querySelectorAll("#cb button").length === 0);
+  v = await view();
+  ok(v1.grocery[1] === "Freedom Flex" && v.grocery[1] === "Freedom Flex" && v.grocery[0] === v1.grocery[0] && v.rows[FREE] === "✓ Activated · ends Dec 31" &&
+    v.pend === "No activations pending" && !v.buttons.length && fileAct(FREE) === "activated",
+    "cb second activation, Quick pick winner unchanged (" + J([v1.grocery, v.grocery]) + "): the row and the header still follow (" + v.pend + ")");
+  ok(!errs.length, "cb Mark activated: no page errors (" + errs.join("; ") + ")");
+  await ctx.close();
+}
+
 // A new day while saving (signed in, phone width, the clock at 23:59:50 on Oct 21): no redraw while the save runs,
 // exactly one right after it ends (the offer that ended Oct 21 moves to Recently unavailable), the save bar and Undo
-// as always. The same with the Custom Cash Focus picker in use (focused, an unsaved pick): no redraw until it loses
-// focus, then one, and the pick is still there. Saves go to a stub CardStore.save that waits until told to finish.
+// as always. The same with Card bonuses' Mark activated in use on the home screen (focused): no redraw until it loses
+// focus, then one (a bonus entry that ended Oct 21 leaves Card bonuses). Saves go to a stub CardStore.save that waits
+// until told to finish.
 async function dayChecks(br, base) {
   const iso = n => { const t = new Date(2026, 9, 21 + n); return t.getFullYear() + "-" + String(t.getMonth() + 1).padStart(2, "0") + "-" + String(t.getDate()).padStart(2, "0"); };
   const mk = (merchant, n, i) => ({ id: "test/zzday-" + i, card: "Chase Freedom Flex", merchant, category: "Dining", bonus: (10 + i) + "% cash back",
     expires: n == null ? null : iso(n), expires_text: null, activation: "needs_activation", channel: "online", spend_cap: null, minimum_spend: null,
     fine_print: null, other_details: [], last_read: "2026-10-18", first_seen: "2026-10-18", status: "active", status_since: "2026-10-18" });
   const tests = [mk("Zzday Ends Today", 0, 0), mk("Zzday Ends Tomorrow", 1, 1)];
-  const open = async () => {
+  // On the home screen (home: no search), Card bonuses: Freedom Flex pending, and a bonus entry that ends Oct 21.
+  const btext = bonusText([["test/flex-q4", "Freedom Flex", "Flex", "not_confirmed"], ["test/zzday-bonus", "Freedom", null, "activated", "2026-10-21", "2026-10-14"]]);
+  const open = async home => {
     const ctx = await br.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: "block" });
     const page = await ctx.newPage();
     await page.clock.install({ time: new Date(2026, 9, 21, 23, 59, 0) });
     await page.route("https://api.github.com/**", r => r.abort());
     await page.route("**/data/phone-edits.json", r => r.fulfill({ status: 200, contentType: "application/json", body: "{}\n" }));
     await page.route("**/data/offers.json", async r => { const j = await (await r.fetch()).json(); j.offers.push(...tests); await r.fulfill({ json: j }); });
+    if (home) await page.route("**/data/bonus-categories.json", r => r.fulfill({ status: 200, contentType: "application/json", body: btext }));
     await page.goto(base);
     await page.evaluate(() => { try { localStorage.clear(); localStorage.setItem("cardselector.token", "test"); } catch (e) {} });
     await page.goto(base);
@@ -682,8 +809,8 @@ async function dayChecks(br, base) {
       CardStore.save = function (change) {
         return new Promise(function (res) {
           window.__pend.push(function () {
-            if (/^bonus\./.test(change.type)) return res({ status: "saved", message: "Focus: " + change.to, undo: { type: change.type, id: change.id, from: change.to, to: change.from },
-              record: { activation: "not_needed", planned: change.type === "bonus.planned" ? change.to : null, choice: change.type === "bonus.choice" ? change.to : null } });
+            if (/^bonus\./.test(change.type)) return res({ status: "saved", message: "Bonus categories activated", undo: { type: change.type, id: change.id, from: change.to, to: change.from },
+              record: { activation: change.to } });
             var rec = window.__recs[change.id], r = CardEdits.apply({ offers: { offers: [rec] } }, change, today);
             res({ status: "saved", message: r.summary, record: JSON.parse(JSON.stringify(rec)), undo: CardEdits.inverse(change, r.before) });
           });
@@ -691,8 +818,8 @@ async function dayChecks(br, base) {
       };
       CardStore.liveStatus = function () { return Promise.resolve({ state: "live" }); };
     }, [Object.fromEntries(tests.map(o => [o.id, JSON.parse(JSON.stringify(o))])), iso(1)]);
-    await page.fill("#q", "zzday");
-    await page.waitForTimeout(900);
+    if (home) await page.waitForFunction(() => !document.getElementById("cb").hidden);
+    else { await page.fill("#q", "zzday"); await page.waitForTimeout(900); }
     await page.clock.pauseAt(new Date(2026, 9, 21, 23, 59, 50));
     return { ctx, page };
   };
@@ -700,6 +827,7 @@ async function dayChecks(br, base) {
     const row = m => [...document.querySelectorAll("li.offer")].find(l => window.__offerOf(l.dataset.oid).merchant === m);
     const t = row("Zzday Ends Today"), b = document.getElementById("savebar");
     return { renders: window.__renders, today: t ? (t.classList.contains("gone") ? "gone" : "live") : "none",
+      bonusToday: !!document.querySelector("#cb li[data-eid='test/zzday-bonus']"), flex: (document.querySelector("#cb li[data-eid='test/flex-q4'] .cbst") || {}).innerText || null,
       bar: b.hidden ? null : (btns => document.getElementById("savemsg").firstChild.textContent + (btns.length ? " · " + btns.join(" ") : ""))([...document.querySelectorAll("#savebtns button")].map(x => x.textContent)),
       live: b.classList.contains("live"), q: document.getElementById("q").value,
       open: [...document.querySelectorAll("li.mc > button.mchead[aria-expanded=true]")].map(x => x.querySelector(".mcname").textContent) };
@@ -733,54 +861,52 @@ async function dayChecks(br, base) {
     "save across midnight: Undo saves as always (bar \"" + s4.bar + "\", " + (s4.renders - s3.renders) + " renders, back to Needs activation)");
   await ctx.close();
 
-  // 2. The Focus picker in use across midnight.
-  ({ ctx, page } = await open());
-  await page.click("#bstrip > summary");
-  const sel = "#blist li[data-eid='citi-custom-cash/standing'] .bfocus select";
-  const cur = await page.$eval(sel, s => s.value);
-  const other = await page.$eval(sel, s => [...s.options].map(o => o.value).find(v => v !== s.value));
-  await page.focus(sel);
-  await page.selectOption(sel, other);
-  await page.focus(sel);
+  // 2. Card bonuses' Mark activated focused across midnight (home screen): no redraw while it has focus, one once it
+  // loses it (the entry that ended Oct 21 leaves), nothing saved.
+  ({ ctx, page } = await open(true));
+  const mbtn = "#cb li[data-eid='test/flex-q4'] button";
+  await page.focus(mbtn);
   const f0 = await st(page);
   await page.clock.runFor(15000);
   const f1 = await st(page);
-  ok(f1.renders === f0.renders && f1.today === "live", "Focus picker in use across midnight: no redraw while it has focus (" + (f1.renders - f0.renders) + " renders)");
+  ok(f0.bonusToday && f1.renders === f0.renders && f1.bonusToday, "Mark activated focused across midnight: no redraw while it has focus (" + (f1.renders - f0.renders) + " renders)");
   await page.evaluate(() => document.activeElement.blur());
   await page.clock.runFor(10);
   await page.waitForTimeout(50);
   const f2 = await st(page);
-  const pick = await page.$eval(sel, s => ({ value: s.value, save: !s.parentNode.querySelector("button").hidden, focus: document.activeElement === document.body }));
-  ok(f2.renders === f1.renders + 1 && f2.today === "gone", "Focus picker: one redraw once it loses focus, the ended offer moved (" + (f2.renders - f1.renders) + " renders)");
-  ok(pick.value === other && other !== cur && pick.save && pick.focus, "Focus picker: the unsaved pick (" + cur + " -> " + other + ") and its Save survive, focus not moved (" + JSON.stringify(pick) + ")");
+  ok(f2.renders === f1.renders + 1 && !f2.bonusToday && /^⚠ Not activated/.test(f2.flex) && await page.evaluate(() => window.__pend.length) === 0,
+    "Mark activated: one redraw once it loses focus, the ended entry left Card bonuses, nothing saved (" + JSON.stringify([f2.renders - f1.renders, f2.flex]) + ")");
   await ctx.close();
 
-  // 3. A Focus save running across midnight: afterwards the picker shows the saved value, with no Save.
-  ({ ctx, page } = await open());
-  await page.click("#bstrip > summary");
-  await page.selectOption(sel, other);
-  await page.locator("#blist li[data-eid='citi-custom-cash/standing'] .bfocus button", { hasText: /^Save$/ }).click();
+  // 3. A Mark activated save running across midnight: one redraw when it ends, the row activated, the ended entry gone,
+  // the bar and its Undo as always.
+  ({ ctx, page } = await open(true));
+  await page.click(mbtn);
+  const m0 = await st(page);
   await page.clock.runFor(15000);
+  const m1 = await st(page);
+  ok(m0.bar === "Saving…" && m1.renders === m0.renders && m1.bonusToday, "Mark activated save across midnight: no redraw while it runs (" + JSON.stringify([m0.bar, m1.renders - m0.renders]) + ")");
   await page.evaluate(() => window.__pend.shift()());
   await page.waitForTimeout(50);
-  const fs3 = await page.$eval(sel, s => ({ value: s.value, save: !s.parentNode.querySelector("button").hidden }));
-  const g3 = await st(page);
-  ok(fs3.value === other && !fs3.save && g3.today === "gone" && g3.bar === "Saved · Deploying · Undo ×",
-    "Focus saved across midnight: the picker shows the saved " + other + " with no Save, the ended offer moved (" + JSON.stringify([fs3, g3.bar]) + ")");
+  const m2 = await st(page);
+  ok(m2.renders === m1.renders + 1 && !m2.bonusToday && m2.flex === "✓ Activated · ends Dec 31" && m2.bar === "Saved · Deploying · Undo ×",
+    "Mark activated saved across midnight: one redraw, the row activated, the ended entry gone, bar \"" + m2.bar + "\" (" + JSON.stringify(m2) + ")");
+  await page.locator("#savebtns button", { hasText: /^Undo$/ }).click();
+  await page.evaluate(() => window.__pend.shift()());
+  await page.waitForTimeout(50);
+  const m3 = await st(page);
+  ok(/^⚠ Not activated, activate by Dec 14/.test(m3.flex) && m3.bar === "Saved · Deploying · Undo ×", "Mark activated across midnight: the bar's Undo puts it back (" + m3.flex + ")");
   await ctx.close();
 
-  // 4. A held redraw doesn't eat a tap: midnight passes with the Focus picker focused, then Save is tapped the way
-  // iOS taps (the button takes no focus, so focus leaves the picker on the press, before the click).
-  ({ ctx, page } = await open());
-  await page.click("#bstrip > summary");
-  await page.focus(sel);
-  await page.selectOption(sel, other);
-  await page.focus(sel);
+  // 4. A held redraw doesn't eat a tap: midnight passes with Mark activated focused, then it is tapped the way iOS
+  // taps (the button takes no focus, so focus leaves it on the press, before the click).
+  ({ ctx, page } = await open(true));
+  await page.focus(mbtn);
   await page.clock.runFor(15000);
   await page.evaluate(() => document.addEventListener("mousedown", function (e) {
-    if (e.target.closest(".bfocus button")) { e.preventDefault(); document.activeElement.blur(); }
+    if (e.target.closest("#cb button")) { e.preventDefault(); document.activeElement.blur(); }
   }, true));
-  const box = await page.locator("#blist li[data-eid='citi-custom-cash/standing'] .bfocus button", { hasText: /^Save$/ }).boundingBox();
+  const box = await page.locator(mbtn).boundingBox();
   const r4 = (await st(page)).renders;
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
   await page.mouse.down();
@@ -790,12 +916,12 @@ async function dayChecks(br, base) {
   await page.clock.runFor(10); // the tap's end (a 0 ms timer, long before a real save returns)
   await page.waitForTimeout(50);
   const n4 = await page.evaluate(() => window.__pend.length);
-  ok(n4 === 1, "tap after a held midnight redraw: the Save tap starts one save (" + n4 + ")");
+  ok(n4 === 1, "tap after a held midnight redraw: the Mark activated tap starts one save (" + n4 + ")");
   await page.evaluate(() => (window.__pend.shift() || function () {})()); // none when the tap was lost
   await page.clock.runFor(10);
   await page.waitForTimeout(50);
   const g4 = await st(page);
-  ok(g4.today === "gone" && g4.renders === r4 + 2, "tap after a held midnight redraw: the save's own redraws carry the new day (" + (g4.renders - r4) + " renders: save start, save end)");
+  ok(!g4.bonusToday && g4.flex === "✓ Activated · ends Dec 31" && g4.renders === r4 + 2, "tap after a held midnight redraw: the save's own redraws carry the new day (" + (g4.renders - r4) + " renders: save start, save end)");
   await ctx.close();
 }
 
@@ -920,6 +1046,7 @@ async function browser() {
 
   await dayChecks(br, base);
   await containerEditChecks(br, base);
+  await cardBonusChecks(br, base);
 
   await br.close();
   server.close();

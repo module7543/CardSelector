@@ -345,29 +345,27 @@ class Hub {
   await waitBar(/changed somewhere else/);
   ok(!(await remembered())["offers:" + C.id], "a conflict on that record drops its entry");
 
-  // 5. Customized Cash choice: survives a reload during the deploy, and the headline uses it.
-  console.log("-- 5. Customized Cash choice");
-  await fresh({ token: "test-token-offline" });
-  const CC = "bank-of-america-customized-cash/standing";
-  const q5 = "chevron";
-  await search(q5);
-  const use0 = await page.$eval("#use", e => e.innerText);
-  await page.click("#bsum");
-  const sel = "#choice-" + CC.replace(/[^a-z0-9]/g, "");
-  const choice0 = await page.$eval(sel, e => e.value);
-  await page.selectOption(sel, "gas & EV charging stations");
-  await page.locator(".bfocus", { has: page.locator(sel) }).locator("button", { hasText: "Save" }).click();
+  // 5. Card bonuses' Mark activated: survives a reload during the deploy (a remembered bonus save), then the deployed
+  // file takes over. One rotating entry is made live and not activated in the served (and main's) file.
+  console.log("-- 5. Card bonuses: Mark activated");
+  const B5 = JSON.parse(read("data/bonus-categories.json")), E5 = B5.entries.find(e => e.kind === "rotating");
+  Object.assign(E5, { start: "2000-01-01", end: "2099-12-31", activate_by: "2099-12-31", activation: "not_confirmed" });
+  await fresh({ token: "test-token-offline", over: { "data/bonus-categories.json": ser(B5) } });
+  const row5 = "#cb li[data-eid='" + E5.id + "']";
+  const st5 = () => page.$eval(row5, l => l.querySelector(".cbst").innerText.replace(/\s+/g, " ").trim());
+  const pend5 = () => page.$eval("#cb .cbpend", e => e.textContent);
+  const p0 = await pend5();
+  ok(/^⚠ Not activated, activate by Dec 31(, 2099)? Mark activated$/.test(await st5()) && /^⚠ \d+ activations? pending$/.test(p0), "a pending row with Mark activated (" + await st5() + "; " + p0 + ")");
+  await page.locator(row5 + " button", { hasText: /^Mark activated$/ }).click();
   await waitBar(/Deploying/);
-  const use1 = await page.$eval("#use", e => e.innerText);
-  ok(choice0 !== "gas & EV charging stations" && /Customized Cash/.test(use1) && use1 !== use0, "after the save the headline uses the new choice: " + JSON.stringify(use1.split("\n")[0]));
-  ok((await remembered())["bonus:" + CC], "choice save remembered");
+  ok(/^✓ Activated · ends Dec 31/.test(await st5()) && (await pend5()) !== p0 && JSON.parse(hub.files["site/data/bonus-categories.json"]).entries.find(e => e.id === E5.id).activation === "activated",
+    "after the save the row is activated and main's file has it (" + await st5() + "; " + await pend5() + ")");
+  ok((await remembered())["bonus:" + E5.id], "activation save remembered");
   await open(true);
-  await search(q5);
-  const use2 = await page.$eval("#use", e => e.innerText);
-  ok(use2 === use1 && (await page.$eval(sel, e => e.value)) === "gas & EV charging stations", "reload during the deploy: the choice and the headline stay (" + JSON.stringify(use2.split("\n")[0]) + ")");
+  ok(/^✓ Activated · ends Dec 31/.test(await st5()) && !(await page.$(row5 + " button")), "reload during the deploy: the row stays activated, no button (" + await st5() + ")");
   hub.deploy();
   await check();
-  ok(!(await remembered())["bonus:" + CC] && (await page.$eval("#use", e => e.innerText)) === use1, "once deployed: entry dropped, the headline unchanged");
+  ok(!(await remembered())["bonus:" + E5.id] && /^✓ Activated/.test(await st5()), "once deployed: entry dropped, the row unchanged");
 
   // 6. A save refused with "reload": an immediate check, then one retry.
   console.log("-- 6. refused save");
@@ -468,17 +466,13 @@ class Hub {
   await page.click("#ftoggle");
   await page.locator("#cats button", { hasText: /^All$/ }).click();
   await page.click("#ftoggle");
-  await page.evaluate(() => { document.getElementById("bstrip").open = true; });
-  await page.focus("#q");
-  await comeBack8();
-  await stays("with the bonus strip open (an unsaved pick could be there)");
-  await page.evaluate(() => { document.getElementById("bstrip").open = false; document.getElementById("editmode").open = true; });
+  await page.evaluate(() => { document.getElementById("editmode").open = true; });
   await page.focus("#q");
   await comeBack8();
   await stays("with the Edit mode panel open");
   await page.evaluate(() => { document.getElementById("editmode").open = false; });
   // Another field in use blocks it too. At phone width every other field is inside a panel that already blocks
-  // the reload (Filters, bonus strip, Edit mode), so this one case runs wide, where the sort select is visible.
+  // the reload (Filters, Edit mode), so this one case runs wide, where the sort select is visible.
   await page.setViewportSize({ width: 1000, height: 844 });
   await page.focus("#sort");
   ok(await page.evaluate(() => document.activeElement.id === "sort"), "wide screen: the sort select has focus");
@@ -517,7 +511,7 @@ class Hub {
   ok(vj === null, "version.json is never answered from the copy");
 
   // 10. Checks that must not change the copy, or must not download what didn't change.
-  console.log("-- 10. version.json errors, unchanged files, the bonus strip");
+  console.log("-- 10. version.json errors, unchanged files, Card bonuses");
   const before10 = await copy();
   site.publish({ "data/offers.json": offersText, "data/phone-edits.json": ser({ [U.id]: { status: "used", status_since: today, used_on: "Smartly" } }) });
   for (const how of [503, "badjson"]) {
@@ -534,14 +528,13 @@ class Hub {
   await check();
   const asked = site.log.slice(n10).filter(p => /^(data|js)\/|^index\.html$/.test(p));
   ok(JSON.stringify(asked) === JSON.stringify(["data/phone-edits.json"]), "only the changed file is requested: " + asked.join(", "));
-  // A swap that doesn't change the bonus file keeps the strip as it is (open details, an unsaved choice).
-  await page.click("#bsum");
-  await page.locator("#blist details").first().evaluate(d => { d.open = true; });
-  await page.selectOption(sel, "dining");
+  // A swap that doesn't change the bonus file leaves Card bonuses as it is (the same rows, not drawn again).
+  await page.fill("#q", "");
+  await page.$eval("#cb li[data-eid]", l => { l.__kept = 1; });
   const sw10 = await page.evaluate(() => window.__swaps || 0);
   site.publish({ "data/offers.json": offersWith({}, [{ id: "test/zqx-strip", card: "U.S. Bank", merchant: "Zqxstrip Shop", category: "Clothing & Jewelry", bonus: "5% back", channel: "online" }]) });
   await check();
-  ok(await page.evaluate(() => window.__swaps) === sw10 + 1 && await page.$eval(sel, e => e.value) === "dining" && await page.locator("#blist details").first().evaluate(d => d.open), "a swap of offers.json only keeps the bonus strip (unsaved pick, open details)");
+  ok(await page.evaluate(() => window.__swaps) === sw10 + 1 && await page.$eval("#cb li[data-eid]", l => l.__kept === 1) && await page.isVisible("#cb"), "a swap of offers.json only keeps Card bonuses as it is");
 
   // 11. A deploy that changes sw.js together with data: the open that picks up the new worker swaps the data in,
   // and the next open still loads (it once hung in Chromium).
