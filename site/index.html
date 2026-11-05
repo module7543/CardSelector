@@ -220,6 +220,8 @@
   /* The compact control row (phones): the Filters button, one removable chip per active sheet filter, the cuisine
      picker under Dining, and the Sort button. It wraps onto more lines; it never scrolls sideways. */
   .fbar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 2px 0 8px; }
+  /* Phones: the panel belongs in the sheet; it never shows in the page (not even before app.js moves it there). */
+  @media (max-width: 699px) { .wrap > .filters { display: none; } }
   .fbar[hidden] { display: none; }
   @media (min-width: 700px) { .fbar { display: none !important; } }
   .fbtn {
@@ -999,8 +1001,8 @@
   <!-- Phones: the compact filter controls (the Filters button opens the filter sheet; a chip per active filter removes
        it; the cuisine picker under Dining; the Sort button opens the sort picker). Wide screens show the panel instead. -->
   <div class="fbar" id="fbar" hidden>
-    <button class="fbtn" id="ftoggle" type="button" aria-haspopup="dialog" aria-expanded="false" aria-controls="fsheet"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true" focusable="false"><path d="M3 5.5h14M5.5 10h9M8 14.5h4"/></svg><span class="fbn" id="fbn">Filters</span></button>
-    <button class="fbtn fsort" id="fsortbtn" type="button" aria-haspopup="dialog" aria-expanded="false" aria-controls="psheet" aria-label="Sort" hidden><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M6.5 16V4M3.5 7l3-3 3 3M13.5 4v12M10.5 13l3 3 3-3"/></svg></button>
+    <button class="fbtn" id="ftoggle" type="button" aria-haspopup="dialog" aria-expanded="false" aria-controls="fsdialog"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true" focusable="false"><path d="M3 5.5h14M5.5 10h9M8 14.5h4"/></svg><span class="fbn" id="fbn">Filters</span></button>
+    <button class="fbtn fsort" id="fsortbtn" type="button" aria-haspopup="dialog" aria-expanded="false" aria-controls="psdialog" aria-label="Sort" hidden><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M6.5 16V4M3.5 7l3-3 3 3M13.5 4v12M10.5 13l3 3 3-3"/></svg></button>
   </div>
   <div class="use" id="use" aria-live="polite" hidden></div>
   <!-- What changed (a mode of this page): opened from an Offer freshness row with changes. -->
@@ -1103,7 +1105,7 @@
 <!-- Phones: the filter sheet (the filters panel moves into its body) and the picker sheet (Sort, Cuisine). -->
 <div class="fsheet" id="fsheet" hidden>
   <div class="fsback" id="fsback"></div>
-  <div class="fspanel" role="dialog" aria-modal="true" aria-labelledby="fs-h" tabindex="-1">
+  <div class="fspanel" id="fsdialog" role="dialog" aria-modal="true" aria-labelledby="fs-h" tabindex="-1">
     <div class="fshandle" aria-hidden="true"></div>
     <div class="fshead"><h2 id="fs-h">Filters</h2><button class="fslink" id="fsreset" type="button">Reset</button></div>
     <div class="fsbody" id="fsbody"></div>
@@ -1112,7 +1114,7 @@
 </div>
 <div class="fsheet psheet" id="psheet" hidden>
   <div class="fsback" id="psback"></div>
-  <div class="fspanel" role="dialog" aria-modal="true" aria-labelledby="ps-h" tabindex="-1">
+  <div class="fspanel" id="psdialog" role="dialog" aria-modal="true" aria-labelledby="ps-h" tabindex="-1">
     <div class="fshandle" aria-hidden="true"></div>
     <div class="fshead"><h2 id="ps-h"></h2><button class="fslink" id="psclose" type="button">Close</button></div>
     <div class="fsbody"><ul class="plist" id="plist"></ul></div>

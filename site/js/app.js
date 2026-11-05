@@ -1322,6 +1322,7 @@
       pb.id = "fcuisbtn";
       pb.setAttribute("aria-label", "Cuisine: " + name + ". Change cuisine");
       pb.setAttribute("aria-haspopup", "dialog");
+      pb.setAttribute("aria-controls", "psdialog");
       pb.setAttribute("aria-expanded", String(!!sheetOpen && sheetOpen.opener === "fcuisbtn"));
       pb.appendChild(el("span", null, name));
       var dn = el("span", "fdown");
@@ -1345,6 +1346,8 @@
       if (back) back.focus({ preventScroll: true });
     }
   }
+  // The sheet's filters as they are (the sort apart: a new order keeps the scroll).
+  function filterSig() { return JSON.stringify([chanMode, actMode, card, category, cuisine, usedMode]); }
   function xMark() { var x = el("span", "fx", "×"); x.setAttribute("aria-hidden", "true"); return x; }
   // A chip's ×: that one filter back to its default (Dining also clears the cuisine), through the same setters as the
   // sheet. Focus moves to the control now in its place, else the Filters button.
@@ -1407,7 +1410,7 @@
   function openSheet(sheet, openerId, ev) {
     if (sheetOpen || !isPhone() || !data) return;
     dtSwapped(ev, FS_GUARD);
-    sheetOpen = { el: sheet, opener: openerId };
+    sheetOpen = { el: sheet, opener: openerId, was: filterSig() };
     wrapEl.setAttribute("inert", "");
     savebar.setAttribute("inert", "");
     document.documentElement.classList.add("fsopen");
@@ -1430,6 +1433,10 @@
     wrapEl.removeAttribute("inert");
     savebar.removeAttribute("inert");
     document.documentElement.classList.remove("fsopen");
+    // A filter changed in the sheet (not just the sort): the view it opened on is gone, so the page goes back to the top,
+    // where the control row shows the new chips and focus returns to the Filters button in view (on the home screen with
+    // a list under it, as a reload shows it).
+    if (s.was !== filterSig() && !noFocus) window.scrollTo(0, 0);
     [ftoggle, fsortBtn, document.getElementById("fcuisbtn")].forEach(function (b) { if (b) b.setAttribute("aria-expanded", "false"); });
     renderFacets();
     if (noFocus) return;
@@ -4481,7 +4488,9 @@
     if (!q || q === settledQuery || document.activeElement !== input) return;
     settledQuery = q;
     var bar = document.querySelector(".searchbar");
-    var target = wc ? wcEl : useEl.hidden ? countEl : useEl; // in What changed, its panel (New / Gone stay in view)
+    // In What changed, its panel (New / Gone stay in view); on phones the filter control row (step 5) right under the
+    // search box stays in view above the answer card.
+    var target = wc ? wcEl : isPhone() && !fbar.hidden ? fbar : useEl.hidden ? countEl : useEl;
     var y = window.scrollY + target.getBoundingClientRect().top - bar.getBoundingClientRect().height - 4;
     if (Math.abs(window.scrollY - y) > 2) window.scrollTo({ top: Math.max(0, y), behavior: "smooth" });
   }

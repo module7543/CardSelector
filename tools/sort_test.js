@@ -3917,6 +3917,57 @@ function listRows(sel) {
       "s5 what changed Back: home again, the category from before, the New shortcut still " + newCount + ", history where it was");
     await ctx.close();
 
+    // Scroll (review fixes): after a search settles, the control row stays in view under the search box; a filter picked
+    // from the home screen's icon (opened from far down the home screen) goes back to the top, where the new chips and the
+    // Filters button (focused) are in view; with only the sort changed the scroll stays.
+    ctx = await s5ctx(390, "light", { channel: "store" });
+    await page.focus("#q");
+    await page.keyboard.type("zs", { delay: 50 });
+    await page.waitForTimeout(1600);
+    const settle = await page.evaluate(() => { const sb = document.querySelector(".searchbar").getBoundingClientRect(), f = document.getElementById("ftoggle").getBoundingClientRect(),
+      c = document.querySelector("#fbar .flchip").getBoundingClientRect(); return { y: Math.round(scrollY), f: Math.round(f.top - sb.bottom), c: Math.round(c.top - sb.bottom) }; });
+    ok(settle.f >= -1 && settle.c >= -1, "s5 after a search settles: the Filters button and the chip are still in view under the search box (" + J(settle) + ")");
+    await page.evaluate(() => { localStorage.setItem("cardselector.channel", "any"); });
+    await ctx.close();
+    ctx = await s5ctx(390, "light");
+    await page.evaluate(() => window.scrollTo(0, 900));
+    await page.waitForTimeout(100);
+    const yHome = await page.evaluate(() => Math.round(scrollY));
+    await page.click("#ftoggle");
+    await page.waitForTimeout(420);
+    await pick("#cats", "Dining");
+    await closeFilters();
+    v = await st();
+    const useTop = await page.evaluate(() => Math.round(document.getElementById("use").getBoundingClientRect().top));
+    ok(yHome > 300 && v.y === 0 && v.focus === "ftoggle" && useTop > 0 && useTop < 300, "s5 home icon opened far down the home screen, Dining picked: Show results opens the Dining list at the top, focus on the Filters button in view (" + J([yHome, v.y, useTop, v.focus]) + ")");
+    await page.click("#fbar [aria-label='Remove Dining filter']");
+    await page.waitForTimeout(420);
+    await page.evaluate(() => window.scrollTo(0, 600));
+    await page.click("#ftoggle");
+    await page.waitForTimeout(420);
+    await pick("#chans", "In store");
+    await closeFilters();
+    const hl = await page.evaluate(() => { const f = document.getElementById("ftoggle").getBoundingClientRect();
+      return { home: !document.getElementById("qp").hidden, y: Math.round(scrollY), focus: document.activeElement.id, ftop: Math.round(f.top),
+        chip: (document.querySelector("#fbar .flchip") || {}).textContent || null, list: !!document.querySelector("#main ul.results") }; });
+    ok(hl.home && hl.list && hl.y === 0 && hl.focus === "ftoggle" && hl.ftop > 0 && hl.ftop < 200 && /^In store/.test(hl.chip || ""),
+      "s5 home icon, In store picked from down the page: back at the top with the In store chip and focus on the Filters button in view; the list follows the home screen (" + J(hl) + ")");
+    await page.evaluate(() => window.scrollTo(0, 300));
+    const y300 = await page.evaluate(() => Math.round(scrollY));
+    await page.evaluate(() => document.getElementById("ftoggle").click());
+    await page.selectOption("#sort", "az");
+    await closeFilters();
+    ok((await st()).y === y300, "s5 only the sort changed: the scroll stays (" + y300 + ")");
+    await ctx.close();
+    // Before app.js runs (slow or failed script), phones never show the raw filters panel in the page.
+    ctx = await s5ctx(390, "light");
+    await page.route("**/js/app.js", r => r.abort());
+    await page.goto(base);
+    await page.waitForTimeout(300);
+    const raw = await page.evaluate(() => { const f = document.getElementById("filters"); return { shown: !!f.offsetParent, h: Math.round(f.getBoundingClientRect().height) }; });
+    ok(!raw.shown && raw.h === 0, "s5 phones: the filters panel stays out of the page before app.js runs (" + J(raw) + ")");
+    await ctx.close();
+
     // Day rollover with the sheet open: one redraw, the sheet stays open with its choices.
     ctx = await s5ctx(390, "light");
     await page.clock.pauseAt(new Date(2026, 10, 5, 23, 59, 40));
