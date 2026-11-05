@@ -103,6 +103,10 @@
   // (Gone). null when off; else { tab: "new" | "gone", from: the freshness row's card (focus goes back to it),
   // saved: the search, filters, sort and scroll from before entering, put back on leaving }.
   var wc = null;
+  // Ending soon: the ordinary list scoped to live offers ending within 7 days (the home screen's Ending shortcut), sorted
+  // Expiring soonest, under a removable "Ends within 7 days" chip. null when off; else { token, saved: the view from
+  // before (viewState()), put back when the chip is removed or Back is pressed }. Nothing picked in it is remembered.
+  var ending = null;
 
   function actIn(mode, o) { return mode === "any" || ACT_OK[mode].indexOf(actOf(o)) !== -1; }
   function actOk(o) { return actIn(actMode, o); }
@@ -352,6 +356,21 @@
   function isLive(o, today) {
     return o.status === "active" && !(o.expires && o.expires < today);
   }
+
+  // ---- Ends within 7 days (one rule for the "Ends in N days" terms, the Ending shortcut's count and its list) ----
+  // Whole local calendar days from today to the offer's end date (0: ends today), or null with no valid date. Only
+  // `expires` counts (never `expires_text`).
+  var SOON_DAYS = 7;
+  function daysLeft(o, today) {
+    var end = parseDay(o.expires), t = parseDay(today);
+    return end === null || t === null ? null : end - t;
+  }
+  // The window alone: a real end date from today through 7 local days from today, inclusive (the list's scope test, so
+  // an offer marked used in the view stays in its place like everywhere else).
+  function inEndWindow(o, today) { var n = daysLeft(o, today); return n !== null && n >= 0 && n <= SOON_DAYS; }
+  // Ending soon: live (active, not used, not past its end) and in the window. The shortcut counts exactly these, and
+  // the list shows exactly these (render(): live matches in the window).
+  function endsSoon(o, today) { return isLive(o, today) && inEndWindow(o, today); }
 
   // Offers hidden from search: absent from the latest batch, expired, or past their date ("Recently
   // unavailable"). Used offers are not among them: signed in, they are under the Used filter.
@@ -680,6 +699,14 @@
     d.setAttribute("aria-hidden", "true");
     return d;
   }
+  // The home screen's card glyph (Quick picks and Card bonuses): a small card-shaped mark in the issuer's color with a
+  // light chip stripe, so it reads as a card. Decoration only (aria-hidden): the card name next to it says which.
+  // Elsewhere the issuer dot stays.
+  function cardGlyph(name) {
+    var g = el("span", "cglyph i-" + (issuerOf(name) || "none"));
+    g.setAttribute("aria-hidden", "true");
+    return g;
+  }
   // Puts the card's dot first inside `node` (no dot for an unknown issuer); returns `node`.
   function withDot(node, name) {
     var d = issuerDot(name);
@@ -801,11 +828,8 @@
   // "Ends today" / "Ends tomorrow" / "Ends in N days" for an active offer ending within 7 days (local date), else
   // null; on an estimated Citi date "Ends about today" / "Ends about tomorrow" / "Ends in about N days".
   function endsSoonText(o) {
-    if (o.status !== "active") return null;
-    var end = parseDay(o.expires), today = parseDay(todayISO());
-    if (end === null || today === null) return null;
-    var n = end - today;
-    if (n < 0 || n > 7) return null;
+    if (o.status !== "active" || !inEndWindow(o, todayISO())) return null;
+    var n = daysLeft(o, todayISO());
     var about = estimatedEnd(o) ? "about " : "";
     return n === 0 ? "Ends " + about + "today" : n === 1 ? "Ends " + about + "tomorrow" : "Ends in " + about + n + " days";
   }
@@ -1129,7 +1153,7 @@
   // focus back on the answer card's selector segment for the new value (the tapped control is drawn again).
   function setChan(mode, refocus) {
     chanMode = mode;
-    if (!wc) try { localStorage.setItem(CHANNEL_KEY, chanMode); } catch (e) {} // nothing picked in What changed is kept
+    if (!wc && !ending) try { localStorage.setItem(CHANNEL_KEY, chanMode); } catch (e) {} // nothing picked in What changed or Ending soon is kept
     renderChans();
     renderCuisines();
     render();
@@ -1152,7 +1176,7 @@
       b.disabled = usedMode && editing() && !wc; // the Used list ignores Activation
       b.addEventListener("click", function () {
         actMode = a[0];
-        if (!wc) try { localStorage.setItem(ACT_KEY, actMode); } catch (e) {}
+        if (!wc && !ending) try { localStorage.setItem(ACT_KEY, actMode); } catch (e) {}
         renderCuisines();
         render();
       });
@@ -2659,9 +2683,10 @@
         li.setAttribute("data-eid", e.id); // the day redraw finds the entry again by it (focus)
         // The row opens the entry's Card Bonus detail: one button (the card and summary) stretched over the row. The
         // state line follows it, outside it, so its Mark activated is a separate button that only saves.
-        var go = el("button", "cbgo"), l1 = el("span", "cbl1");
+        var go = el("button", "cbgo"), l1 = el("span", "cbl1"), name = el("span", "cbcard", e.card);
         go.type = "button";
-        l1.appendChild(withDot(el("span", "cbcard", e.card), e.card));
+        name.insertBefore(cardGlyph(e.card), name.firstChild); // drawn in the row's left column
+        l1.appendChild(name);
         l1.appendChild(document.createTextNode(" "));
         l1.appendChild(bonusSummary(e, el("span", "cbsumm")));
         go.appendChild(l1);
@@ -2743,15 +2768,17 @@
       cond: L.cond || null, note: quickNote(p)
     };
   }
-  // A tile's answer, appended to node (also the answer box at the top of its Quick Pick detail): the rate and card,
-  // then "+N more ready", the dated label, the activation line, Citi Custom Cash's line and the note.
-  function qpBody(p, node) {
+  // A tile's answer, appended to node (also the answer box at the top of its Quick Pick detail): the rate, the card,
+  // then "+N more ready", the dated label, the activation line, Citi Custom Cash's line and the note. On a tile the
+  // card glyph is in the tile's corner (glyph: true), so the card name has no dot; the detail keeps the dot.
+  function qpBody(p, node, glyph) {
     var w = el("span", "qpw");
     w.appendChild(el("span", "qpr", pct(p.rate) + "%"));
-    w.appendChild(withDot(el("span", "qpc", p.card), p.card));
     // "Likely" on a tile whose winning rate is a category rate (merchant coding decides it); none for Smartly's.
     if (p.cat) w.appendChild(likelyTag());
     node.appendChild(w);
+    var c = el("span", "qpc", p.card);
+    node.appendChild(glyph ? c : withDot(c, p.card));
     if (p.more) node.appendChild(el("span", "qpm", "+" + p.more + " more ready"));
     if (p.dated) node.appendChild(el("span", "qpm qpd", p.dated));
     if (p.after) {
@@ -2790,7 +2817,9 @@
     if (qpEl.hidden) return;
     var picks = QUICK_PICKS.map(function (q) { return { label: q[0], topic: q[1], p: quickPick(q[1], today) }; });
     var head = el("div", "qphead");
-    head.appendChild(el("h2", "qph", "Quick picks · no offer needed")).id = "qp-h";
+    var h = head.appendChild(el("h2", "qph", "Quick picks"));
+    h.id = "qp-h";
+    h.appendChild(el("span", "qphq", " · no offer needed"));
     qpEl.appendChild(head);
     var ul = el("ul", "qpgrid");
     picks.forEach(function (x) {
@@ -2801,7 +2830,8 @@
       var b = el("button", "qpgo");
       b.type = "button";
       b.appendChild(el("span", "qpn", x.label));
-      qpBody(p, b);
+      b.appendChild(cardGlyph(p.card)); // the leading card, top right
+      qpBody(p, b, true);
       b.appendChild(goChev());
       b.appendChild(el("span", "sr-only", ", details"));
       b.addEventListener("click", function (ev) { openDetail({ kind: "qp", topic: x.topic, label: x.label }, { qp: x.label }, ev); });
@@ -2809,13 +2839,16 @@
       ul.appendChild(li);
     });
     qpEl.appendChild(ul);
-    // "Everyday default · Smartly 4%" with its caveat from the data ("First $10,000 per billing cycle, then 2%; ...").
+    // "Everyday default · Smartly 4%" with its caveat from the data ("First $10,000 per billing cycle, then 2%; ..."):
+    // the card glyph, the title and caveat, the rate big on the right. Information only (no detail page, no chevron).
     var ev = everyday(today);
     if (ev) {
       var e = el("div", "qpt qpe"), t = el("div", "qpw");
+      e.appendChild(cardGlyph(ev.card));
       t.appendChild(el("span", "qpn", "Everyday default · "));
-      t.appendChild(withDot(el("span", "qpc", ev.card + " " + pct(ev.rate) + "%"), ev.card));
+      t.appendChild(el("span", "qpc", ev.card));
       e.appendChild(t);
+      e.appendChild(el("div", "qpr", pct(ev.rate) + "%"));
       var en = ev.headline_note || ev.strip_note;
       if (en) e.appendChild(el("div", "qpnote", cap(en)));
       qpEl.appendChild(e);
@@ -2967,32 +3000,19 @@
       wcTabs.appendChild(b);
     });
   }
-  // Entering from a freshness row: that card, its New list (Gone when it added nothing), no search or other
-  // filter, so the buttons show the row's numbers. One history entry, so the phone's back button leaves.
-  function enterWc(c, tab) {
-    if (!wc) {
-      var ex = main.querySelector("details.expired");
-      // The view as it was (pages shown, rows kept in place, Recently unavailable open or closed) comes back too.
-      wc = { saved: { q: input.value, category: category, card: card, cuisine: cuisine, chan: chanMode, act: actMode,
-        sort: sortMode, used: usedMode, y: window.scrollY, view: viewSig, shown: shownBefore, keep: keep, exOpen: ex ? ex.open : null },
-        token: String(Date.now()) + Math.random() };
-      try { history.pushState({ cardselectorWc: wc.token }, ""); } catch (e) {}
-    }
-    wc.tab = tab;
-    wc.from = c;
-    input.value = "";
-    category = null; cuisine = null; chanMode = "any"; actMode = "any"; card = c;
-    renderChans(); renderCats(); renderCards(); renderCuisines(); render();
-    window.scrollTo(0, 0);
-    document.getElementById("wcback").focus({ preventScroll: true });
+  // The view as it is (search, filters, sort, scroll, pages shown, rows kept in place, Recently unavailable open or
+  // closed, an Ending soon scope), saved on entering What changed or Ending soon and put back on leaving (putView).
+  function viewState() {
+    var ex = main.querySelector("details.expired");
+    return { q: input.value, category: category, card: card, cuisine: cuisine, chan: chanMode, act: actMode,
+      sort: sortMode, used: usedMode, y: window.scrollY, view: viewSig, shown: shownBefore, keep: keep, exOpen: ex ? ex.open : null,
+      ending: ending };
   }
-  // Leaving puts back the search, filters, sort and scroll from before entering.
-  function leaveWc() {
-    if (!wc) return;
-    var s = wc.saved, from = wc.from;
-    wc = null;
+  // Puts a saved view back and draws it (the caller puts focus and the scroll back).
+  function putView(s) {
     input.value = s.q;
     category = s.category; card = s.card; cuisine = s.cuisine; chanMode = s.chan; actMode = s.act; usedMode = s.used;
+    ending = s.ending;
     if (card !== null && !data.offers.some(function (o) { return o.card === card; })) card = null; // gone with new data
     if (category !== null && (data.categories || []).indexOf(category) === -1) category = null;
     sortMode = s.sort;
@@ -3002,26 +3022,159 @@
     renderChans(); renderCats(); renderCards(); renderCuisines(); render();
     var ex = main.querySelector("details.expired");
     if (ex && s.exOpen !== null) ex.open = s.exOpen;
-    var row = Array.prototype.filter.call(flist.querySelectorAll(".fhead"), function (b) { return b.dataset.card === from; })[0];
-    if (row) row.focus({ preventScroll: true });
+  }
+  // Entering from a freshness row: that card, its New list (Gone when it added nothing), no search or other
+  // filter, so the buttons show the row's numbers. From the home screen's New shortcut: All cards, New (sc: "new",
+  // focus goes back to it). One history entry, so the phone's back button leaves. An Ending soon scope is set aside
+  // while it is on (What changed lists its own offers) and comes back on leaving.
+  function enterWc(c, tab, sc, ev) {
+    // This swap's own double-tap window: the New shortcut's tap arms it; a freshness row's ends any older one, so a tap on
+    // New / Gone just after entering is never dropped because of an earlier Back.
+    dtSwapped(ev);
+    if (!wc) {
+      wc = { saved: viewState(), token: String(Date.now()) + Math.random() };
+      ending = null;
+      try { history.pushState({ cardselectorWc: wc.token }, ""); } catch (e) {}
+    }
+    wc.tab = tab;
+    wc.from = c;
+    wc.sc = sc || null;
+    input.value = "";
+    category = null; cuisine = null; chanMode = "any"; actMode = "any"; card = c;
+    renderChans(); renderCats(); renderCards(); renderCuisines(); render();
+    window.scrollTo(0, 0);
+    document.getElementById("wcback").focus({ preventScroll: true });
+  }
+  // Leaving puts back the search, filters, sort and scroll from before entering.
+  function leaveWc() {
+    if (!wc) return;
+    var s = wc.saved, from = wc.from, sc = wc.sc;
+    wc = null;
+    putView(s);
+    var row = sc ? document.getElementById("sc-" + sc) :
+      Array.prototype.filter.call(flist.querySelectorAll(".fhead"), function (b) { return b.dataset.card === from; })[0];
+    if (row && !row.hidden && row.offsetParent) row.focus({ preventScroll: true });
     window.scrollTo(0, s.y);
   }
   // The entry pushed on entering carries this visit's token; any other entry (the one before, or an old forward one) leaves.
   function onWcEntry(st) { return !!wc && !!st && st.cardselectorWc === wc.token; }
   // The back arrow leaves at once, then steps back over the pushed entry (that popstate finds the mode off, and a
   // second tap finds nothing to do, so a quick double tap can't leave the site).
-  document.getElementById("wcback").addEventListener("click", function () {
+  document.getElementById("wcback").addEventListener("click", function (ev) {
     if (!wc) return;
+    dtSwapped(ev); // the page under it comes back: a second tap of a double tap must not land on it
     var back = onWcEntry(history.state);
     leaveWc();
     if (back) history.back();
   });
   window.addEventListener("popstate", function (e) {
-    if (wc && !onWcEntry(e.state)) leaveWc();
+    if (wc && !onWcEntry(e.state)) { dtSwapped(e); leaveWc(); }
   });
   // A reload starts outside the mode. Reloaded on the entry pushed on entering, step back over it (the same page, so
   // nothing loads again), so the phone's back button needs one press, not two, to leave.
   try { if (history.state && history.state.cardselectorWc) history.back(); } catch (e) {}
+
+  // ---- Home shortcuts: New offers and Ending in the next 7 days (home screen, between Card bonuses and Offer freshness) ----
+  // New: the All-cards New count of What changed (changeCounts, the rule its New tab and the freshness rows use); a tap
+  // opens What changed on All cards, New. Ending: live offers ending within 7 local days (endsSoon); a tap opens the
+  // ordinary list scoped to exactly those (inEndWindow on the live matches), sorted Expiring soonest, with a removable
+  // "Ends within 7 days" chip. Both counts follow every redraw (saves, new data, the day redraw).
+  var scEl = document.getElementById("sc"), scNew = document.getElementById("sc-new"), scEnd = document.getElementById("sc-end");
+  var scCounts = { new: 0, end: 0 };
+  function newTotal(today) {
+    var ch = changeCounts(today);
+    return Object.keys(ch).reduce(function (n, c) { return n + ch[c].n; }, 0);
+  }
+  function endTotal(today) { return data.offers.filter(function (o) { return endsSoon(o, today); }).length; }
+  function renderShortcuts(show, today) {
+    scEl.hidden = !(show && data);
+    if (scEl.hidden) return;
+    scCounts = { new: newTotal(today), end: endTotal(today) };
+    // The buttons stay (only their words change), so focus on one survives a redraw.
+    document.getElementById("sc-new-n").textContent = scCounts.new + " new offer" + (scCounts.new === 1 ? "" : "s");
+    document.getElementById("sc-end-n").textContent = scCounts.end + " ending";
+  }
+  window.__shortcuts = function () { return scEl.hidden ? null : { new: scCounts.new, end: scCounts.end }; }; // for the tests
+  // Each swaps the page under the finger: the double-tap guard drops a second tap there (dtSwapped).
+  scNew.addEventListener("click", function (ev) { if (!wc && !ending && !dt) enterWc(null, "new", "new", ev); });
+  scEnd.addEventListener("click", function (ev) { if (!ending && !wc && !dt) { dtSwapped(ev); enterEnding(); } });
+
+  // Ending soon: the view is saved (viewState) and one history entry pushed; then the search and every filter are
+  // cleared and the sort is Expiring soonest, so the list holds exactly the offers the shortcut counted (a remembered
+  // channel or activation choice can't hide some). Nothing changed while it is on goes to localStorage. The chip's ×,
+  // the phone's back button (and a later Back over its entry) put the saved view back as it was.
+  var endBar = document.getElementById("endbar"), endChip = document.getElementById("endchip");
+  function enterEnding() {
+    if (ending || wc || dt || !data) return;
+    ending = { token: String(Date.now()) + Math.random(), saved: viewState() };
+    try { history.pushState({ cardselectorEnd: ending.token }, ""); } catch (e) {}
+    input.value = "";
+    category = null; card = null; cuisine = null; chanMode = "any"; actMode = "any"; usedMode = false;
+    sortMode = "expiring";
+    sortEl.value = sortMode;
+    showSortHelp();
+    renderChans(); renderCats(); renderCards(); renderCuisines(); render();
+    window.scrollTo(0, 0);
+    endChip.focus({ preventScroll: true });
+  }
+  function leaveEnding() {
+    if (!ending) return;
+    var s = ending.saved;
+    ending = null;
+    putView(s);
+    if (!scEnd.closest("[hidden]")) scEnd.focus({ preventScroll: true });
+    window.scrollTo(0, s.y);
+  }
+  function onEndEntry(st) { return !!ending && !!st && st.cardselectorEnd === ending.token; }
+  function renderEndBar() { endBar.hidden = !ending; }
+  // The chip's × leaves at once, then steps back over the pushed entry (as What changed's back arrow does).
+  endChip.addEventListener("click", function (ev) {
+    if (!ending) return;
+    dtSwapped(ev); // the home screen comes back under the finger (Card bonuses' Mark activated may be right there)
+    var back = onEndEntry(history.state);
+    leaveEnding();
+    if (back) history.back();
+  });
+  window.addEventListener("popstate", function (e) {
+    if (ending && !wc && !onEndEntry(e.state)) { dtSwapped(e); leaveEnding(); }
+    // An entry of an earlier visit (after a reload inside What changed opened from it): step back over it too.
+    else if (!ending && !wc && !dt && e.state && e.state.cardselectorEnd) { try { history.back(); } catch (x) {} }
+  });
+  // A reload starts outside it, as What changed does.
+  try { if (history.state && history.state.cardselectorEnd) history.back(); } catch (e) {}
+  // ---- The home screen's order (finalised in step 4D): search, Quick picks, Card bonuses, the shortcuts, Offer
+  // freshness, then the quieter utilities (Recently unavailable, the Filters button, Edit mode). Offer freshness moves up
+  // from the footer, and the Filters button and its panel move down under the results area, on the home screen only;
+  // everywhere else they are where they were (freshness in the footer, Filters under the answer card). The Filters
+  // control here is the pre-step-5 one, kept as it is until the step 5 filter sheet replaces it.
+  var homeFresh = document.getElementById("homefresh"), homeUtil = document.getElementById("homeutil");
+  var freshEl = document.getElementById("fresh"), filterTapT = -1e9;
+  filtersEl.addEventListener("click", function () { filterTapT = Date.now(); }, true);
+  // filtersDown: the home screen shows no list (no channel or activation choice), so Filters can sit with the utilities;
+  // with a list (a remembered In store, say) it stays above the list, where it always was.
+  function placeHome(home, filtersDown) {
+    wrapEl.classList.toggle("home", home);
+    if (home && freshEl.parentNode !== homeFresh) homeFresh.appendChild(freshEl);
+    if (!home && freshEl.parentNode !== foot) foot.insertBefore(freshEl, foot.firstChild);
+    homeFresh.hidden = !home;
+    if (filtersDown && ftoggle.parentNode !== homeUtil) { homeUtil.appendChild(ftoggle); homeUtil.appendChild(filtersEl); }
+    else if (!filtersDown && ftoggle.parentNode === homeUtil) {
+      countEl.parentNode.insertBefore(ftoggle, countEl);
+      countEl.parentNode.insertBefore(filtersEl, countEl);
+      // A filter picked down there: a category or card opens the list at the top; a channel or activation choice keeps
+      // the home screen with a list under it, so the panel (now just above the list) is brought into view.
+      if (Date.now() - filterTapT < 1500) {
+        if (!home) window.scrollTo(0, 0);
+        else requestAnimationFrame(function () {
+          var top = ftoggle.getBoundingClientRect().top - document.querySelector(".searchbar").getBoundingClientRect().height - 8;
+          window.scrollTo(0, Math.max(0, window.scrollY + top));
+        });
+      }
+    }
+    homeUtil.hidden = !filtersDown;
+  }
+
+  window.__ending = function () { return ending ? { sort: sortMode } : null; }; // for the tests
 
   // ---- Quick Pick and Card Bonus details (modes of the main page, like What changed) ----
   // A Quick picks tile opens its topic's detail; a Card bonuses row opens that entry's. Entering pushes one history
@@ -3046,7 +3199,9 @@
   // A keyboard click (detail 0) has no second tap to guard against.
   function dtSwapped(ev) { dtSwapT = ev && typeof ev.timeStamp === "number" && !(ev.type === "click" && ev.detail === 0) ? ev.timeStamp : -1e9; }
   // The search box counts too: it sits under the back arrow, so a double tap on Back would focus it (and pop up the keyboard).
-  var DT_GUARD = "#dt, #qp, #cb, .searchbar", dtPressDropped = false;
+  // Since step 4D also the shortcuts, the Ending chip, What changed's panel and the results, which the shortcuts and their
+  // way back swap in and out.
+  var DT_GUARD = "#dt, #qp, #cb, #sc, #endbar, #wc, #main, .searchbar", dtPressDropped = false;
   var inGuard = function (ev) { return ev.timeStamp - dtSwapT >= 0 && ev.timeStamp - dtSwapT < 400 && !!ev.target.closest && !!ev.target.closest(DT_GUARD); };
   document.addEventListener("click", function (ev) {
     if (ev.detail > 0 && (dtPressDropped || inGuard(ev)) && ev.target.closest && ev.target.closest(DT_GUARD)) {
@@ -3620,54 +3775,61 @@
     if (lineFit) lineFit.disconnect(); // the old bonus rows are gone
     var hasQuery = compact(query) !== "";
     var filtered = category !== null || card !== null;
-    var usedOn = usedMode && editing() && !wc; // What changed ignores the Used filter
+    var usedOn = usedMode && editing() && !wc && !ending; // What changed and Ending soon ignore the Used filter
     // A new search or filter ends the in-place rows and the extra pages of the last view.
-    var view = JSON.stringify([query, category, card, cuisine, chanMode, actMode, sortMode, usedOn, wc && wc.tab]);
+    var view = JSON.stringify([query, category, card, cuisine, chanMode, actMode, sortMode, usedOn, wc && wc.tab, !!ending]);
     if (view !== viewSig) { keep = {}; viewSig = view; shownBefore = 0; }
     // Card rates here stays as opened while the search and filters stay (a channel change or a save keeps it).
-    var rk = JSON.stringify([query, category, card, cuisine, !!wc]);
+    var rk = JSON.stringify([query, category, card, cuisine, !!wc, !!ending]);
     if (rk !== ratesKey) { ratesOpen = false; ratesKey = rk; }
     // Any filter picked (In store / Online, Activation too) lists the offers it keeps, in pages.
-    var narrowed = filtered || chanMode !== "any" || actMode !== "any";
+    var narrowed = filtered || chanMode !== "any" || actMode !== "any" || !!ending;
     var cuis = category === "Dining" ? cuisine : null;
+    // Ending soon: the "Ends within 7 days" window (the live test is the list's own, so its offers are endsSoon's).
+    var inEnd = function (o) { return !ending || inEndWindow(o, today); };
     var inScope = function (o) {
       return (category === null || o.category === category) && (card === null || o.card === card) &&
-        (cuis === null || cuisineLabel(o) === cuis) && chanOk(o);
+        (cuis === null || cuisineLabel(o) === cuis) && chanOk(o) && inEnd(o);
     };
     var inCat = function (o) { return inScope(o) && actOk(o); };
     // The answer card works per channel itself, so it reads every channel (the same scope otherwise).
     var inAnyChan = function (o) {
       return (category === null || o.category === category) && (card === null || o.card === card) &&
-        (cuis === null || cuisineLabel(o) === cuis);
+        (cuis === null || cuisineLabel(o) === cuis) && inEnd(o);
     };
     // The Used filter keeps only the search, card and category (with its cuisine).
     var inUsedScope = function (o) {
       return (category === null || o.category === category) && (card === null || o.card === card) &&
         (cuis === null || cuisineLabel(o) === cuis);
     };
-    // "in Dining", "on U.S. Bank", "in Dining on U.S. Bank", "in Dining: Persian & Mediterranean", ", ready now"
-    // (the channel choice has its own words on the count line: countLine).
+    // "in Dining", "on U.S. Bank", "in Dining on U.S. Bank", "in Dining: Persian & Mediterranean", " ending in the next
+    // 7 days", ", ready now" (the channel choice has its own words on the count line: countLine).
     var scope = (category !== null ? " in " + category + (cuis !== null ? ": " + cuis : "") : "") +
-      (card !== null ? " on " + card : "") +
+      (card !== null ? " on " + card : "") + (ending ? " ending in the next 7 days" : "") +
       (actMode !== "any" ? (actMode === "ready" ? ", ready now" : ", needs activation") : "");
     renderFilterSummary();
-    renderUsed(editing() && !wc ? search(query, function (o) { return o.status === "used" && inUsedScope(o); }).length : null);
+    renderUsed(editing() && !wc && !ending ? search(query, function (o) { return o.status === "used" && inUsedScope(o); }).length : null);
     // The Used list ignores In store / Online and Activation: their rows are greyed out and can't be changed.
     [chansEl, actsEl].forEach(function (g) {
       g.parentNode.classList.toggle("off", usedOn);
       Array.prototype.forEach.call(g.querySelectorAll("button"), function (b) { b.disabled = usedOn; });
     });
     renderWcPanel();
+    renderEndBar();
     renderDetail(); // an open Quick Pick or Card Bonus detail follows every redraw
     renderFreshness(); // its New and Gone counts follow saves and new data
-    // Quick picks and Card bonuses: the home screen only (a search, category or card answers in the answer card instead).
-    var home = !wc && !usedOn && !hasQuery && category === null && card === null;
+    // Quick picks, Card bonuses and the New / Ending shortcuts: the home screen only (a search, category or card answers
+    // in the answer card instead).
+    var home = !wc && !ending && !usedOn && !hasQuery && category === null && card === null;
+    placeHome(home, home && !narrowed);
     renderQuickPicks(home, today);
     showBonuses(home);
+    renderShortcuts(home, today);
     if (wc) return renderWcList(query, today, inScope, inUsedScope, scope, narrowed);
     if (usedOn) return renderUsedList(query, today, inUsedScope,
       (category !== null ? " in " + category + (cuis !== null ? ": " + cuis : "") : "") + (card !== null ? " on " + card : ""));
-    var gone = search(query, function (o) { return inCat(o) && isGone(o, today); });
+    // Recently unavailable: none under Ending soon (its list is live offers only).
+    var gone = ending ? [] : search(query, function (o) { return inCat(o) && isGone(o, today); });
     // One comparator for every list, with or without a search or filters (set again below once the live
     // matches are known, for the Best offer whole-word grouping).
     var cmp = comparator(sortMode, query);
@@ -3678,7 +3840,8 @@
       renderActs(actCounts(liveList));
       countEl.textContent = "";
       renderHeadline([], today, false);
-      main.appendChild(el("p", "hint", "Type part of a store name to see which cards have a bonus there, " +
+      // On the home screen a quiet footnote above the utilities (Recently unavailable, Filters, Edit mode).
+      main.appendChild(el("p", "hint" + (home ? " homehint" : ""), "Type part of a store name to see which cards have a bonus there, " +
         "or pick a category or card. " + live + " active offers loaded."));
     } else {
       // Every match in scope, then the Activation choice (its buttons count what each choice keeps). Offers
@@ -3694,7 +3857,7 @@
       // How many live matches the In store / Online choice is hiding (shown on the count line).
       var chanHidden = chanMode === "any" ? 0 : search(query, function (o) {
         return !chanOk(o) && actOk(o) && isLive(o, today) && (category === null || o.category === category) &&
-          (card === null || o.card === card) && (cuis === null || cuisineLabel(o) === cuis);
+          (card === null || o.card === card) && (cuis === null || cuisineLabel(o) === cuis) && inEnd(o);
       }).length;
       // Sorted as a copy: the headline (allHits) keeps the search's own name-match order.
       hits = hits.slice().sort(cmp);
@@ -3737,6 +3900,7 @@
           p.appendChild(el("strong", null, card));
         }
         if (chanMode !== "any") p.appendChild(document.createTextNode(chanMode === "store" ? " in store" : " online"));
+        if (ending) p.appendChild(document.createTextNode(" ending in the next 7 days"));
         p.appendChild(document.createTextNode(hasQuery ? " match " : ""));
         if (hasQuery) p.appendChild(el("strong", null, "“" + query.trim() + "”"));
         p.appendChild(document.createTextNode("."));
@@ -3887,6 +4051,7 @@
     flist.textContent = "";
     rows.forEach(function (r) { flist.appendChild(freshRow(r, ch[r.card])); });
     foot.hidden = !rows.length;
+    freshEl.hidden = !rows.length; // also on the home screen, where it sits above the footer
     if (focused) {
       var again = flist.querySelectorAll(".fhead");
       for (var i = 0; i < again.length; i++) if (again[i].dataset.card === focused) again[i].focus();
@@ -4055,7 +4220,7 @@
   sortEl.addEventListener("change", function () {
     sortMode = sortEl.value;
     showSortHelp();
-    if (!wc) try { localStorage.setItem(SORT_KEY, sortMode); } catch (e) {}
+    if (!wc && !ending) try { localStorage.setItem(SORT_KEY, sortMode); } catch (e) {}
     render();
   });
 
@@ -4627,7 +4792,7 @@
   // detail (an unsaved Focus or Choice pick lives there), and no form field in use other than the empty search box.
   function idle() {
     var f = document.activeElement;
-    return !saving && !wc && !dt && input.value.trim() === "" && category === null && card === null && cuisine === null && !usedMode &&
+    return !saving && !wc && !dt && !ending && input.value.trim() === "" && category === null && card === null && cuisine === null && !usedMode &&
       // a save bar still showing (Deploying with Undo, an error with Retry); the small "Live" pill doesn't block
       (savebar.hidden || savebar.classList.contains("live")) &&
       !main.querySelector("button.mchead[aria-expanded=true]") && !filtersEl.classList.contains("open") &&

@@ -518,6 +518,16 @@ class Hub {
   await stays("in a Card Bonus detail with an unsaved Choice pick");
   ok(await page.$eval("#dt .bfocus select", s => s.value) === "dining" && await page.$eval("#dt .bfocus button", b => !b.hidden), "the unsaved pick and its Save are still there");
   await page.click("#dtback");
+  await page.waitForTimeout(450);
+  // In the Ending soon list (step 4D: its chip holds the view from before, put back when it is removed): no reload.
+  await page.click("#sc-end");
+  await page.waitForTimeout(100);
+  ok(await page.evaluate(() => !document.getElementById("endbar").hidden && document.getElementById("q").value === ""), "the Ending shortcut opened its list (chip on, search box empty)");
+  await page.focus("#q");
+  await comeBack8();
+  await stays("in the Ending soon list (its chip on, empty search box focused)");
+  await page.click("#endchip");
+  await page.waitForTimeout(100);
   await page.focus("#q");
   // Another field in use blocks it too. At phone width every other field is inside a panel that already blocks
   // the reload (Filters, Edit mode), so this one case runs wide, where the sort select is visible.
