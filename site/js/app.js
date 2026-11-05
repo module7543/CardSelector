@@ -2739,7 +2739,7 @@
       if (p.dated) li.appendChild(el("div", "qpm qpd", p.dated));
       if (p.after) {
         // "Activate Flex or Freedom: 5% · +1 pt" (every card tied at the better rate).
-        var n = p.after.names, who = n.length > 1 ? n.slice(0, -1).join(", ") + " or " + n[n.length - 1] : n[0];
+        var n = p.after.names.map(function (x) { return x.replace(/ /g, "\u00a0"); }), who = n.length > 1 ? n.slice(0, -1).join(", ") + " or " + n[n.length - 1] : n[0];
         var a = el("div", "qpx qpa", "Activate " + who + ": "), ag = el("span", "qpkeep", pct(p.after.rate) + "% · ");
         a.setAttribute("data-cards", p.after.cards.join("|"));
         ag.appendChild(el("span", "usegain", p.after.gain));
@@ -2748,8 +2748,8 @@
       }
       if (p.cond) {
         // "Citi Custom Cash 5% · conditional · +1 pt" when it would beat the ready rate; else the short muted line.
-        var c = el("div", "qpx qpcond" + (p.cond.strong ? " strong" : ""), p.cond.e.card + " " + pct(p.cond.rate) + "% · ");
-        var cg = c.appendChild(el("span", "qpkeep", "conditional" + (p.cond.strong ? " · " : "")));
+        var c = el("div", "qpx qpcond" + (p.cond.strong ? " strong" : ""), p.cond.e.card + " ");
+        var cg = c.appendChild(el("span", "qpkeep", pct(p.cond.rate) + "% · conditional" + (p.cond.strong ? " · " : "")));
         if (p.cond.strong) cg.appendChild(el("span", "usegain", p.cond.gain));
         c.appendChild(el("span", "sr-only", ", " + condWhy(p.cond.e)));
         li.appendChild(c);
