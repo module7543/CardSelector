@@ -2189,6 +2189,7 @@ function listRows(sel) {
         tiles: q.hidden ? null : [...q.querySelectorAll("li.qpt")].map(plain),
         use: u.hidden ? null : [...u.children].filter(c => !c.matches(".chansel, details.rates")).map(plain),
         rates: u.hidden || !u.querySelector("details.rates > summary") ? null : plain(u.querySelector("details.rates > summary")),
+        strip: [...document.querySelectorAll("#blist li[data-eid]")].map(plain),
         totals: [...document.querySelectorAll("#main > ul.results li.offer")].map(li => li.dataset.oid + " " + plain(li.querySelector(".obig") || li) + " " + plain(li.querySelector(".obreak") || li))
       };
     });
@@ -2268,6 +2269,52 @@ function listRows(sel) {
       const cleared = (await rollView(T.temu)).tile;
       ok(J(cleared) === J(fresh.home.tile), how + ": the searched tab, cleared, shows the Dec 16 Online shopping tile (" + J(cleared) + ")");
       await ctx6.close();
+    }
+    // A save that ends just after midnight, before the midnight timer (00:00:00.5): its redraw must not use up the new
+    // day without preparing the rates again. Signed in (GitHub blocked, CardStore.save stubbed), a Focus pick saved at
+    // 00:00:00.2; then the timer and later comebacks. The tiles and strip must equal a fresh load on Dec 16.
+    {
+      const ctx7 = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: "block" });
+      await ctx7.clock.install({ time: new Date(2026, 11, 15, 23, 59, 0) });
+      const p = await ctx7.newPage();
+      p.on("pageerror", e => errs.push(e.message));
+      await rollRoutes(p);
+      await p.route("https://api.github.com/**", r => r.abort());
+      await p.goto(base);
+      await p.evaluate(() => { try { localStorage.setItem("cardselector.token", "test"); } catch (e) {} });
+      await p.goto(base);
+      await p.waitForFunction(() => window.__cardsReady && window.__bonusReady && !document.getElementById("qp").hidden);
+      await p.evaluate(() => {
+        window.__pend = [];
+        CardStore.save = change => new Promise(res => window.__pend.push(() => res({ status: "saved", message: "Focus: " + change.to,
+          undo: { type: change.type, id: change.id, from: change.to, to: change.from },
+          record: { activation: "not_needed", planned: change.type === "bonus.planned" ? change.to : null, choice: change.type === "bonus.choice" ? change.to : null } })));
+        CardStore.liveStatus = () => Promise.resolve({ state: "live" });
+      });
+      await p.click("#bstrip > summary");
+      const sel = "#blist li[data-eid='citi-custom-cash/standing'] .bfocus select";
+      await p.selectOption(sel, "gas stations");
+      await p.evaluate(() => document.activeElement && document.activeElement.blur());
+      await ctx7.clock.pauseAt(new Date(2026, 11, 15, 23, 59, 59, 900));
+      const b7 = await rollView(p);
+      await ctx7.clock.runFor(300); // 00:00:00.2: the midnight timer hasn't run
+      await p.locator("#blist li[data-eid='citi-custom-cash/standing'] .bfocus button", { hasText: /^Save$/ }).click();
+      await p.evaluate(() => window.__pend.shift()());
+      await p.waitForTimeout(50);
+      await ctx7.clock.runFor(15000);
+      await p.evaluate(() => { window.dispatchEvent(new Event("focus")); document.dispatchEvent(new Event("visibilitychange")); });
+      const a7 = await rollView(p);
+      await ctx7.close();
+      // The fresh load: Dec 16, the same Focus (gas stations) saved in the file.
+      const ctx8 = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: "block" });
+      await ctx8.clock.install({ time: new Date(2026, 11, 16, 0, 0, 30) });
+      CASE = { set: { "Citi Custom Cash": { planned: "gas stations" } } };
+      const f8 = await rollView(await rollOpen(ctx8, null));
+      await ctx8.close();
+      CASE = {};
+      const cc = v => (v.strip.find(x => /^Customized Cash:/.test(x)) || "").slice(0, 60);
+      ok(b7.tile.rate === "5.25%" && a7.tile.rate === "4.5%" && J(a7.tiles) === J(f8.tiles) && cc(a7) === cc(f8) && /4\.5% online shopping/.test(cc(a7)),
+        "qp rollover, a save just after midnight: tiles and the strip's Customized Cash equal a fresh load on Dec 16 (" + J([b7.tile.rate, a7.tile, cc(a7), cc(f8)]) + ")");
     }
     ok(errs.length === 0, "qp rollover: no page errors (" + errs.join("; ") + ")");
     page = mainPage;
