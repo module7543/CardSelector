@@ -563,7 +563,7 @@
   .wrap.home .hint.homehint { margin: 14px 4px 4px; font-size: 13px; line-height: 1.4; }
   /* Recently unavailable, Filters (closed) and Edit mode (closed): plain muted rows, each with its expand chevron. */
   .wrap.home details.expired { margin-top: 0; }
-  .wrap.home details.expired > summary, .wrap.home .ftoggle[aria-expanded="false"], .wrap.home .editmode:not([open]) > summary {
+  .wrap.home details.expired > summary, .homeutil .ftoggle[aria-expanded="false"], .wrap.home .editmode:not([open]) > summary {
     min-height: 44px; padding: 0 4px; font-size: 14px; font-weight: 600; color: var(--muted);
   }
   .wrap.home details.expired > summary { list-style: none; -webkit-tap-highlight-color: transparent; }
@@ -574,8 +574,8 @@
   }
   .wrap.home details.expired[open] > summary::after { margin-top: 3px; transform: rotate(-135deg); }
   .wrap.home details.expired > summary:focus-visible { outline: 3px solid var(--accent); outline-offset: -3px; border-radius: 10px; }
-  .wrap.home .ftoggle[aria-expanded="false"] { margin-top: 0; background: transparent; border-color: transparent; }
-  .wrap.home .ftoggle[aria-expanded="false"] .fsumm .on { color: var(--muted); }
+  .homeutil .ftoggle[aria-expanded="false"] { margin-top: 0; background: transparent; border-color: transparent; }
+  .homeutil .ftoggle[aria-expanded="false"] .fsumm .on { color: var(--muted); }
   .wrap.home footer { margin-top: 0; }
   .wrap.home .editmode:not([open]) { background: transparent; border-color: transparent; box-shadow: none; }
 

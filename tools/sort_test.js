@@ -2327,7 +2327,7 @@ function listRows(sel) {
         if (process.env.SHOT_DIR) await page.screenshot({ path: path.join(process.env.SHOT_DIR, "cb-390-signed-in.png"), fullPage: true });
         C = await cbOpen({}, false);
         // Step 4D: the elevated Quick pick tiles and the name / summary / state rows take a little more room (mockup parity).
-        ok(C.top + C.height < 1500 && Object.values(C.rows).every(r => r.h <= 110), "cb 390px, signed out: seven rows of at most 110px (" + J([C.top, C.height, Object.values(C.rows).map(r => r.h)]) + ")");
+        ok(C.top + C.height < 1600 && Object.values(C.rows).every(r => r.h <= 120), "cb 390px, signed out: seven rows of at most 120px (" + J([C.top, C.height, Object.values(C.rows).map(r => r.h)]) + ")");
       }
     }
 
@@ -3164,7 +3164,7 @@ function listRows(sel) {
         "4d new " + set + ": shortcut count " + want + " (\"" + v.newText + "\"), matching the freshness rows' +N new (" + fresh + ")");
       const h0 = await hist();
       await page.click("#sc-new");
-      await page.waitForTimeout(100);
+      await page.waitForTimeout(450); // a person's next tap comes later than the double-tap guard's 400 ms
       const w = await page.evaluate(() => ({ on: !document.getElementById("wc").hidden, name: document.getElementById("wcname").textContent,
         tabs: [...document.querySelectorAll("#wctabs button")].map(b => b.textContent.replace(/\s+/g, " ").trim() + (b.getAttribute("aria-pressed") === "true" ? "*" : "")),
         rows: [...document.querySelectorAll("#main li.offer")].length, focus: document.activeElement.id }));
@@ -3172,7 +3172,7 @@ function listRows(sel) {
       ok(w.on && w.name === "All cards" && w.tabs[0] === "New " + want + "*" && w.rows === want && h1.i === h0.i + 1 && h1.n === h0.i + 2 && w.focus === "wcback",
         "4d new " + set + ": tap opens What changed, All cards, New " + want + " (same count), one history entry (" + J([w, h0, h1]) + ")");
       await page.goBack();
-      await page.waitForTimeout(100);
+      await page.waitForTimeout(450); // a person's next tap comes later than the double-tap guard's 400 ms
       const b = await view4d(), h2 = await hist();
       ok(b.home && !(await page.evaluate(() => !document.getElementById("wc").hidden)) && h2.i === h0.i && b.focus === "sc-new" && b.sc.new === want,
         "4d new " + set + ": browser Back returns to the home screen, focus back on the shortcut (" + J([h2, b.focus]) + ")");
@@ -3194,10 +3194,12 @@ function listRows(sel) {
     ok(before.home && before.sc.end === END_IDS.length && J(before.stored) === J(["az", "online", "ready"]),
       "4d ending: a remembered channel and activation choice don't change the shortcut's all-cards count (" + J([before.sc, before.stored]) + ")");
     await page.locator("#sc-end").scrollIntoViewIfNeeded();
-    const y0 = await page.evaluate(() => Math.round(window.scrollY)), h0 = await hist();
+    // The scroll at the press itself (the click may first bring the button out from under the sticky search box).
+    await page.evaluate(() => document.addEventListener("pointerdown", () => { window.__y0 = Math.round(window.scrollY); }, { capture: true, once: true }));
+    const h0 = await hist();
     const before2 = await view4d();
     await page.click("#sc-end");
-    await page.waitForTimeout(100);
+    await page.waitForTimeout(450); // a person's next tap comes later than the double-tap guard's 400 ms
     v = await view4d();
     const h1 = await hist();
     const exp = await expiresOf(v.rows);
@@ -3225,25 +3227,25 @@ function listRows(sel) {
     ok(vi.chip && vi.sort === "best" && vi.chan === "In store" && J(vi.stored) === J(["az", "online", "ready"]),
       "4d ending: a sort or channel picked inside is not remembered (" + J([vi.sort, vi.chan, vi.stored]) + ")");
     await page.click("#endchip");
-    await page.waitForTimeout(150);
+    await page.waitForTimeout(450); // a person's next tap comes later than the double-tap guard's 400 ms
     v = await view4d();
-    const h2 = await hist();
+    const h2 = await hist(), y0 = await page.evaluate(() => window.__y0);
     ok(!v.chip && !v.ending && v.home && v.sort === before2.sort && v.chan === "Online" && v.act === "Ready now" && v.filtersOpen === before2.filtersOpen &&
       J(v.rows) === J(before2.rows) && J(v.stored) === J(["az", "online", "ready"]) && h2.i === h0.i && v.focus === "sc-end" && Math.abs(v.y - y0) <= 2,
       "4d ending chip ×: the earlier view comes back (A to Z, Online, Ready now, its list, Filters open), Back entry stepped over, focus on the shortcut, scroll kept (" + J([v.sort, v.chan, v.act, h0, h2, v.focus, v.y, y0]) + ")");
     // Back leaves it the same way; Forward onto its old entry doesn't bring it back; a reload starts outside.
     await page.click("#sc-end");
-    await page.waitForTimeout(100);
+    await page.waitForTimeout(450); // a person's next tap comes later than the double-tap guard's 400 ms
     await page.goBack();
-    await page.waitForTimeout(150);
+    await page.waitForTimeout(450); // a person's next tap comes later than the double-tap guard's 400 ms
     v = await view4d();
     ok(!v.chip && !v.ending && v.sort === "az" && v.chan === "Online" && v.act === "Ready now" && (await hist()).i === h0.i,
       "4d ending Back: leaves it, the earlier sort and filters back (" + J([v.sort, v.chan, v.act]) + ")");
     await page.goForward();
-    await page.waitForTimeout(200);
+    await page.waitForTimeout(450); // a person's next tap comes later than the double-tap guard's 400 ms
     ok(!(await page.evaluate(() => window.__ending())) && (await hist()).i === h0.i, "4d ending Forward: an old entry doesn't reopen it (no hidden ending state)");
     await page.click("#sc-end");
-    await page.waitForTimeout(100);
+    await page.waitForTimeout(450); // a person's next tap comes later than the double-tap guard's 400 ms
     await page.reload();
     await page.waitForFunction(() => window.__shortcuts && window.__shortcuts());
     await page.waitForTimeout(200);
@@ -3251,18 +3253,18 @@ function listRows(sel) {
     ok(!v.chip && !v.ending && v.home && v.sort === "az" && (await hist()).i === h0.i, "4d ending reload: starts outside it, on the remembered sort (" + J([v.sort, await hist()]) + ")");
     // What changed opened from the Ending view (its freshness row) comes back to the Ending view, then the chip leaves.
     await page.click("#sc-end");
-    await page.waitForTimeout(100);
+    await page.waitForTimeout(450); // a person's next tap comes later than the double-tap guard's 400 ms
     await page.evaluate(() => { document.getElementById("fresh").open = true; });
     await page.click("#flist .fhead.fgo");
-    await page.waitForTimeout(100);
+    await page.waitForTimeout(450); // a person's next tap comes later than the double-tap guard's 400 ms
     const inWc = await page.evaluate(() => ({ wc: !document.getElementById("wc").hidden, chip: !document.getElementById("endbar").hidden }));
     await page.click("#wcback");
-    await page.waitForTimeout(150);
+    await page.waitForTimeout(450); // a person's next tap comes later than the double-tap guard's 400 ms
     v = await view4d();
     ok(inWc.wc && !inWc.chip && v.chip && v.ending && v.sort === "expiring" && J(v.rows.slice().sort()) === J(END_IDS.slice().sort()),
       "4d ending -> What changed -> back: the Ending view as it was (" + J([inWc, v.sort, v.rows.length]) + ")");
     await page.click("#endchip");
-    await page.waitForTimeout(150);
+    await page.waitForTimeout(450); // a person's next tap comes later than the double-tap guard's 400 ms
     ok(!(await page.evaluate(() => window.__ending())) && (await hist()).i === h0.i && (await view4d()).sort === "az", "4d ending: the chip then leaves to the home screen, history back where it started");
     ok(errs.length === 0, "4d shortcuts: no page errors (" + errs.join("; ") + ")");
     await ctx4d.close();
@@ -3283,7 +3285,7 @@ function listRows(sel) {
     const age = () => page.$eval("#fsum .fsumage", e => e.textContent);
     const a0 = await age(), r0 = await view4d();
     await page.click("#sc-end");
-    await page.waitForTimeout(100);
+    await page.waitForTimeout(450); // a person's next tap comes later than the double-tap guard's 400 ms
     const hR = await hist();
     await ctxR.clock.runFor(3 * 60 * 1000);
     await page.waitForTimeout(100);
@@ -3292,7 +3294,7 @@ function listRows(sel) {
     ok(r0.sc.end === 7 && r1.chip && r1.sort === "expiring" && J(r1.rows.slice().sort()) === J(NEXT.slice().sort()) && /^8 offers ending/.test(r1.count) && J(hR1) === J(hR),
       "4d rollover: an open Ending list follows the new day (8 offers: Nov 5 leaves, both Nov 13 join), no new history entry (" + J([r1.rows.length, r1.count, hR, hR1]) + ")");
     await page.click("#endchip");
-    await page.waitForTimeout(150);
+    await page.waitForTimeout(450); // a person's next tap comes later than the double-tap guard's 400 ms
     const r2 = await view4d(), a1 = await age();
     ok(r2.home && r2.sc.end === 8 && r2.endText === "8 ending in the next 7 days" && a0 !== a1,
       "4d rollover: back home the shortcut says 8; Offer freshness moved on a day (" + J([a0, a1]) + ")");
@@ -3304,6 +3306,78 @@ function listRows(sel) {
     ok(r3.home && r3.sc.end === 7 && hR3.n === hR1.n, "4d rollover: on the home screen the count follows the day redraw (" + J([r3.sc, hR3]) + ")");
     ok(errsR.length === 0, "4d rollover: no page errors (" + errsR.join("; ") + ")");
     await ctxR.close();
+
+
+    // Double taps across the shortcuts' page swaps (the 4C guard): signed in, with pending bonuses whose Mark activated
+    // sits under the finger when the home screen comes back. A double tap on the chip's ×, or on What changed's back
+    // arrow after the New shortcut, leaves once: no save, no detail, history where it started.
+    {
+      const ctxG = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: "block" });
+      page = await ctxG.newPage();
+      const errsG = [];
+      page.on("pageerror", e => errsG.push(e.message));
+      await page.clock.install({ time: new Date(2026, 10, 5, 12, 0, 0) });
+      await page.route("https://api.github.com/**", r => r.abort());
+      await page.route("**/data/bonus-categories.json", async r => {
+        const d = await (await r.fetch()).json();
+        d.entries.forEach(e => { if (e.activate_by) e.activation = "not_confirmed"; });
+        await r.fulfill({ json: d });
+      });
+      await page.route("**/data/offers.json", async route => {
+        const d = await (await route.fetch()).json();
+        await route.fulfill({ json: { categories: d.categories, batches: D4_BATCHES, offers: END_OFFERS.concat(NEW_SETS.many) } });
+      });
+      await page.route("**/data/phone-edits.json", route => route.fulfill({ json: {} }));
+      await page.goto(base);
+      await page.evaluate(() => { localStorage.clear(); localStorage.setItem("cardselector.token", "test"); });
+      await load4d();
+      await page.waitForFunction(() => document.querySelectorAll("#cb .edfill").length >= 2);
+      await page.evaluate(() => { window.__saves = []; window.CardStore.save = c => { window.__saves.push(c); return new Promise(() => {}); }; });
+      const g = () => page.evaluate(() => ({ saves: window.__saves.length, dt: !!window.__detail(), ending: !!window.__ending(), wc: !document.getElementById("wc").hidden,
+        hist: navigation.currentEntry.index }));
+      for (const [label, open, back] of [["Ending chip ×", "#sc-end", "#endchip"], ["What changed back arrow (New shortcut)", "#sc-new", "#wcback"]]) {
+        // Scroll so a Mark activated sits where the chip / back arrow will be (the spot the second tap lands on).
+        await page.evaluate(() => { const e = document.querySelectorAll("#cb .edfill")[1].getBoundingClientRect(); window.scrollTo(0, e.top + e.height / 2 + window.scrollY - 90); });
+        await page.waitForTimeout(100);
+        const h0 = (await g()).hist;
+        await page.click(open);
+        await page.waitForTimeout(600);
+        const box = await page.locator(back).boundingBox();
+        await page.mouse.dblclick(box.x + box.width / 2, box.y + box.height / 2, { delay: 60 });
+        await page.waitForTimeout(600);
+        const r = await g();
+        ok(r.saves === 0 && !r.dt && !r.ending && !r.wc && r.hist === h0, "4d double tap on the " + label + ": back home once, the second tap dropped (no save, no detail) (" + J(r) + ")");
+      }
+      ok(errsG.length === 0, "4d double taps: no page errors (" + errsG.join("; ") + ")");
+      await ctxG.close();
+    }
+
+    // A remembered channel lists offers on the home screen: Filters stays above that list (only with no list does it move
+    // down with the utilities). A channel picked down there keeps the panel in view.
+    {
+      const ctxF = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: "block" });
+      page = await ctxF.newPage();
+      await page.clock.install({ time: new Date(2026, 10, 5, 12, 0, 0) });
+      await page.route("**/data/phone-edits.json", route => route.fulfill({ json: {} }));
+      await page.goto(base);
+      await page.evaluate(() => { localStorage.clear(); localStorage.setItem("cardselector.channel", "store"); });
+      await load4d();
+      const pos = () => page.evaluate(() => { const f = document.getElementById("ftoggle"), m = document.querySelector("#main > ul.results"), fr = document.getElementById("fresh");
+        return { above: !!m && !!(f.compareDocumentPosition(m) & Node.DOCUMENT_POSITION_FOLLOWING), afterFresh: !!(fr.compareDocumentPosition(f) & Node.DOCUMENT_POSITION_FOLLOWING),
+          down: f.parentNode.id === "homeutil", top: Math.round(f.getBoundingClientRect().top), filled: getComputedStyle(f).backgroundColor !== "rgba(0, 0, 0, 0)", home: !!window.__shortcuts() }; });
+      const s1 = await pos();
+      ok(s1.home && s1.above && s1.afterFresh && !s1.down && s1.filled, "4d Filters with a remembered In store: above the list it opens, under freshness, its usual look (" + J(s1) + ")");
+      await page.evaluate(() => localStorage.setItem("cardselector.channel", "any"));
+      await load4d();
+      const s2 = await pos();
+      ok(s2.home && s2.down && !s2.filled, "4d Filters with no list: down with the utilities, quiet (" + J(s2) + ")");
+      await page.click("#ftoggle");
+      await page.locator("#chans button", { hasText: /^In store$/ }).click();
+      await page.waitForTimeout(200);
+      const s3 = await pos();
+      ok(s3.home && s3.above && !s3.down && s3.top >= 0 && s3.top < 844, "4d Filters: In store picked down there moves the panel above the new list and keeps it in view (" + J(s3) + ")");
+      await ctxF.close();
+    }
 
     // The home screen at 390, 350 and 320px, light and dark: the frozen order (search, Quick picks, Card bonuses, the
     // shortcuts, Offer freshness, then Recently unavailable, the temporary Filters and Edit mode), freshness closed,

@@ -3057,14 +3057,15 @@
   function onWcEntry(st) { return !!wc && !!st && st.cardselectorWc === wc.token; }
   // The back arrow leaves at once, then steps back over the pushed entry (that popstate finds the mode off, and a
   // second tap finds nothing to do, so a quick double tap can't leave the site).
-  document.getElementById("wcback").addEventListener("click", function () {
+  document.getElementById("wcback").addEventListener("click", function (ev) {
     if (!wc) return;
+    dtSwapped(ev); // the page under it comes back: a second tap of a double tap must not land on it
     var back = onWcEntry(history.state);
     leaveWc();
     if (back) history.back();
   });
   window.addEventListener("popstate", function (e) {
-    if (wc && !onWcEntry(e.state)) leaveWc();
+    if (wc && !onWcEntry(e.state)) { dtSwapped(e); leaveWc(); }
   });
   // A reload starts outside the mode. Reloaded on the entry pushed on entering, step back over it (the same page, so
   // nothing loads again), so the phone's back button needs one press, not two, to leave.
@@ -3091,8 +3092,9 @@
     document.getElementById("sc-end-n").textContent = scCounts.end + " ending";
   }
   window.__shortcuts = function () { return scEl.hidden ? null : { new: scCounts.new, end: scCounts.end }; }; // for the tests
-  scNew.addEventListener("click", function () { if (!wc && !ending && !dt) enterWc(null, "new", "new"); });
-  scEnd.addEventListener("click", function () { enterEnding(); });
+  // Each swaps the page under the finger: the double-tap guard drops a second tap there (dtSwapped).
+  scNew.addEventListener("click", function (ev) { if (!wc && !ending && !dt) { dtSwapped(ev); enterWc(null, "new", "new"); } });
+  scEnd.addEventListener("click", function (ev) { if (!ending && !wc && !dt) { dtSwapped(ev); enterEnding(); } });
 
   // Ending soon: the view is saved (viewState) and one history entry pushed; then the search and every filter are
   // cleared and the sort is Expiring soonest, so the list holds exactly the offers the shortcut counted (a remembered
@@ -3123,14 +3125,15 @@
   function onEndEntry(st) { return !!ending && !!st && st.cardselectorEnd === ending.token; }
   function renderEndBar() { endBar.hidden = !ending; }
   // The chip's × leaves at once, then steps back over the pushed entry (as What changed's back arrow does).
-  endChip.addEventListener("click", function () {
+  endChip.addEventListener("click", function (ev) {
     if (!ending) return;
+    dtSwapped(ev); // the home screen comes back under the finger (Card bonuses' Mark activated may be right there)
     var back = onEndEntry(history.state);
     leaveEnding();
     if (back) history.back();
   });
   window.addEventListener("popstate", function (e) {
-    if (ending && !wc && !onEndEntry(e.state)) leaveEnding();
+    if (ending && !wc && !onEndEntry(e.state)) { dtSwapped(e); leaveEnding(); }
     // An entry of an earlier visit (after a reload inside What changed opened from it): step back over it too.
     else if (!ending && !wc && !dt && e.state && e.state.cardselectorEnd) { try { history.back(); } catch (x) {} }
   });
@@ -3144,19 +3147,28 @@
   var homeFresh = document.getElementById("homefresh"), homeUtil = document.getElementById("homeutil");
   var freshEl = document.getElementById("fresh"), filterTapT = -1e9;
   filtersEl.addEventListener("click", function () { filterTapT = Date.now(); }, true);
-  function placeHome(home) {
+  // filtersDown: the home screen shows no list (no channel or activation choice), so Filters can sit with the utilities;
+  // with a list (a remembered In store, say) it stays above the list, where it always was.
+  function placeHome(home, filtersDown) {
     wrapEl.classList.toggle("home", home);
     if (home && freshEl.parentNode !== homeFresh) homeFresh.appendChild(freshEl);
     if (!home && freshEl.parentNode !== foot) foot.insertBefore(freshEl, foot.firstChild);
     homeFresh.hidden = !home;
-    if (home && ftoggle.parentNode !== homeUtil) { homeUtil.appendChild(ftoggle); homeUtil.appendChild(filtersEl); }
-    else if (!home && ftoggle.parentNode === homeUtil) {
+    if (filtersDown && ftoggle.parentNode !== homeUtil) { homeUtil.appendChild(ftoggle); homeUtil.appendChild(filtersEl); }
+    else if (!filtersDown && ftoggle.parentNode === homeUtil) {
       countEl.parentNode.insertBefore(ftoggle, countEl);
       countEl.parentNode.insertBefore(filtersEl, countEl);
-      // A filter picked down there (a category, a card) opens the list at the top, where the panel now is.
-      if (Date.now() - filterTapT < 1500) window.scrollTo(0, 0);
+      // A filter picked down there: a category or card opens the list at the top; a channel or activation choice keeps
+      // the home screen with a list under it, so the panel (now just above the list) is brought into view.
+      if (Date.now() - filterTapT < 1500) {
+        if (!home) window.scrollTo(0, 0);
+        else requestAnimationFrame(function () {
+          var top = ftoggle.getBoundingClientRect().top - document.querySelector(".searchbar").getBoundingClientRect().height - 8;
+          window.scrollTo(0, Math.max(0, window.scrollY + top));
+        });
+      }
     }
-    homeUtil.hidden = !home;
+    homeUtil.hidden = !filtersDown;
   }
 
   window.__ending = function () { return ending ? { sort: sortMode } : null; }; // for the tests
@@ -3184,7 +3196,9 @@
   // A keyboard click (detail 0) has no second tap to guard against.
   function dtSwapped(ev) { dtSwapT = ev && typeof ev.timeStamp === "number" && !(ev.type === "click" && ev.detail === 0) ? ev.timeStamp : -1e9; }
   // The search box counts too: it sits under the back arrow, so a double tap on Back would focus it (and pop up the keyboard).
-  var DT_GUARD = "#dt, #qp, #cb, .searchbar", dtPressDropped = false;
+  // Since step 4D also the shortcuts, the Ending chip, What changed's panel and the results, which the shortcuts and their
+  // way back swap in and out.
+  var DT_GUARD = "#dt, #qp, #cb, #sc, #endbar, #wc, #main, .searchbar", dtPressDropped = false;
   var inGuard = function (ev) { return ev.timeStamp - dtSwapT >= 0 && ev.timeStamp - dtSwapT < 400 && !!ev.target.closest && !!ev.target.closest(DT_GUARD); };
   document.addEventListener("click", function (ev) {
     if (ev.detail > 0 && (dtPressDropped || inGuard(ev)) && ev.target.closest && ev.target.closest(DT_GUARD)) {
@@ -3758,7 +3772,7 @@
     if (lineFit) lineFit.disconnect(); // the old bonus rows are gone
     var hasQuery = compact(query) !== "";
     var filtered = category !== null || card !== null;
-    var usedOn = usedMode && editing() && !wc; // What changed ignores the Used filter
+    var usedOn = usedMode && editing() && !wc && !ending; // What changed and Ending soon ignore the Used filter
     // A new search or filter ends the in-place rows and the extra pages of the last view.
     var view = JSON.stringify([query, category, card, cuisine, chanMode, actMode, sortMode, usedOn, wc && wc.tab, !!ending]);
     if (view !== viewSig) { keep = {}; viewSig = view; shownBefore = 0; }
@@ -3791,7 +3805,7 @@
       (card !== null ? " on " + card : "") + (ending ? " ending in the next 7 days" : "") +
       (actMode !== "any" ? (actMode === "ready" ? ", ready now" : ", needs activation") : "");
     renderFilterSummary();
-    renderUsed(editing() && !wc ? search(query, function (o) { return o.status === "used" && inUsedScope(o); }).length : null);
+    renderUsed(editing() && !wc && !ending ? search(query, function (o) { return o.status === "used" && inUsedScope(o); }).length : null);
     // The Used list ignores In store / Online and Activation: their rows are greyed out and can't be changed.
     [chansEl, actsEl].forEach(function (g) {
       g.parentNode.classList.toggle("off", usedOn);
@@ -3804,7 +3818,7 @@
     // Quick picks, Card bonuses and the New / Ending shortcuts: the home screen only (a search, category or card answers
     // in the answer card instead).
     var home = !wc && !ending && !usedOn && !hasQuery && category === null && card === null;
-    placeHome(home);
+    placeHome(home, home && !narrowed);
     renderQuickPicks(home, today);
     showBonuses(home);
     renderShortcuts(home, today);
