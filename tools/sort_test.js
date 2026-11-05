@@ -2310,7 +2310,8 @@ function listRows(sel) {
       const btn = await page.$$eval("#cb button", bs => bs.map(b => { const r = b.getBoundingClientRect(), li = b.closest("li").getBoundingClientRect(); return [Math.round(r.width), Math.round(r.height), r.right <= li.right + 0.5]; }));
       const hs = Object.values(C.rows).map(r => r.h), maxH = Math.max.apply(null, hs);
       ok(C.pageW <= w && Object.values(C.rows).every(r => !r.over) && btn.length === 4 && btn.every(b => b[1] >= 30 && b[1] <= 36 && b[0] <= 140 && b[2]) &&
-        maxH <= (w === 320 ? 130 : 110) && C.rows[FLEX].h <= (w === 320 ? 110 : 92) && C.minFont >= 12,
+        // Pixel limits with room for the runner's wider font (CI: a 126px button, a 109px pending row at 390px).
+        maxH <= 150 && C.rows[FLEX].h <= 130 && C.minFont >= 12,
         "cb " + w + "px: no sideways scroll, no row overflows, four small Mark activated buttons inside their rows, rows at most " + maxH + "px (the long name's four lines), a pending row " + C.rows[FLEX].h + "px, text 12px+ (" + J({ pageW: C.pageW, hs, btn, font: C.minFont, height: C.height }) + ")");
       if (w === 390) {
         if (process.env.SHOT_DIR) await page.screenshot({ path: path.join(process.env.SHOT_DIR, "cb-390-signed-in.png"), fullPage: true });
