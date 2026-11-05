@@ -2130,10 +2130,32 @@ function listRows(sel) {
     Q = await open({ set: { "Freedom Flex": "not_confirmed", "Freedom": "not_confirmed", "Discover it": "not_confirmed" } });
     tileIs("D/I", Q, "Dining", { rate: "4%", card: "Smartly", more: null, after: "Activate Flex, Freedom or Discover it: 5% · +1 pt",
       afterCards: ["Freedom Flex", "Freedom", "Discover it"], cond: "Citi Custom Cash 5% · conditional · +1 pt", condKind: "strong", likely: null, afterLikely: LIKELY });
-    // (Only the tag is checked for fit: the Custom Cash "5% · conditional · +1 pt" line, which doesn't wrap, can be wider
-    // than the Dining tile with some fonts, as on main.)
     ok(Object.keys(Q.tiles).every(k => !!Q.tiles[k].after === !!Q.tiles[k].afterLikely && (!Q.tiles[k].afterLikely || Q.tiles[k].afterLikelyIn)),
       "qp D/I: every activation line (and only those) carries Likely, each inside its tile (" + J(Object.keys(Q.tiles).map(k => [k, Q.tiles[k].after, !!Q.tiles[k].afterLikely, Q.tiles[k].afterLikelyIn])) + ")");
+    // The longest lines (Dining: "Activate Flex, Freedom or Discover it: 5% · +1 pt" and the strong
+    // "Citi Custom Cash 5% · conditional · +1 pt") wrap inside the tile at every phone width, with the same words.
+    for (const w of [320, 330, 350, 390]) {
+      await page.setViewportSize({ width: w, height: 844 });
+      await page.waitForTimeout(60);
+      const W = await quick();
+      const fit = await page.evaluate(() => [...document.querySelectorAll("#qp li.qpt")].map(li => {
+        // Where the visible text and chips end, against the tile's content edge (scrollWidth misses text that only
+        // runs into the padding).
+        const edge = li.getBoundingClientRect().right - parseFloat(getComputedStyle(li).paddingRight), rects = [];
+        const tw = document.createTreeWalker(li, NodeFilter.SHOW_TEXT);
+        for (let n; (n = tw.nextNode());) {
+          if (!n.textContent.trim() || n.parentElement.closest(".sr-only, .sr")) continue;
+          const r = document.createRange(); r.selectNodeContents(n); rects.push(...r.getClientRects());
+        }
+        li.querySelectorAll(".usegain, .likely").forEach(x => rects.push(x.getBoundingClientRect()));
+        return [li.dataset.topic, Math.round(Math.max.apply(null, rects.map(r => r.right)) - edge)];
+      }));
+      ok(Object.keys(W.tiles).every(k => !W.tiles[k].over) && fit.every(f => f[1] <= 1) && W.pageW <= w,
+        "qp D/I at " + w + "px: no Quick Pick tile overflows (" + J(Object.keys(W.tiles).map(k => [k, W.tiles[k].over])) + "; text past the edge " + J(fit) + "; page " + W.pageW + ")");
+      tileIs("D/I at " + w + "px", W, "Dining", { after: "Activate Flex, Freedom or Discover it: 5% · +1 pt", cond: "Citi Custom Cash 5% · conditional · +1 pt",
+        condKind: "strong", condSr: ", only if restaurants is your actual top eligible category this cycle" });
+    }
+    await page.setViewportSize({ width: 390, height: 844 });
     // Only one card's activation improves the answer: only it is named.
     tileIs("I", Q, "Utilities", { rate: "4%", card: "Smartly", after: "Activate Discover it: 5% · +1 pt", afterCards: ["Discover it"] });
     await parity("D/I", Q);
