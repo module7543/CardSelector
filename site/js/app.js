@@ -3043,7 +3043,8 @@
   // whatever the new page has there (a Mark activated would save). Pointer clicks (detail > 0; keyboard clicks are 0)
   // on the details, Quick picks or Card bonuses within 400 ms of the event that swapped the page are dropped.
   var dtSwapT = -1e9;
-  function dtSwapped(ev) { dtSwapT = ev && typeof ev.timeStamp === "number" ? ev.timeStamp : -1e9; }
+  // A keyboard click (detail 0) has no second tap to guard against.
+  function dtSwapped(ev) { dtSwapT = ev && typeof ev.timeStamp === "number" && !(ev.type === "click" && ev.detail === 0) ? ev.timeStamp : -1e9; }
   document.addEventListener("click", function (ev) {
     if (ev.detail > 0 && ev.timeStamp - dtSwapT >= 0 && ev.timeStamp - dtSwapT < 400 && ev.target.closest && ev.target.closest("#dt, #qp, #cb")) {
       ev.preventDefault();
