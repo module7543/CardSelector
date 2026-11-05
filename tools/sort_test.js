@@ -1939,7 +1939,7 @@ function listRows(sel) {
       "qp fixture: \"" + k + "\" is still a keyword in the real lists (the Step 2 comparison matches through it)"));
     let CASE = {}; // { set: { card: activation | "ended" | {start, end} }, choice, entries: list => list (after set) }
     const ROUTES = {
-      "offers.json": r => r.fulfill({ json: Object.assign({}, real, { offers: FX }) }),
+      "offers.json": r => r.fulfill({ json: Object.assign({}, real, { offers: CASE.offers ? CASE.offers(FX) : FX }) }),
       "phone-edits.json": r => r.fulfill({ json: {} }),
       "merchant-locations.json": r => r.fulfill({ json: { groups: {} } }),
       "cards.json": r => r.fulfill({ json: Object.assign({}, realCards, {
@@ -1973,7 +1973,8 @@ function listRows(sel) {
           afterLikely: a && a.querySelector(".likely") ? a.querySelector(".likely").textContent : null,
           afterLikelyLast: a && a.querySelector(".likely") ? a.lastElementChild === a.querySelector(".likely") : null,
           afterLikelyIn: a && a.querySelector(".likely") ? a.querySelector(".likely").getBoundingClientRect().right <= li.getBoundingClientRect().right - 1 : null,
-          empty: [...li.querySelectorAll("*")].filter(x => !x.textContent.trim() && !x.classList.contains("idot")).length,
+          empty: [...li.querySelectorAll("*")].filter(x => !x.textContent.trim() && !x.classList.contains("idot") && !x.classList.contains("gochev")).length,
+          go: [...li.querySelectorAll("button, a, input, select, [tabindex], [role=button], [onclick]")].map(x => x.className), chev: li.querySelectorAll(".qpgo > .gochev[aria-hidden=true]").length,
           over: li.scrollWidth > li.clientWidth + 1, h: Math.round(li.getBoundingClientRect().height) };
       });
       const sizes = [...q.querySelectorAll("*")].filter(x => x.textContent.trim() && !x.closest(".sr-only")).map(x => parseFloat(getComputedStyle(x).fontSize));
@@ -1982,7 +1983,7 @@ function listRows(sel) {
         order: [...q.querySelectorAll(".qpgrid > li.qpt")].map(li => li.dataset.topic), tiles,
         ev: ev ? ev.innerText.replace(/\s+/g, " ").trim() : null, evFull: ev ? Math.abs(ev.getBoundingClientRect().width - q.getBoundingClientRect().width) < 1 : false,
         cols: getComputedStyle(q.querySelector(".qpgrid")).gridTemplateColumns.split(" ").length,
-        actions: q.querySelectorAll("button, a, input, select, [tabindex], [role=button], [onclick]").length,
+        actions: q.querySelectorAll("button, a, input, select, [tabindex], [role=button], [onclick]").length, evActions: q.querySelector(".qpe") ? q.querySelector(".qpe").querySelectorAll("button, a, [tabindex], [role=button]").length : null,
         minFont: Math.min.apply(null, sizes), top: Math.round(r.top), bottom: Math.round(r.bottom), pageW: document.documentElement.scrollWidth,
         afterSearch: !!(document.querySelector(".searchbar").compareDocumentPosition(q) & Node.DOCUMENT_POSITION_FOLLOWING),
         beforeCb: !!(q.compareDocumentPosition(cb) & Node.DOCUMENT_POSITION_FOLLOWING), cbShown: !cb.hidden && cb.getBoundingClientRect().height > 0,
@@ -2074,8 +2075,8 @@ function listRows(sel) {
     ok(Q.tiles.Dining.condSr === ", only if restaurants is your actual top eligible category this cycle" &&
       ["Grocery stores", "Online shopping", "Gas stations", "Entertainment", "Utilities"].every(k => Q.tiles[k].cond === null),
       "qp custom cash: muted line on its focus topic (with why, for screen readers), none on the other five");
-    ok(Q.cols === 2 && Q.actions === 0 && Q.minFont >= 11.5 && Q.pageW <= 390,
-      "qp 390px: a two-column grid, no buttons or links (no tap action in 4A), no text under 11.5px, no sideways scroll (" + J([Q.cols, Q.actions, Q.minFont, Q.pageW]) + ")");
+    ok(Q.cols === 2 && Q.actions === 6 && Object.keys(Q.tiles).every(k => J(Q.tiles[k].go) === J(["qpgo"]) && Q.tiles[k].chev === 1) && Q.evActions === 0 && Q.minFont >= 11.5 && Q.pageW <= 390,
+      "qp 390px: a two-column grid, each of the six tiles one button with a chevron (it opens the detail), the Everyday tile none, no text under 11.5px, no sideways scroll (" + J([Q.cols, Q.actions, Q.evActions, Q.minFont, Q.pageW]) + ")");
     ok(Q.afterSearch && Q.beforeCb && Q.cbShown && !Q.oldStrip && Q.bottom < 844, "qp placement: after the search box, before Card bonuses, which shows; the old Bonus categories strip is gone; within the first screen (" + J([Q.top, Q.bottom]) + ")");
     await parity("A", Q);
     // Not on a search, a category or a card (the answer card answers those), back on the home screen.
@@ -2194,13 +2195,14 @@ function listRows(sel) {
       const rows = {};
       c.querySelectorAll("li[data-eid]").forEach(l => {
         rows[l.dataset.eid] = { card: plain(l.querySelector(".cbcard")), dot: !!l.querySelector(".cbcard .idot"), summary: plain(l.querySelector(".cbsumm")),
-          state: plain(l.querySelector(".cbst")), states: l.querySelectorAll(".cbst").length, buttons: [...l.querySelectorAll("button")].map(b => b.textContent),
+          state: plain(l.querySelector(".cbst")), states: l.querySelectorAll(".cbst").length, buttons: [...l.querySelectorAll("button:not(.cbgo)")].map(b => b.textContent),
+          go: l.querySelectorAll(":scope > button.cbgo").length, chev: l.querySelectorAll(".cbgo > .gochev[aria-hidden=true]").length,
           h: Math.round(l.getBoundingClientRect().height), over: l.scrollWidth > l.clientWidth + 1, cursor: getComputedStyle(l).cursor };
       });
       const qp = document.getElementById("qp"), ft = document.getElementById("ftoggle");
       return { shown: !c.hidden && c.getBoundingClientRect().height > 0, head: plain(c.querySelector("h2")), pend: plain(c.querySelector(".cbpend")),
         pendWarn: !!c.querySelector(".cbpend.bwarn"), ids: [...c.querySelectorAll("li[data-eid]")].map(l => l.dataset.eid), rows,
-        controls: [...c.querySelectorAll("button, a, input, select, textarea, details, summary, [tabindex], [role=button], [role=link], [onclick]")].map(x => x.tagName + ":" + x.textContent.trim()),
+        controls: [...c.querySelectorAll("button:not(.cbgo), a, input, select, textarea, details, summary, [tabindex], [role=button], [role=link], [onclick]")].map(x => x.tagName + ":" + x.textContent.trim()),
         text: plain(c), pageW: document.documentElement.scrollWidth,
         afterQp: !!(qp.compareDocumentPosition(c) & Node.DOCUMENT_POSITION_FOLLOWING), beforeFilters: !!(c.compareDocumentPosition(ft) & Node.DOCUMENT_POSITION_FOLLOWING),
         top: Math.round(c.getBoundingClientRect().top), height: Math.round(c.getBoundingClientRect().height),
@@ -2254,14 +2256,20 @@ function listRows(sel) {
     cbIs("states", C, CC, { card: "Citi Custom Cash", dot: true, summary: "5% on top category", state: "CardSelector focus: restaurants", states: 1, buttons: [] });
     cbIs("states", C, COSTCO, { card: "Costco Visa", dot: true, summary: "5% Costco gas, 4% gas, 3% dining", state: "No activation needed", states: 1, buttons: [] });
     cbIs("states", C, BOA, { card: "Customized Cash", dot: true, summary: "5.25% online shopping, 3.5% grocery & wholesale clubs", state: "Choice: online shopping", states: 1, buttons: [] });
-    ok(!C.controls.length && Object.values(C.rows).every(r => r.cursor !== "pointer"), "cb signed out: no button, picker, link or other tap target, and no row looks tappable (" + J(C.controls) + ")");
+    ok(!C.controls.length && Object.values(C.rows).every(r => r.go === 1 && r.chev === 1 && !r.buttons.length),
+      "cb signed out: each row is one button with a chevron (it opens the row's detail); no other button, picker, link or tap target (" + J(C.controls) + ")");
     ok(!/More details|Undo|Save|Mark not activated|Change it at Bank of America/.test(C.text) && !/Citi elects|at Citi/.test(C.text),
       "cb signed out: no More details, Undo, Save or picker wording; the focus line claims nothing at Citi (" + C.text + ")");
-    // Tapping a row does nothing (no navigation, no detail page yet: step 4C).
-    const r0 = await page.evaluate(() => [window.__renders, location.href, history.length]);
-    await page.click("#cb li[data-eid='" + FLEX + "']");
-    await page.click("#cb li[data-eid='" + CC + "']");
-    ok(J(await page.evaluate(() => [window.__renders, location.href, history.length])) === J(r0), "cb: tapping a row opens nothing and draws nothing");
+    // Tapping a row (anywhere on it, its state line too) opens its detail; the back arrow returns (more in "dt …").
+    const r0 = await page.evaluate(() => [location.href, navigation.currentEntry.index]);
+    // A real tap on the state line text (the row's button covers it, so the tap lands on the button).
+    const stBox = await page.locator("#cb li[data-eid='" + FLEX + "'] .cbst").boundingBox();
+    await page.mouse.click(stBox.x + 20, stBox.y + stBox.height / 2);
+    await page.waitForTimeout(450);
+    ok(J(await page.evaluate(() => window.__detail())) === J({ depth: 1, view: "cb:" + FLEX, hist: 1 }) && J(await page.evaluate(() => [location.href, navigation.currentEntry.index])) === J([r0[0], r0[1] + 1]),
+      "cb: tapping a row's state line opens its detail, one history entry, same URL");
+    await page.click("#dtback");
+    ok(await page.evaluate(() => window.__detail() === null && !document.getElementById("cb").hidden), "cb: the back arrow returns to the home screen");
     // A pending Custom Cash or Customized Cash entry (not in today's data) shows the pending line, as the header counts it.
     C = await cbOpen({ set: { "Citi Custom Cash": "not_confirmed", "Customized Cash": "not_confirmed" } });
     ok(C.pend === "⚠ 2 activations pending" && C.rows[CC].state === "⚠ Not activated" && C.rows[BOA].state === "⚠ Not activated",
@@ -2281,7 +2289,7 @@ function listRows(sel) {
     cbIs("signed in", C, FLEX, { state: "⚠ Not activated, activate by Dec 14 Mark activated", buttons: ["Mark activated"] });
     cbIs("signed in", C, DISC, { state: "⚠ Not activated, activate by Dec 31 5% starts the day you activate. Mark activated", buttons: ["Mark activated"] });
     cbIs("signed in", C, FREE, { state: "⚠ Not activated", buttons: [] });
-    const labels = await page.$$eval("#cb button", bs => bs.map(b => b.getAttribute("aria-label")));
+    const labels = await page.$$eval("#cb button:not(.cbgo)", bs => bs.map(b => b.getAttribute("aria-label")));
     ok(J(labels) === J(["Mark activated: Freedom Flex", "Mark activated: Discover it"]), "cb signed in: each Mark activated names its card for screen readers (" + J(labels) + ")");
     ok(J(C.controls) === J(["BUTTON:Mark activated", "BUTTON:Mark activated"]) && C.pend === "⚠ 3 activations pending",
       "cb signed in: the only controls are the two Mark activated buttons (a pending entry with no deadline has none) (" + J(C.controls) + ")");
@@ -2307,7 +2315,7 @@ function listRows(sel) {
     for (const w of [390, 320]) {
       await page.setViewportSize({ width: w, height: 844 });
       C = await cbOpen({ set: { "Freedom Flex": "not_confirmed", "Discover it": "not_confirmed", "Freedom": "not_confirmed" }, entries: l => l.concat([Object.assign({}, LONG, { activation: "not_confirmed" })]) }, true);
-      const btn = await page.$$eval("#cb button", bs => bs.map(b => { const r = b.getBoundingClientRect(), li = b.closest("li").getBoundingClientRect(); return [Math.round(r.width), Math.round(r.height), r.right <= li.right + 0.5]; }));
+      const btn = await page.$$eval("#cb button:not(.cbgo)", bs => bs.map(b => { const r = b.getBoundingClientRect(), li = b.closest("li").getBoundingClientRect(); return [Math.round(r.width), Math.round(r.height), r.right <= li.right + 0.5]; }));
       const hs = Object.values(C.rows).map(r => r.h), maxH = Math.max.apply(null, hs);
       ok(C.pageW <= w && Object.values(C.rows).every(r => !r.over) && btn.length === 4 && btn.every(b => b[1] >= 30 && b[1] <= 36 && b[0] <= 140 && b[2]) &&
         // Pixel limits with room for the runner's wider font (CI: a 126px button, a 109px pending row at 390px).
@@ -2319,6 +2327,473 @@ function listRows(sel) {
         ok(C.top + C.height < 1400 && Object.values(C.rows).every(r => r.h <= 80), "cb 390px, signed out: seven rows of at most 80px (" + J([C.top, C.height, Object.values(C.rows).map(r => r.h)]) + ")");
       }
     }
+
+    // ---- Quick Pick and Card Bonus details (redesign step 4C): modes of the main page, on the same fixture files and
+    // clock. A tile or row opens its detail (one history entry); Back (the arrow or the browser's) returns with the
+    // scroll and focus as they were; the detail's numbers come from the same rules as the tiles and rows.
+    await page.setViewportSize({ width: 390, height: 844 });
+    const ZQG = Object.assign(fx("zqgrocer", "Zqgrocer Market", "Groceries & Food Delivery", "in_store"), { card: "U.S. Bank", bonus: "10% cash back", activation: "already_activated" });
+    // A tile's or the detail's answer box as words: the rate and card, then each line (Likely and screen-reader text left out).
+    const ANS = () => {
+      window.__ans = e => !e ? null : [...e.children].filter(c => !c.matches(".qpn, .gochev, .sr-only")).map(c => {
+        const k = c.cloneNode(true); k.querySelectorAll(".sr, .sr-only, .likely").forEach(x => x.remove());
+        return c.matches(".qpw") ? [...k.children].map(x => x.textContent).join(" ") : k.textContent;
+      }).join(" ").replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
+    };
+    await page.addInitScript(ANS);
+    await page.evaluate(ANS);
+    const dtv = () => page.evaluate(() => {
+      const d = document.getElementById("dt"), b = document.getElementById("dtbody");
+      if (d.hidden) return null;
+      const plain = e => e ? e.innerText.replace(/\s+/g, " ").trim() : null;
+      const bare = e => { if (!e) return null; const c = e.cloneNode(true); c.querySelectorAll(".sr, .sr-only, .likely").forEach(x => x.remove()); return c.textContent.replace(/ /g, " ").replace(/\s+/g, " ").trim(); };
+      const sec = h => { const s = [...b.querySelectorAll("section.dtsec")].find(x => x.querySelector("h3") && x.querySelector("h3").textContent === h); return s ? plain(s) : null; };
+      const vis = x => { const r = x.getBoundingClientRect(); return r.width > 0 && !x.closest(".sr-only") && getComputedStyle(x).visibility !== "hidden"; };
+      return { title: plain(document.getElementById("dt-h")), sub: plain(document.getElementById("dtsub")), detail: window.__detail(),
+        heads: [...b.querySelectorAll("section.dtsec > h3")].map(h => h.textContent), answer: window.__ans(b.querySelector(".dtans")),
+        ranks: [...b.querySelectorAll(".dtrank .dtrow")].map(r => ({ rate: bare(r.querySelector(".dtrate")), card: bare(r.querySelector(".dtcard")), status: bare(r.querySelector(".dtst")),
+          why: bare(r.querySelector(".dtwhy")), muted: r.classList.contains("muted"), go: r.tagName === "BUTTON" })),
+        links: [...b.querySelectorAll(".dtlinks .dtlink")].map(bare),
+        counts: ([...b.querySelectorAll("section.dtsec")].find(s => s.querySelector("h3").textContent === "What counts") || { querySelectorAll: () => [] }).querySelectorAll("li").length ?
+          [...[...b.querySelectorAll("section.dtsec")].find(s => s.querySelector("h3").textContent === "What counts").querySelectorAll("li")].map(li => li.textContent) : [],
+        cat: sec("App category"), status: sec("Status"), rates: sec("Rates"), focus: sec("CardSelector focus"), choice: sec("Choice"), stands: sec("Where it stands now"), always: sec("Always on"),
+        tags: [...b.querySelectorAll(".dttag")].map(t => t.parentNode.querySelector(".dtoname").textContent + ":" + t.textContent),
+        opts: [...b.querySelectorAll(".dtopts li")].map(li => [...li.children].map(c => c.textContent.trim()).join(" ")),
+        more: b.querySelector("details.dtmore") ? { open: b.querySelector("details.dtmore").open, text: plain(b.querySelector("details.dtmore .dtmorebody")) } : null,
+        controls: [...b.querySelectorAll("button, select, input")].filter(x => !x.closest(".dtrank, .dtlinks")).map(x => x.tagName + ":" + (x.tagName === "SELECT" ? x.value : x.textContent) + (x.hidden ? " (hidden)" : "")),
+        text: plain(b), y: Math.round(window.scrollY), hist: navigation.currentEntry.index, entries: navigation.entries().length, focused: document.activeElement === document.getElementById("dtback") ? "back" : document.activeElement.getAttribute("data-f"),
+        homeHidden: ["qp", "cb", "ftoggle", "main"].every(id => !document.getElementById(id).offsetParent) && !document.querySelector(".searchbar").offsetParent,
+        pageW: document.documentElement.scrollWidth,
+        over: [...d.querySelectorAll("*")].filter(x => vis(x) && (x.getBoundingClientRect().right > window.innerWidth + 0.5 || x.getBoundingClientRect().left < -0.5)).map(x => x.className || x.tagName).slice(0, 5),
+        minFont: Math.min.apply(null, [...d.querySelectorAll("*")].filter(x => vis(x) && x.textContent.trim()).map(x => parseFloat(getComputedStyle(x).fontSize))) };
+    });
+    const tileText = label => page.$eval("#qp li.qpt[data-topic='" + label + "'] .qpgo", e => window.__ans(e));
+    // Each page swap is followed by a pause, as a person's next tap is: taps within 400 ms of a swap are dropped (double-tap guard).
+    const qpGo = async label => { await page.click("#qp li.qpt[data-topic='" + label + "'] .qpgo"); await page.waitForFunction(() => !document.getElementById("dt").hidden); await page.waitForTimeout(450); return dtv(); };
+    const cbGo = async id => { await page.click("#cb li[data-eid='" + id + "'] .cbgo"); await page.waitForFunction(() => !document.getElementById("dt").hidden); await page.waitForTimeout(450); return dtv(); };
+    const dtBackArrow = async () => { await page.click("#dtback"); await page.waitForTimeout(450); };
+    const rk = D => D.ranks.map(r => [r.rate, r.card, r.status, r.muted]);
+    // A signed-in save that answers at once (the real store.js path is checked in tools/phone_edits_test.js): the record
+    // the save leaves, from the bonus file the page loaded.
+    const stubSave = () => page.evaluate(async () => {
+      const j = await (await fetch("data/bonus-categories.json")).json();
+      window.__recs = Object.fromEntries(j.entries.map(e => [e.id, { activation: e.activation, planned: e.planned, choice: e.choice }]));
+      window.__saves = [];
+      CardStore.save = change => {
+        const f = { "bonus.activation": "activation", "bonus.planned": "planned", "bonus.choice": "choice" }[change.type], r = window.__recs[change.id];
+        window.__saves.push(change);
+        r[f] = change.to;
+        return Promise.resolve({ status: "saved", message: "test save", commit: "c" + window.__saves.length, undo: { type: change.type, id: change.id, from: change.to, to: change.from }, record: Object.assign({}, r) });
+      };
+      CardStore.liveStatus = () => Promise.resolve({ state: "live" });
+    });
+
+    // Dining (every bonus activated): the answer as its tile gives it, then every card best rate first.
+    await cbOpen({});
+    let tDining = await tileText("Dining"), D = await qpGo("Dining");
+    ok(D.title === "Dining" && D.sub === "Quick pick · no offer needed" && D.answer === tDining && D.homeHidden && D.focused === "back",
+      "dt Dining: the detail shows the tile's answer (" + D.answer + "), the home screen hidden, focus on the back arrow");
+    ok(J(rk(D)) === J([["5%", "Freedom Flex", "Activated", false], ["5%", "Freedom", "Activated", false], ["5%", "Discover it", "Activated", false],
+      ["5%", "Citi Custom Cash", "Conditional", true], ["4%", "Smartly", "Always on", false], ["3%", "Costco Visa", "Below everyday", true]]),
+      "dt Dining: ranked Freedom Flex, Freedom, Discover it (Activated), Citi Custom Cash (Conditional, muted), Smartly (Always on), Costco Visa (Below everyday, muted) (" + J(rk(D)) + ")");
+    ok(D.ranks[3].why === "only if restaurants is your actual top eligible category this cycle" && D.ranks.every(r => r.go) && /^Q4 · through Dec 31$/.test(D.ranks[0].why) &&
+      /^everyday rate, first \$10,000 per billing cycle, some categories 2%$/.test(D.ranks[4].why),
+      "dt Dining: Custom Cash says only if restaurants is your actual top eligible category this cycle; Smartly keeps its caveat; each row opens its card (" + J(D.ranks.map(r => r.why)) + ")");
+    ok(D.counts[0] === LIKELY && D.counts.includes("Discover it: bakeries may not count as restaurants.") && /Dining Matches this Quick pick, except the Gift Cards & Dining Services cuisine, which doesn't count as dining\./.test(D.cat),
+      "dt Dining: What counts has Likely and the bakery caveat; the app category box names the excluded Gift Cards & Dining Services cuisine (" + J([D.counts, D.cat]) + ")");
+    ok(J(D.links) === J(["CardSelector focus: restaurants", "Choice: online shopping"]) && D.more && !D.more.open, "dt Dining: links to the focus and the Choice (signed out wording), More details collapsed (" + J(D.links) + ")");
+    await page.click("#dtbody details.dtmore > summary");
+    D = await dtv();
+    ok(D.more.open && /Freedom Flex 5% test quarter\. .*Cap: up to \$1,500 in combined purchases\..*Source: example\.com/.test(D.more.text), "dt Dining: More details opens on the issuer wording, cap and source (" + D.more.text.slice(0, 160) + ")");
+    await dtBackArrow();
+
+    // Grocery stores with both Chase bonuses pending: Smartly leads, the pending cards are not ready, Custom Cash's
+    // grocery stores is conditional, Customized Cash is below everyday; the category box isn't Groceries & Food Delivery.
+    CASE = { set: { "Freedom Flex": "not_confirmed", "Freedom": "not_confirmed" }, offers: f => f.concat([ZQG]) };
+    await cbOpen(CASE);
+    const tGro = await tileText("Grocery stores");
+    D = await qpGo("Grocery stores");
+    ok(D.answer === tGro && /^4% Smartly/.test(D.answer) && /Activate Flex or Freedom: 5% · \+1 pt/.test(D.answer),
+      "dt Grocery stores: the answer as the tile gives it, Smartly 4% with the activation line (" + D.answer + ")");
+    ok(J(rk(D)) === J([["5%", "Freedom Flex", "Not activated", true], ["5%", "Freedom", "Not activated", true], ["5%", "Citi Custom Cash", "Conditional", true],
+      ["4%", "Smartly", "Always on", false], ["3.5%", "Customized Cash", "Below everyday", true]]),
+      "dt Grocery stores: pending cards Not activated (muted), Custom Cash Conditional, Smartly the first ready card, Customized Cash 3.5% Below everyday (" + J(rk(D)) + ")");
+    ok(D.ranks[0].why === "activate by Dec 14 · Q4 · through Dec 31" && D.ranks[2].why === "only if grocery stores is your actual top eligible category this cycle (not your CardSelector focus)" &&
+      D.ranks[4].why === "below Smartly's everyday 4% · incl. 75% Preferred Rewards",
+      "dt Grocery stores: why each is muted (" + J(D.ranks.map(r => r.why)) + ")");
+    ok(/Not the same as Groceries & Food Delivery/.test(D.cat) && /Grocery stores only, not meal kits, wine clubs or delivery services\./.test(D.cat) &&
+      /Top offer in Groceries & Food Delivery: Zqgrocer Market 14% with Smartly\./.test(D.cat) && /not every merchant in Groceries & Food Delivery/.test(D.cat),
+      "dt Grocery stores: not the same as Groceries & Food Delivery, with that category's top offer (" + D.cat + ")");
+    ok(D.counts.includes("Freedom Flex, Freedom and Citi Custom Cash (grocery stores): excludes Walmart, Target, Costco, Sam's Club, BJ's.") &&
+      D.counts.includes("Customized Cash: excludes Walmart, Target.") &&
+      D.counts.includes("Freedom Flex, Freedom, Citi Custom Cash (grocery stores) and Customized Cash: Instacart and Shipt may not count: delivery services can code as delivery, not as a grocery store.") &&
+      !D.counts.some(l => /^Excluded:/.test(l)), "dt Grocery stores: What counts names the cards each exclusion and may-not-count line applies to; Customized Cash's own wholesale clubs rate keeps Costco, Sam's Club and BJ's off its line (" + J(D.counts) + ")");
+    ok(J(D.links) === J(["CardSelector focus: restaurants"]), "dt Grocery stores: links to the Custom Cash focus only (grocery isn't a Customized Cash choice) (" + J(D.links) + ")");
+    await dtBackArrow();
+
+    // Online shopping: the Customized Cash Choice and the Preferred Rewards tier of today; the Online filter counts.
+    const ONL = [Object.assign(fx("onl1", "Zqonline One", "Clothing & Jewelry", "online")), Object.assign(fx("none1", "Zqnone One", "Clothing & Jewelry", "none_shown")),
+      Object.assign(fx("none2", "Zqnone Two", "Home & Garden", "none_shown")), Object.assign(fx("both1", "Zqboth One", "Home & Garden", "in_store_and_online"))];
+    const allOnl = FX.concat(ONL), nKnown = allOnl.filter(o => o.channel === "online").length, nNone = allOnl.filter(o => o.channel === "none_shown").length;
+    await cbOpen({ offers: f => f.concat(ONL) });
+    D = await qpGo("Online shopping");
+    ok(J(rk(D)) === J([["5.25%", "Customized Cash", "Always on", false], ["4%", "Smartly", "Always on", false]]) && D.ranks[0].why === "incl. 75% Preferred Rewards" &&
+      J(D.links) === J(["Choice: online shopping"]), "dt Online shopping: Customized Cash 5.25% incl. 75% Preferred Rewards (the Choice), Smartly 4%, the Choice link (" + J([rk(D), D.ranks[0].why, D.links]) + ")");
+    ok(nKnown === 2 && nNone === 3 && new RegExp("No app category for online shopping .*Online filter.* " + nKnown + " offers are online only \\(known online\\)\\. " + nNone +
+      " offers don't show a channel\\. The Online filter keeps them, but they never count as known online\\.").test(D.cat),
+      "dt Online shopping: no app category, the Online filter, " + nKnown + " known online and " + nNone + " with no channel shown (never counted as known online) (" + D.cat + ")");
+    await dtBackArrow();
+    await cbOpen({ choice: "dining" });
+    D = await qpGo("Online shopping");
+    ok(J(rk(D)) === J([["4%", "Smartly", "Always on", false]]) && J(D.links) === J(["Choice: dining"]) && !D.counts.includes(LIKELY),
+      "dt Online shopping, Choice dining: no Customized Cash rate here, the link names the Choice, no Likely line (only the everyday rate) (" + J([rk(D), D.links, D.counts]) + ")");
+    await dtBackArrow();
+    await cbOpen({}, false, new Date(2026, 11, 20, 12, 0, 0));
+    D = await qpGo("Online shopping");
+    ok(J(D.ranks[0]) === J({ rate: "4.5%", card: "Customized Cash", status: "Always on", why: "incl. 50% Preferred Rewards", muted: false, go: true }), "dt Online shopping on Dec 20: 4.5%, incl. 50% Preferred Rewards (" + J(D.ranks[0]) + ")");
+    await dtBackArrow();
+    // Custom Cash's focus never "covers" its other categories, and a shorter keyword ("Alamo", car rental) never covers a
+    // longer merchant ("Alamo Drafthouse").
+    {
+      const ccE = ENTRIES.find(e => e.id === CC);
+      await cbOpen({ set: { "Citi Custom Cash": { planned: "select transit", eligible: ccE.eligible.concat([{ name: "select transit", topic: "transit", list: ["select_transit", "car_rental"] }]) } } });
+      D = await qpGo("Entertainment");
+      ok(D.counts.includes("Citi Custom Cash (live entertainment): excludes AMC, Regal, Cinemark, Fandango, Landmark Theatres, Alamo Drafthouse."),
+        "dt Entertainment, focus select transit: the live entertainment line keeps Alamo Drafthouse (" + J(D.counts) + ")");
+      await dtBackArrow();
+    }
+    // The other three topics: the tile's answer, a ranked list and an app category line each.
+    await cbOpen({});
+    for (const t of ["Gas stations", "Entertainment", "Utilities"]) {
+      const tt = await tileText(t);
+      D = await qpGo(t);
+      const first = D.ranks.find(r => r.status === "Always on" || r.status === "Activated");
+      ok(D.answer === tt && first && tt.startsWith(first.rate + " " + first.card) && D.cat && D.counts[0] === LIKELY, "dt " + t + ": the tile's answer, its first ready card leads the list (" + J([tt, rk(D), D.cat]) + ")");
+      if (t === "Entertainment") ok(D.counts.includes("Discover it: excludes Netflix, Hulu, Disney+, Max, Peacock, Paramount+, Spotify, YouTube.") &&
+        D.counts.includes("Citi Custom Cash (live entertainment): excludes AMC, Regal, Cinemark, Fandango, Landmark Theatres, Alamo Drafthouse.") &&
+        D.counts.some(l => /^Citi Custom Cash \(live entertainment\): Eventbrite may not count/.test(l)) && !D.counts.some(l => /^Excluded:/.test(l)),
+        "dt Entertainment: one card's exclusions are never stated for the topic (Citi's AMC exclusion names Citi; Discover it pays at AMC) (" + J(D.counts) + ")");
+      await dtBackArrow();
+    }
+    D = await qpGo("Gas stations");
+    ok(D.counts.includes("Citi Custom Cash (gas stations): excludes Costco, Sam's Club, BJ's, Walmart.") && D.counts.includes("Costco Visa: excludes Sam's Club, BJ's, Walmart."),
+      "dt Gas stations: Costco Visa's line leaves out Costco (its own Costco gas and Costco rates) (" + J(D.counts) + ")");
+    await dtBackArrow();
+    await cbOpen({ choice: "gas & EV charging stations" });
+    D = await qpGo("Gas stations");
+    ok(D.counts.includes("Customized Cash and Citi Custom Cash (gas stations): excludes Costco, Sam's Club, BJ's, Walmart."),
+      "dt Gas stations, Choice gas: Customized Cash keeps Costco, Sam's Club and BJ's on its line (its wholesale clubs rate is lower than 5.25%) (" + J(D.counts) + ")");
+    await dtBackArrow();
+    await cbOpen({});
+    D = await qpGo("Gas stations");
+    ok(/Not the same as Auto & Gas/.test(D.cat) && D.counts.some(l => /^Citi Custom Cash \(gas stations\) and Costco Visa: Speedway, Circle K, Wawa, Sheetz, QuikTrip, Casey's and Quik Stop may not count: /.test(l)) &&
+      J(rk(D).slice(0, 2)) === J([["5%", "Citi Custom Cash", "Conditional", true], ["4%", "Smartly", "Always on", false]]),
+      "dt Gas stations: Custom Cash conditional above Smartly, Costco Visa tied; names sharing a reason on one line; not the same as Auto & Gas (" + J([rk(D), D.cat]) + ")");
+    await dtBackArrow();
+
+    // Card Bonus details, signed out (Freedom Flex pending): state, rates, where each stands, always-on rates; no control.
+    await cbOpen({ set: { "Freedom Flex": "not_confirmed" } });
+    D = await cbGo(FLEX);
+    ok(D.title === "Freedom Flex" && D.sub === "5% grocery, dining, Red Cross" && D.status === "Status ⚠ Not activated, activate by Dec 14 Oct 1 – Dec 31, 2026" && !D.controls.length,
+      "dt Freedom Flex signed out: the pending state and dates, no control (" + J([D.status, D.controls]) + ")");
+    ok(D.rates === "Rates 5% grocery stores 5% dining 5% American Red Cross donations Cap: up to $1,500 in combined purchases." &&
+      D.always === "Always on 3% dining 3% drugstores 1% base rate, everything else" &&
+      /Grocery stores: not activated, so it doesn't lead\. Freedom 5% leads\./.test(D.stands) && /Dining: not activated, so it doesn't lead\. Freedom 5% leads\./.test(D.stands),
+      "dt Freedom Flex: rates, always-on rates from cards.json, where it stands (not activated) (" + J([D.rates, D.always, D.stands]) + ")");
+    await dtBackArrow();
+    D = await cbGo(FREE);
+    ok(D.status === "Status ✓ Activated Oct 1 – Dec 31, 2026" && /Dining: leads at 5%, tied with Discover it\./.test(D.stands) && /Grocery stores: leads at 5%\./.test(D.stands) && !D.controls.length,
+      "dt Freedom: activated, leads Dining (tied with Discover it) and Grocery stores (" + D.stands + ")");
+    await dtBackArrow();
+    D = await cbGo(SMART);
+    ok(!D.controls.length && /4% everyday · first \$10,000 per billing cycle, then 2%; some categories always 2%/.test(D.rates) && !/4% (everywhere|on everything)/i.test(D.text) &&
+      /Gas stations: leads at 4%, tied with Costco Visa\./.test(D.stands) && /Dining: 4%; Freedom 5% leads\./.test(D.stands) && !D.always,
+      "dt Smartly: no control, the $10,000 / 2% caveat (never \"4% everywhere\"), where it stands (" + J([D.rates, D.stands]) + ")");
+    await dtBackArrow();
+    D = await cbGo(COSTCO);
+    ok(!D.controls.length && D.status === "Status No activation needed" && /^Rates 3% dining 5% Costco gas 4% gas stations · 5% at Costco gas /.test(D.rates) && /Rewards come as an annual certificate\./.test(D.rates) &&
+      /Gas stations: tied at 4%; Smartly wins the tie\./.test(D.stands) && /Dining: 3%, below Smartly's everyday 4%\./.test(D.stands) && D.always === "Always on 1% base rate, everything else",
+      "dt Costco Visa: no control, its standing rates and note, tied on Gas stations (Smartly wins the tie), below everyday on Dining (" + J([D.rates, D.stands]) + ")");
+    await dtBackArrow();
+    D = await cbGo(CC);
+    ok(!D.controls.length && J(D.tags) === J(["restaurants:CardSelector focus"]) && D.opts.length === 4 && D.opts[0] === "restaurants CardSelector focus Quick pick: Dining · also Flex, Freedom, Discover it, Costco Visa 3%" &&
+      /changes nothing at Citi/.test(D.focus) && !/set your Citi category|Citi elects|earns 5%/i.test(D.text) && D.status === "Status No activation needed CardSelector focus: restaurants",
+      "dt Citi Custom Cash signed out: the focus tagged, the eligible list with its also cards, no picker, nothing claims a Citi election (" + J([D.opts, D.status]) + ")");
+    await dtBackArrow();
+    D = await cbGo(BOA);
+    ok(!D.controls.length && J(D.tags) === J(["online shopping:Your Choice"]) && J(D.opts) === J(["5.25% gas & EV charging stations Quick pick: Gas stations · also Costco Visa 4%",
+      "5.25% online shopping Your Choice Quick pick: Online shopping", "5.25% dining Quick pick: Dining · also Flex 5%, Freedom 5%, Discover it 5%, Citi Custom Cash 5%, Costco Visa 3%"]) &&
+      !/Change it at Bank of America/.test(D.text) && /Customized Cash: rates include the 75% Preferred Rewards boost \(50% after Dec 15\)\./.test(D.rates),
+      "dt Customized Cash signed out: the Choice tagged, each choice's rate and who else pays, no picker or BofA wording (" + J(D.opts) + ")");
+    await dtBackArrow();
+    // Custom Cash and Customized Cash pending: the detail shows the activation state and the focus or Choice, both.
+    await cbOpen({ set: { "Citi Custom Cash": "not_confirmed", "Customized Cash": "not_confirmed" } });
+    D = await cbGo(CC);
+    const ccSt = D.status;
+    await dtBackArrow();
+    D = await cbGo(BOA);
+    ok(ccSt === "Status ⚠ Not activated CardSelector focus: restaurants" && D.status === "Status ⚠ Not activated Choice: online shopping",
+      "dt pending Custom Cash / Customized Cash: both the pending state and the focus or Choice (" + J([ccSt, D.status]) + ")");
+    await dtBackArrow();
+
+    // Signed in: Mark activated / Mark not activated in the detail, the save bar's Undo, the home count and the Quick picks.
+    const homeOf = () => page.evaluate(() => ({ pend: document.querySelector("#cb .cbpend").textContent,
+      gro: [...document.querySelectorAll("#qp li.qpt[data-topic='Grocery stores'] .qpw > span")].map(s => s.textContent.replace(/ /g, " ")).join(" ") }));
+    await cbOpen({ set: { "Freedom Flex": "not_confirmed", "Freedom": "not_confirmed" } }, true);
+    await stubSave();
+    const home0 = await homeOf();
+    D = await qpGo("Grocery stores");
+    const hD = D.hist;
+    // Quick Pick -> its pending Freedom Flex row -> that Card Bonus detail (one more entry).
+    await page.click("#dtbody .dtrow[data-f='r-Freedom Flex']");
+    await page.waitForTimeout(450);
+    D = await dtv();
+    ok(D.detail.depth === 2 && D.detail.view === "cb:" + FLEX && D.hist === hD + 1 && J(D.controls) === J(["BUTTON:Mark activated"]),
+      "dt nested: a Quick Pick row opens its Card Bonus detail, one more history entry, Mark activated signed in (" + J([D.detail, D.hist - hD, D.controls]) + ")");
+    await page.click("#dtbody button[data-f='act']");
+    await page.waitForFunction(() => /✓ Activated/.test(document.getElementById("dtbody").innerText));
+    D = await dtv();
+    ok(J(D.controls) === J(["BUTTON:Mark not activated"]) && D.hist === hD + 1 && D.detail.depth === 2 && D.focused === "act" && /Grocery stores: leads at 5%, tied with Freedom|Grocery stores: leads at 5%\./.test(D.stands),
+      "dt Mark activated in the detail: activated, Mark not activated in its place (focused), no history entry, where it stands follows (" + J([D.controls, D.stands]) + ")");
+    await page.goBack();
+    await page.waitForFunction(() => window.__detail() && window.__detail().depth === 1);
+    await page.waitForTimeout(450);
+    D = await dtv();
+    ok(D.ranks[0].card === "Freedom Flex" && D.ranks[0].status === "Activated" && /^5% Freedom Flex/.test(D.answer) && D.focused === "r-Freedom Flex",
+      "dt nested Back: the Quick Pick detail again, its ranking and answer updated (Freedom Flex Activated, 5%), focus on the row that opened it (" + J([rk(D), D.answer, D.focused]) + ")");
+    await page.goBack();
+    await page.waitForFunction(() => !window.__detail());
+    await page.waitForTimeout(450);
+    const home1 = await homeOf();
+    ok(home0.pend === "⚠ 2 activations pending" && home1.pend === "⚠ 1 activation pending" && /^4% Smartly/.test(home0.gro) && /^5% Freedom Flex/.test(home1.gro) &&
+      await page.evaluate(() => document.activeElement.closest("li.qpt") && document.activeElement.closest("li.qpt").dataset.topic) === "Grocery stores",
+      "dt Back to home: the pending count and the Grocery stores tile follow the save; focus on the tile (" + J([home0, home1]) + ")");
+    // The save bar's Undo (from the home screen) puts it back; the reversal itself is in the detail only.
+    await page.locator("#savebtns button", { hasText: /^Undo$/ }).click();
+    await page.waitForFunction(() => /2 activations pending/.test(document.querySelector("#cb .cbpend").textContent));
+    ok(J(await homeOf()) === J(home0) && !(await page.$("#cb li[data-eid='" + FREE + "'] .cbst button.edlink")), "dt Undo: count and tile as before; no Mark not activated on the home screen");
+    // The inline Mark activated on a home row saves and does not open the row's detail.
+    const hh = await page.evaluate(() => navigation.currentEntry.index);
+    await page.locator("#cb li[data-eid='" + FREE + "'] button", { hasText: /^Mark activated$/ }).click();
+    await page.waitForFunction(() => /1 activation pending/.test(document.querySelector("#cb .cbpend").textContent));
+    ok(await page.evaluate(() => window.__detail()) === null && await page.evaluate(() => navigation.currentEntry.index) === hh && J(await page.evaluate(() => window.__saves.slice(-1)[0])) ===
+      J({ type: "bonus.activation", id: FREE, from: "not_confirmed", to: "activated" }), "dt: the home row's inline Mark activated saves and doesn't open the detail");
+    // A double tap on a row whose detail has Mark activated right where the second tap lands: the row opens, nothing saves.
+    await page.locator("#savebar button.xbtn").click();
+    D = await cbGo(FLEX);
+    const mBox = await page.locator("#dtbody button[data-f='act']").boundingBox();
+    await dtBackArrow();
+    const rBox = await page.locator("#cb li[data-eid='" + FLEX + "'] .cbgo").boundingBox();
+    await page.evaluate(dy => window.scrollBy(0, dy), Math.round(rBox.y + rBox.height / 2 - (mBox.y + mBox.height / 2)));
+    const rBox2 = await page.locator("#cb li[data-eid='" + FLEX + "'] .cbgo").boundingBox(), nSaves = await page.evaluate(() => window.__saves.length);
+    await page.mouse.dblclick(mBox.x + mBox.width / 2, rBox2.y + rBox2.height / 2);
+    await page.waitForTimeout(450);
+    D = await dtv();
+    ok(Math.abs(rBox2.y + rBox2.height / 2 - (mBox.y + mBox.height / 2)) < 6 && D && D.detail.view === "cb:" + FLEX && await page.evaluate(() => window.__saves.length) === nSaves &&
+      J(D.controls) === J(["BUTTON:Mark activated"]) && await page.evaluate(() => document.getElementById("savebar").hidden),
+      "dt double tap: a row under the detail's Mark activated opens the detail, the second tap saves nothing (" + J([D && D.detail, D && D.controls]) + ")");
+    // The same over the Custom Cash focus picker: the second tap neither focuses nor opens it.
+    await dtBackArrow();
+    D = await cbGo(CC);
+    const sBox = await page.locator("#dtbody .bfocus select").boundingBox();
+    await dtBackArrow();
+    const cBox = await page.locator("#cb li[data-eid='" + CC + "'] .cbgo").boundingBox();
+    await page.evaluate(dy => window.scrollBy(0, dy), Math.round(cBox.y + cBox.height / 2 - (sBox.y + sBox.height / 2)));
+    const cBox2 = await page.locator("#cb li[data-eid='" + CC + "'] .cbgo").boundingBox();
+    await page.mouse.dblclick(sBox.x + 20, cBox2.y + cBox2.height / 2);
+    await page.waitForTimeout(450);
+    ok(await page.evaluate(() => window.__detail() && window.__detail().view === "cb:citi-custom-cash/standing" && document.activeElement.tagName !== "SELECT" &&
+      !document.querySelector("#dtbody .bfocus select").matches(":open")), "dt double tap: a second tap landing on the focus picker neither focuses nor opens it");
+    await dtBackArrow();
+    // A double tap on the back arrow: home, focus on the row that opened the page (the second tap, landing on the search
+    // box under the arrow, focuses nothing and brings up no keyboard).
+    D = await cbGo(SMART);
+    const bBox = await page.locator("#dtback").boundingBox();
+    await page.mouse.dblclick(bBox.x + bBox.width / 2, bBox.y + bBox.height / 2);
+    await page.waitForTimeout(450);
+    ok(await page.evaluate(id => window.__detail() === null && document.activeElement.classList.contains("cbgo") && document.activeElement.closest("li").dataset.eid === id, SMART),
+      "dt double tap on the back arrow: home, focus on the row that opened it, not the search box under the arrow (" + await page.evaluate(() => document.activeElement.id || document.activeElement.className) + ")");
+    // A slow mouse press: pressed inside the 400 ms window on Mark not activated, released after it: no save.
+    const nS = await page.evaluate(() => window.__saves.length);
+    await page.click("#cb li[data-eid='" + FREE + "'] .cbgo");
+    const t0 = Date.now(), aBox = await page.locator("#dtbody button[data-f='act']").boundingBox();
+    await page.mouse.move(aBox.x + aBox.width / 2, aBox.y + aBox.height / 2);
+    await page.mouse.down();
+    const tDown = Date.now() - t0;
+    await page.waitForTimeout(500);
+    await page.mouse.up();
+    await page.waitForTimeout(100);
+    if (tDown < 300) ok(await page.evaluate(() => window.__saves.length) === nS && J((await dtv()).controls) === J(["BUTTON:Mark not activated"]),
+      "dt slow press: a press inside the window released after it saves nothing (pressed " + tDown + " ms after the tap)");
+    else skip("dt slow press: the press came " + tDown + " ms after the tap (too slow to test the window)");
+    await dtBackArrow();
+    D = await cbGo(FREE);
+    ok(J(D.controls) === J(["BUTTON:Mark not activated"]), "dt: the activated entry's detail has Mark not activated");
+    await page.click("#dtbody button[data-f='act']");
+    await page.waitForFunction(() => /⚠ Not activated/.test(document.getElementById("dtbody").innerText));
+    ok(J(await page.evaluate(() => window.__saves.slice(-1)[0])) === J({ type: "bonus.activation", id: FREE, from: "activated", to: "not_confirmed" }) && J((await dtv()).controls) === J(["BUTTON:Mark activated"]),
+      "dt Mark not activated: saves the reversal of that entry, Mark activated in its place");
+    await dtBackArrow();
+
+    // Custom Cash focus, signed in: no Save until changed; Save; the home, Quick picks and the answer card follow; Undo.
+    const useLine = async q => { await page.fill("#q", q); await page.waitForTimeout(150); const t = await page.$eval("#use", e => e.hidden ? "" : e.innerText); await page.fill("#q", ""); await page.waitForTimeout(80); return t; };
+    await cbOpen({}, true);
+    await stubSave();
+    const ralphs0 = await useLine("ralphs"), dine0 = await useLine("zqdine grill");
+    D = await cbGo(CC);
+    ok(J(D.controls) === J(["SELECT:restaurants", "BUTTON:Save (hidden)"]), "dt focus: the picker shows the stored focus, no Save (" + J(D.controls) + ")");
+    await page.selectOption("#dtbody .bfocus select", "grocery stores");
+    const fc1 = (await dtv()).controls;
+    await page.selectOption("#dtbody .bfocus select", "restaurants");
+    const fc2 = (await dtv()).controls;
+    ok(J(fc1) === J(["SELECT:grocery stores", "BUTTON:Save"]) && J(fc2) === J(["SELECT:restaurants", "BUTTON:Save (hidden)"]), "dt focus: Save after a change, gone when changed back (" + J([fc1, fc2]) + ")");
+    await page.selectOption("#dtbody .bfocus select", "grocery stores");
+    await page.click("#dtbody .bfocus button");
+    await page.waitForFunction(() => /CardSelector focus: grocery stores/.test(document.querySelector("#dtbody").innerText));
+    D = await dtv();
+    ok(J(D.tags) === J(["grocery stores:CardSelector focus"]) && J(D.controls) === J(["SELECT:grocery stores", "BUTTON:Save (hidden)"]),
+      "dt focus saved: the tag moves, Save gone (" + J([D.tags, D.controls]) + ")");
+    await dtBackArrow();
+    const ralphs1 = await useLine("ralphs"), dine1 = await useLine("zqdine grill");
+    const cbFocus = await page.$eval("#cb li[data-eid='" + CC + "'] .cbst", e => e.textContent);
+    Q = await quick();
+    ok(cbFocus === "CardSelector focus: grocery stores" && Q.tiles["Grocery stores"].cond === "Citi Custom Cash 5% · conditional" && Q.tiles.Dining.cond === null &&
+      /only if grocery stores is your actual top eligible category/.test(ralphs1) && !/only if grocery stores/.test(ralphs0) && /Citi Custom Cash/.test(dine0) && !/Citi Custom Cash/.test(dine1),
+      "dt focus saved: Card bonuses, Quick picks and the answer card (\"ralphs\" gets the conditional line, a restaurant loses it) use the new focus (" + J([cbFocus, ralphs1.split("\n").find(l => /Custom Cash/.test(l))]) + ")");
+    await page.locator("#savebtns button", { hasText: /^Undo$/ }).click();
+    await page.waitForFunction(() => /CardSelector focus: restaurants/.test(document.querySelector("#cb li[data-eid='citi-custom-cash/standing'] .cbst").textContent));
+    Q = await quick();
+    ok(Q.tiles.Dining.cond === "Citi Custom Cash 5% · conditional" && Q.tiles["Grocery stores"].cond === null && await useLine("ralphs") === ralphs0 && await useLine("zqdine grill") === dine0,
+      "dt focus Undo: Card bonuses, Quick picks and the answer card back as before");
+    // Customized Cash Choice, signed in: the BofA wording, Save only after a change, saved, Undo.
+    D = await cbGo(BOA);
+    ok(/Change it at Bank of America first, then here\./.test(D.choice) && J(D.controls) === J(["SELECT:online shopping", "BUTTON:Save (hidden)"]), "dt choice: the BofA wording, the picker, no Save (" + J(D.controls) + ")");
+    await page.selectOption("#dtbody .bfocus select", "dining");
+    await page.click("#dtbody .bfocus button");
+    await page.waitForFunction(() => /Choice: dining/.test(document.querySelector("#dtbody").innerText));
+    D = await dtv();
+    ok(/^Rates 5\.25% dining \(your Choice\) 3\.5% grocery stores/.test(D.rates) && J(D.tags) === J(["dining:Your Choice"]) && /Dining: leads at 5\.25%/.test(D.stands), "dt choice saved: rates, tag and where it stands follow (" + J([D.rates, D.stands]) + ")");
+    await dtBackArrow();
+    Q = await quick();
+    ok(Q.tiles["Online shopping"].card === "Smartly" && Q.tiles.Dining.card === "Customized Cash" && Q.tiles.Dining.rate === "5.25%", "dt choice saved: the Online shopping and Dining Quick picks follow (" + J([Q.tiles["Online shopping"].card, Q.tiles.Dining.card]) + ")");
+    await page.locator("#savebtns button", { hasText: /^Undo$/ }).click();
+    await page.waitForFunction(() => /Choice: online shopping/.test(document.querySelector("#cb li[data-eid='bank-of-america-customized-cash/standing'] .cbst").textContent));
+    Q = await quick();
+    ok(Q.tiles["Online shopping"].card === "Customized Cash" && Q.tiles.Dining.card === "Freedom Flex", "dt choice Undo: the Quick picks back as before");
+
+    // History: one entry in, Back (browser, then the arrow) out, scroll and focus put back; nested; Forward; reload.
+    await cbOpen({});
+    const hist = () => page.evaluate(() => navigation.currentEntry.index);
+    await page.evaluate(() => window.scrollTo(0, 180));
+    let y0 = await page.evaluate(() => Math.round(window.scrollY)), n0 = await hist();
+    await page.evaluate(() => document.querySelector("#qp li.qpt[data-topic='Entertainment'] .qpgo").click());
+    D = await dtv();
+    ok(y0 === 180 && D.hist === n0 + 1 && D.y === 0 && D.detail.view === "qp:Entertainment", "dt history: from scroll 180 a tile opens its detail at the top, one entry added (" + J([y0, D.hist - n0, D.y]) + ")");
+    await page.goBack();
+    await page.waitForFunction(() => !window.__detail());
+    await page.waitForTimeout(450);
+    let back = await page.evaluate(() => ({ y: Math.round(window.scrollY), f: document.activeElement.closest("li.qpt") && document.activeElement.closest("li.qpt").dataset.topic, dt: !document.getElementById("dt").hidden }));
+    ok(back.y === 180 && back.f === "Entertainment" && !back.dt && await hist() === n0, "dt history: the browser's Back returns home at scroll 180, focus on the tile (" + J(back) + ")");
+    await page.locator("#cb li[data-eid='" + COSTCO + "'] .cbgo").scrollIntoViewIfNeeded();
+    await page.evaluate(() => window.scrollBy(0, 37));
+    y0 = await page.evaluate(() => Math.round(window.scrollY));
+    await page.evaluate(id => document.querySelector("#cb li[data-eid='" + id + "'] .cbgo").click(), COSTCO);
+    await page.waitForTimeout(450);
+    D = await dtv();
+    ok(y0 > 0 && D.detail.view === "cb:" + COSTCO && D.y === 0, "dt history: a Card bonuses row opens its detail (from scroll " + y0 + ")");
+    await dtBackArrow();
+    back = await page.evaluate(() => ({ y: Math.round(window.scrollY), f: document.activeElement.closest("li[data-eid]") && document.activeElement.closest("li[data-eid]").dataset.eid, cls: document.activeElement.className }));
+    ok(back.y === y0 && back.f === COSTCO && back.cls === "cbgo" && await page.evaluate(() => !(history.state && history.state.cardselectorDt)), "dt history: the back arrow returns home at the same scroll, focus on the row, off the pushed entry (" + J(back) + ")");
+    D = await qpGo("Dining");
+    await page.evaluate(() => window.scrollTo(0, 260));
+    const yq = await page.evaluate(() => Math.round(window.scrollY)), nq = await hist();
+    await page.click("#dtbody .dtlink[data-f='focus-link']");
+    await page.waitForTimeout(450);
+    D = await dtv();
+    ok(D.detail.depth === 2 && D.detail.view === "cb:" + CC && D.hist === nq + 1 && D.y === 0, "dt history: Quick Pick -> CardSelector focus link -> the Custom Cash detail, one more entry (" + J([D.detail, D.hist - nq]) + ")");
+    await page.goBack();
+    await page.waitForFunction(() => window.__detail() && window.__detail().depth === 1);
+    await page.waitForTimeout(450);
+    D = await dtv();
+    ok(D.detail.view === "qp:Dining" && D.y === yq && D.focused === "focus-link", "dt history: Back returns to the Quick Pick detail at its scroll, focus on the link (" + J([D.detail, D.y, yq, D.focused]) + ")");
+    await page.goForward();
+    await page.waitForFunction(() => window.__detail() && window.__detail().depth === 2);
+    await page.waitForTimeout(450);
+    D = await dtv();
+    ok(D.detail.view === "cb:" + CC && !D.over.length, "dt history: Forward shows the Custom Cash detail again (" + J(D.detail) + ")");
+    await page.dblclick("#dtback");
+    await page.waitForTimeout(450);
+    ok(page.url() === base && await page.evaluate(() => window.__detail() && window.__detail().depth === 1 && window.__detail().view === "qp:Dining"),
+      "dt history: a double tap on the back arrow from two levels in steps back one page (the second tap, within 400 ms of the swap, is dropped) and stays on the page (" + page.url() + ")");
+    await dtBackArrow();
+    ok(await page.evaluate(() => window.__detail() === null && !document.getElementById("qp").hidden) && await page.evaluate(() => !(history.state && history.state.cardselectorDt)),
+      "dt history: one more Back returns home, off the details' entries");
+    await page.goForward().catch(() => {});
+    await page.waitForTimeout(200);
+    ok(page.url() === base && await page.evaluate(() => window.__detail() === null && !document.getElementById("qp").hidden && !document.querySelector(".wrap").classList.contains("dton")),
+      "dt history: Forward after leaving stays on a whole home screen (no half-open detail)");
+    D = await qpGo("Utilities");
+    await page.reload();
+    await page.waitForFunction(() => window.__cardsReady && window.__bonusReady && !document.getElementById("qp").hidden);
+    await page.waitForTimeout(200);
+    ok(await page.evaluate(() => window.__detail() === null && document.getElementById("dt").hidden && !(history.state && history.state.cardselectorDt)), "dt history: a reload in a detail starts outside it, off the detail's entry");
+
+    // Keyboard and tap targets: Enter and Space open a tile, Enter a row; the chevrons are part of their button; names say where they go.
+    await page.focus("#qp li.qpt[data-topic='Utilities'] .qpgo");
+    await page.keyboard.press("Enter");
+    ok(await page.evaluate(() => window.__detail() && window.__detail().view === "qp:Utilities" && document.activeElement.id === "dtback"), "dt keyboard: Enter on a tile opens its detail, focus on Back");
+    await page.keyboard.press("Enter");
+    await page.waitForTimeout(80);
+    ok(await page.evaluate(() => !window.__detail() && document.activeElement.closest("li.qpt").dataset.topic === "Utilities"), "dt keyboard: Enter on Back returns, focus on the tile");
+    await page.keyboard.press(" ");
+    ok(await page.evaluate(() => window.__detail() && window.__detail().view === "qp:Utilities"), "dt keyboard: Space on a tile opens its detail");
+    await dtBackArrow();
+    await page.focus("#cb li[data-eid='" + SMART + "'] .cbgo");
+    await page.keyboard.press("Enter");
+    ok(await page.evaluate(id => window.__detail() && window.__detail().view === "cb:" + id, SMART), "dt keyboard: Enter on a Card bonuses row opens its detail");
+    await dtBackArrow();
+    const chev = await page.evaluate(() => [...document.querySelectorAll("#qp .qpgo > .gochev, #cb .cbgo > .gochev")].map(c => {
+      c.parentNode.scrollIntoView({ block: "center" });
+      const r = c.getBoundingClientRect(), hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+      return !!hit && hit.closest(".qpgo, .cbgo") === c.parentNode && c.getAttribute("aria-hidden") === "true";
+    }));
+    ok(chev.length === 13 && chev.every(Boolean), "dt: each of the 13 chevrons is inside its tile's or row's button, not a tap target of its own (" + J(chev) + ")");
+    const names = { tile: await page.getByRole("button", { name: /^Dining 5% .*, details$/ }).count(), row: await page.getByRole("button", { name: /^Costco Visa 5% Costco gas.*, details$/ }).count(),
+      desc: await page.$eval("#cb li[data-eid='" + COSTCO + "'] .cbgo", b => document.getElementById(b.getAttribute("aria-describedby")).textContent) };
+    ok(names.tile === 1 && names.row === 1 && names.desc === "No activation needed", "dt: accessible names start with the visible words and end \", details\"; a row's state line describes it (" + J(names) + ")");
+
+    // Layout at 390 and 320px: every Quick Pick detail and every Card Bonus detail, signed in, pickers changed (Save
+    // showing) and More details open: no sideways scroll, nothing past the screen's edges, text 12px or more.
+    for (const w of [390, 320]) {
+      await page.setViewportSize({ width: w, height: 844 });
+      await cbOpen({ set: { "Freedom Flex": "not_confirmed" } }, true);
+      const bad = [];
+      for (const t of ["Dining", "Grocery stores", "Online shopping", "Gas stations", "Entertainment", "Utilities"]) {
+        await qpGo(t);
+        for (const open of [false, true]) {
+          if (open) await page.click("#dtbody details.dtmore > summary");
+          D = await dtv();
+          if (D.pageW > w || D.over.length || D.minFont < 11.5) bad.push([t, open, D.pageW, D.over, D.minFont]);
+        }
+        if (process.env.SHOT_DIR && w === 390 && t === "Grocery stores") await page.screenshot({ path: path.join(process.env.SHOT_DIR, "dt-qp-grocery-390.png"), fullPage: true });
+        await dtBackArrow();
+      }
+      for (const id of IDS) {
+        await cbGo(id);
+        const sel = await page.$("#dtbody .bfocus select");
+        if (sel) await page.selectOption("#dtbody .bfocus select", await sel.evaluate(x => [...x.options].find(o => o.value !== x.value).value));
+        await page.click("#dtbody details.dtmore > summary");
+        D = await dtv();
+        if (D.pageW > w || D.over.length || D.minFont < 11.5) bad.push([id, D.pageW, D.over, D.minFont]);
+        if (sel && !D.controls.includes("BUTTON:Save")) bad.push([id, "no Save after a change", D.controls]);
+        if (process.env.SHOT_DIR) await page.screenshot({ path: path.join(process.env.SHOT_DIR, "dt-" + id.split("/")[0] + "-" + w + ".png"), fullPage: true });
+        await dtBackArrow();
+      }
+      ok(!bad.length, "dt " + w + "px: six Quick Pick details (More details closed and open) and seven Card Bonus details (picker changed, More details open): no sideways scroll, nothing past the edges, text 11.5px+ (the Likely tag) (" + J(bad) + ")");
+      Q = await quick();
+      ok(Object.keys(Q.tiles).every(k => !Q.tiles[k].over) && Q.pageW <= w, "dt " + w + "px: the tiles with their chevrons still fit (" + J(Object.keys(Q.tiles).map(k => [k, Q.tiles[k].over])) + ")");
+    }
+    await page.setViewportSize({ width: 390, height: 844 });
     await page.setViewportSize({ width: 390, height: 844 });
     CASE = {};
     ok(errs.length === 0, "qp: no page errors (" + errs.join("; ") + ")");
@@ -2469,6 +2944,134 @@ function listRows(sel) {
       ok(b7.tile.rate === "5.25%" && a7.tile.rate === "4.5%" && J(a7.tiles) === J(f8.tiles) && J(a7.strip) === J(f8.strip) && a7.pend === f8.pend &&
         /^⚠ 1 activation/.test(b7.pend) && a7.pend === "No activations pending" && /4\.5% online shopping/.test(cc(a7)),
         "qp rollover, a Mark activated save just after midnight: tiles and Card bonuses equal a fresh load on Dec 16 (" + J([b7.tile.rate, b7.pend, a7.tile, a7.pend, cc(a7), cc(f8)]) + ")");
+    }
+    // A detail open across midnight. Dec 15 -> 16 (the Preferred Rewards switch): the Customized Cash detail, signed in
+    // with an unsaved Choice pick, is drawn again for the new day (4.5%), the pick and its Save kept, still in the detail,
+    // no history entry; while the picker has focus the redraw waits, as on the home screen. A second tab's Online
+    // shopping detail follows too. Dec 31 -> Jan 1: the Freedom Flex detail says the bonus isn't live; Back still works.
+    {
+      CASE = {};
+      const ctx9 = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: "block" });
+      await ctx9.clock.install({ time: new Date(2026, 11, 15, 23, 58, 0) });
+      const openDt = async (signedIn, sel) => {
+        const p = await ctx9.newPage();
+        p.on("pageerror", e => errs.push(e.message));
+        await rollRoutes(p);
+        await p.route("https://api.github.com/**", r => r.abort());
+        await p.goto(base);
+        await p.evaluate(t => { try { localStorage.clear(); if (t) localStorage.setItem("cardselector.token", "test"); } catch (e) {} }, signedIn);
+        await p.goto(base);
+        await p.waitForFunction(() => window.__cardsReady && window.__bonusReady && !document.getElementById("qp").hidden);
+        await p.click(sel);
+        await p.waitForFunction(() => !!window.__detail());
+        await p.waitForTimeout(450);
+        return p;
+      };
+      const st9 = p => p.evaluate(() => {
+        const b = document.getElementById("dtbody"), sec = h => { const s = [...b.querySelectorAll("section.dtsec")].find(x => x.querySelector("h3").textContent === h); return s ? s.innerText.replace(/\s+/g, " ") : null; };
+        const sel = b.querySelector(".bfocus select"), save = b.querySelector(".bfocus button"), r0 = b.querySelector(".dtrank .dtrow");
+        return { d: window.__detail(), rates: sec("Rates"), sel: sel && sel.value, save: save ? !save.hidden : null, nav: [navigation.currentEntry.index, navigation.entries().length],
+          renders: window.__renders, rank0: r0 ? r0.innerText.replace(/\s+/g, " ") : null, text: b.innerText.replace(/\s+/g, " ") };
+      });
+      const p1 = await openDt(true, "#cb li[data-eid='bank-of-america-customized-cash/standing'] .cbgo");
+      const p2 = await openDt(true, "#qp li.qpt[data-topic='Online shopping'] .qpgo"); // one storage per context: both tabs signed in
+      await p1.selectOption("#dtbody .bfocus select", "dining");
+      await p1.focus("#dtbody .bfocus select");
+      await ctx9.clock.pauseAt(new Date(2026, 11, 15, 23, 59, 50));
+      const b1 = await st9(p1), b2 = await st9(p2);
+      await ctx9.clock.runFor(15000); // past midnight, the picker still focused
+      const m1 = await st9(p1);
+      await p1.evaluate(() => document.getElementById("dtback").focus());
+      await ctx9.clock.runFor(10);
+      await p1.waitForTimeout(50);
+      const a1 = await st9(p1), a2 = await st9(p2);
+      ok(/^Rates 5\.25% online shopping \(your Choice\)/.test(b1.rates) && b1.sel === "dining" && b1.save && m1.renders === b1.renders && /^Rates 5\.25%/.test(m1.rates),
+        "dt rollover: before midnight 5.25%, an unsaved pick (dining) with its Save; no redraw while the picker has focus (" + J([b1.rates, m1.renders - b1.renders]) + ")");
+      ok(/^Rates 4\.5% online shopping \(your Choice\) 3% grocery stores 3% wholesale clubs/.test(a1.rates) && a1.sel === "dining" && a1.save && J(a1.d) === J(b1.d) && J(a1.nav) === J(b1.nav) &&
+        a1.renders === b1.renders + 1, "dt rollover: once focus leaves, one redraw for Dec 16 (4.5%), the unsaved pick and its Save kept, still in the detail, no history entry (" + J([a1.rates, a1.sel, a1.nav, b1.nav]) + ")");
+      ok(/^5\.25% Customized Cash ?Always on incl\. 75% Preferred Rewards/.test(b2.rank0) && /^4\.5% Customized Cash ?Always on incl\. 50% Preferred Rewards/.test(a2.rank0) && J(a2.nav) === J(b2.nav) && J(a2.d) === J(b2.d),
+        "dt rollover: the Online shopping detail goes from 5.25% (75%) to 4.5% (50%) in place (" + J([b2.rank0, a2.rank0]) + ")");
+      await ctx9.close();
+      const ctx10 = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: "block" });
+      await ctx10.clock.install({ time: new Date(2026, 11, 31, 23, 58, 0) });
+      const p3 = await ctx10.newPage();
+      p3.on("pageerror", e => errs.push(e.message));
+      await rollRoutes(p3);
+      await p3.goto(base);
+      await p3.waitForFunction(() => window.__cardsReady && window.__bonusReady && !document.getElementById("cb").hidden);
+      await p3.click("#cb li[data-eid='chase-freedom-flex/2026-q4'] .cbgo");
+      await p3.waitForTimeout(450);
+      await ctx10.clock.pauseAt(new Date(2026, 11, 31, 23, 59, 50));
+      const e0 = await st9(p3);
+      await ctx10.clock.runFor(15000);
+      const e1 = await st9(p3);
+      await p3.click("#dtback");
+      const home = await p3.evaluate(() => ({ d: window.__detail(), rows: [...document.querySelectorAll("#cb li[data-eid]")].map(l => l.dataset.eid) }));
+      ok(/^Status ✓ Activated/.test(e0.text) && e1.text === "This card bonus isn't live today." && J(e1.d) === J(e0.d) && J(e1.nav) === J(e0.nav) && home.d === null && !home.rows.includes("chase-freedom-flex/2026-q4"),
+        "dt rollover Dec 31 -> Jan 1: the open Freedom Flex detail says the bonus isn't live, no history entry; Back returns home, where its row is gone (" + J([e1.text, home.rows]) + ")");
+      await ctx10.close();
+      // After a save in the detail the page puts focus back on the control (Mark not activated); that focus doesn't
+      // hold the day redraw: midnight passes, the detail follows the new day at once.
+      CASE = { set: { "Freedom Flex": "not_confirmed" } };
+      const ctx11 = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: "block" });
+      await ctx11.clock.install({ time: new Date(2026, 11, 31, 23, 58, 0) });
+      const p4 = await ctx11.newPage();
+      p4.on("pageerror", e => errs.push(e.message));
+      await rollRoutes(p4);
+      await p4.route("https://api.github.com/**", r => r.abort());
+      await p4.goto(base);
+      await p4.evaluate(() => { try { localStorage.clear(); localStorage.setItem("cardselector.token", "test"); } catch (e) {} });
+      await p4.goto(base);
+      await p4.waitForFunction(() => window.__cardsReady && window.__bonusReady && !document.getElementById("cb").hidden);
+      await p4.evaluate(() => {
+        CardStore.save = c => Promise.resolve({ status: "saved", message: "test save", undo: { type: c.type, id: c.id, from: c.to, to: c.from }, record: { activation: c.to } });
+        CardStore.liveStatus = () => Promise.resolve({ state: "live" });
+      });
+      await p4.click("#cb li[data-eid='chase-freedom-flex/2026-q4'] .cbgo");
+      await p4.waitForTimeout(450);
+      await p4.click("#dtbody button[data-f='act']");
+      await p4.waitForFunction(() => /✓ Activated/.test(document.getElementById("dtbody").innerText));
+      const f0 = await p4.evaluate(() => document.activeElement.getAttribute("data-f"));
+      await ctx11.clock.pauseAt(new Date(2026, 11, 31, 23, 59, 50));
+      await ctx11.clock.runFor(15000);
+      await p4.waitForTimeout(50);
+      const f1 = await st9(p4);
+      ok(f0 === "act" && f1.text === "This card bonus isn't live today." && f1.d && f1.d.view === "cb:chase-freedom-flex/2026-q4",
+        "dt rollover after a save in the detail: the control the page refocused doesn't hold the day redraw; the detail follows Jan 1 (" + J([f0, f1.text]) + ")");
+      await ctx11.close();
+      // The same, reached by a double tap whose second tap lands on Mark activated and is dropped: the focus that tap
+      // left there doesn't hold the day redraw either.
+      const ctx12 = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: "block" });
+      await ctx12.clock.install({ time: new Date(2026, 11, 31, 23, 58, 0) });
+      const p5 = await ctx12.newPage();
+      p5.on("pageerror", e => errs.push(e.message));
+      await rollRoutes(p5);
+      await p5.route("https://api.github.com/**", r => r.abort());
+      await p5.goto(base);
+      await p5.evaluate(() => { try { localStorage.clear(); localStorage.setItem("cardselector.token", "test"); } catch (e) {} });
+      await p5.goto(base);
+      await p5.waitForFunction(() => window.__cardsReady && window.__bonusReady && !document.getElementById("cb").hidden);
+      await p5.evaluate(() => { window.__n = 0; CardStore.save = () => { window.__n++; return new Promise(() => {}); }; });
+      const row5 = "#cb li[data-eid='chase-freedom-flex/2026-q4'] .cbgo";
+      await p5.click(row5);
+      await p5.waitForTimeout(450);
+      const mb = await p5.locator("#dtbody button[data-f='act']").boundingBox();
+      await p5.click("#dtback");
+      await p5.waitForTimeout(450);
+      const rb = await p5.locator(row5).boundingBox();
+      await p5.evaluate(dy => window.scrollBy(0, dy), Math.round(rb.y + rb.height / 2 - (mb.y + mb.height / 2)));
+      const rb2 = await p5.locator(row5).boundingBox();
+      await p5.mouse.dblclick(mb.x + mb.width / 2, rb2.y + rb2.height / 2);
+      await p5.waitForTimeout(450);
+      const g0 = await p5.evaluate(() => [window.__n, document.activeElement.getAttribute("data-f"), JSON.stringify(window.__detail())]);
+      await ctx12.clock.pauseAt(new Date(2026, 11, 31, 23, 59, 50));
+      await ctx12.clock.runFor(15000);
+      await p5.waitForTimeout(50);
+      const g1 = await st9(p5);
+      ok(g0[0] === 0 && g1.text === "This card bonus isn't live today." && g1.d && g1.d.view === "cb:chase-freedom-flex/2026-q4",
+        "dt rollover after a double tap (second tap dropped on Mark activated): no save, and the focus it left doesn't hold the day redraw (" + J([g0, g1.text]) + ")");
+      await ctx12.close();
+      CASE = {};
     }
     ok(errs.length === 0, "qp rollover: no page errors (" + errs.join("; ") + ")");
     page = mainPage;

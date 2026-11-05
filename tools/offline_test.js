@@ -362,13 +362,13 @@ class Hub {
     "after the save the row is activated and main's file has it (" + await st5() + "; " + await pend5() + ")");
   ok((await remembered())["bonus:" + E5.id], "activation save remembered");
   await open(true);
-  ok(/^✓ Activated · ends Dec 31/.test(await st5()) && !(await page.$(row5 + " button")), "reload during the deploy: the row stays activated, no button (" + await st5() + ")");
+  ok(/^✓ Activated · ends Dec 31/.test(await st5()) && !(await page.$(row5 + " button:not(.cbgo)")), "reload during the deploy: the row stays activated, no button (" + await st5() + ")");
   hub.deploy();
   await check();
   ok(!(await remembered())["bonus:" + E5.id] && /^✓ Activated/.test(await st5()), "once deployed: entry dropped, the row unchanged");
 
-  // 5b. Customized Cash choice (the page's save path, runSave, which the 4C picker will call): survives a reload during
-  // the deploy, and the headline and Card bonuses use it.
+  // 5b. Customized Cash choice, saved from its Card Bonus detail page's Choice picker: survives a reload during the
+  // deploy, and the headline and Card bonuses use it.
   console.log("-- 5b. Customized Cash choice");
   await fresh({ token: "test-token-offline" });
   const CC = "bank-of-america-customized-cash/standing", q5 = "chevron";
@@ -376,8 +376,16 @@ class Hub {
   await search(q5);
   const use0 = await page.$eval("#use", e => e.innerText);
   const choice0 = JSON.parse(hub.files["site/data/bonus-categories.json"]).entries.find(e => e.id === CC).choice;
-  await page.evaluate(([id, from]) => window.__runSave({ type: "bonus.choice", id, from, to: "gas & EV charging stations" }), [CC, choice0]);
+  await page.fill("#q", "");
+  await page.click("#cb li[data-eid='" + CC + "'] .cbgo");
+  await page.waitForTimeout(450); // a tap within 400 ms of a page swap is dropped (double-tap guard)
+  await page.selectOption("#dt .bfocus select", "gas & EV charging stations");
+  await page.click("#dt .bfocus button:has-text('Save')");
   await waitBar(/Deploying/);
+  ok(await page.$eval("#dt", d => /Choice: gas & EV charging stations/.test(d.innerText)), "the detail shows the saved choice");
+  await page.click("#dtback");
+  await page.waitForTimeout(450);
+  await search(q5);
   const use1 = await page.$eval("#use", e => e.innerText);
   ok(choice0 !== "gas & EV charging stations" && /Customized Cash/.test(use1) && use1 !== use0 && await choiceRow() === "Choice: gas & EV charging stations",
     "after the save the headline and Card bonuses use the new choice: " + JSON.stringify(use1.split("\n").find(l => /Customized Cash/.test(l))));
@@ -495,6 +503,22 @@ class Hub {
   await comeBack8();
   await stays("with the Edit mode panel open");
   await page.evaluate(() => { document.getElementById("editmode").open = false; });
+  // In a Quick Pick or Card Bonus detail (a mode of the page; an unsaved Focus or Choice pick lives there): no reload.
+  await page.click("#qp li.qpt[data-topic='Dining'] .qpgo");
+  await page.waitForTimeout(450);
+  await comeBack8();
+  await stays("in a Quick Pick detail");
+  await page.click("#dtback");
+  await page.waitForTimeout(450);
+  await page.click("#cb li[data-eid='bank-of-america-customized-cash/standing'] .cbgo");
+  await page.waitForTimeout(450);
+  await page.selectOption("#dt .bfocus select", "dining");
+  await page.focus("#dtback");
+  await comeBack8();
+  await stays("in a Card Bonus detail with an unsaved Choice pick");
+  ok(await page.$eval("#dt .bfocus select", s => s.value) === "dining" && await page.$eval("#dt .bfocus button", b => !b.hidden), "the unsaved pick and its Save are still there");
+  await page.click("#dtback");
+  await page.focus("#q");
   // Another field in use blocks it too. At phone width every other field is inside a panel that already blocks
   // the reload (Filters, Edit mode), so this one case runs wide, where the sort select is visible.
   await page.setViewportSize({ width: 1000, height: 844 });
