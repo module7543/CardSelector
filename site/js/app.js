@@ -3041,7 +3041,7 @@
   function goChev() { var c = el("span", "gochev"); c.setAttribute("aria-hidden", "true"); return c; }
   // A page swap (into, between or out of the details) under a finger: the second tap of a double tap must not land on
   // whatever the new page has there (a Mark activated would save). Pointer clicks (detail > 0; keyboard clicks are 0)
-  // on the details, Quick picks or Card bonuses within 400 ms of the event that swapped the page are dropped.
+  // on the details, Quick picks, Card bonuses or the search box within 400 ms of the event that swapped the page are dropped.
   var dtSwapT = -1e9;
   // A keyboard click (detail 0) has no second tap to guard against.
   function dtSwapped(ev) { dtSwapT = ev && typeof ev.timeStamp === "number" && !(ev.type === "click" && ev.detail === 0) ? ev.timeStamp : -1e9; }
@@ -3348,8 +3348,9 @@
       [].concat(g.list == null ? [] : g.list).forEach(function (ln) {
         var l = bonus.keyword_lists[ln];
         if (!l) return;
-        // Names another of this card's own live rates covers aren't excluded for it (Costco for Costco Visa, which pays at
-        // Costco gas and Costco; Costco, Sam's Club and BJ's for Customized Cash's wholesale clubs).
+        // Names another of this card's own live rates covers at the shown rate or better aren't excluded for it (Costco
+        // for Costco Visa's 4% gas: its Costco gas pays 5%; Costco, Sam's Club and BJ's for Customized Cash's 2% grocery:
+        // its wholesale clubs pay the same).
         var ex = (l.exclude || []).filter(function (n) { return !ownCovers(x.C, g, n, today, x.rate); });
         if (ex.length) put("ex|" + ex.join("|"), who, "excludes " + ex.join(", ") + ".");
         // "Speedway, Circle K and Wawa may not count: convenience-store chains may code as …" (names sharing a reason).
