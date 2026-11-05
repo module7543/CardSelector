@@ -2468,6 +2468,14 @@ function listRows(sel) {
     D = await qpGo("Gas stations");
     ok(D.counts.includes("Citi Custom Cash (gas stations): excludes Costco, Sam's Club, BJ's, Walmart.") && D.counts.includes("Costco Visa: excludes Sam's Club, BJ's, Walmart."),
       "dt Gas stations: Costco Visa's line leaves out Costco (its own Costco gas and Costco rates) (" + J(D.counts) + ")");
+    await dtBackArrow();
+    await cbOpen({ choice: "gas & EV charging stations" });
+    D = await qpGo("Gas stations");
+    ok(D.counts.includes("Customized Cash and Citi Custom Cash (gas stations): excludes Costco, Sam's Club, BJ's, Walmart."),
+      "dt Gas stations, Choice gas: Customized Cash keeps Costco, Sam's Club and BJ's on its line (its wholesale clubs rate is lower than 5.25%) (" + J(D.counts) + ")");
+    await dtBackArrow();
+    await cbOpen({});
+    D = await qpGo("Gas stations");
     ok(/Not the same as Auto & Gas/.test(D.cat) && D.counts.some(l => /^Citi Custom Cash \(gas stations\) and Costco Visa: Speedway, Circle K, Wawa, Sheetz, QuikTrip, Casey's and Quik Stop may not count: /.test(l)) &&
       J(rk(D).slice(0, 2)) === J([["5%", "Citi Custom Cash", "Conditional", true], ["4%", "Smartly", "Always on", false]]),
       "dt Gas stations: Custom Cash conditional above Smartly, Costco Visa tied; names sharing a reason on one line; not the same as Auto & Gas (" + J([rk(D), D.cat]) + ")");
@@ -2574,6 +2582,19 @@ function listRows(sel) {
     ok(Math.abs(rBox2.y + rBox2.height / 2 - (mBox.y + mBox.height / 2)) < 6 && D && D.detail.view === "cb:" + FLEX && await page.evaluate(() => window.__saves.length) === nSaves &&
       J(D.controls) === J(["BUTTON:Mark activated"]) && await page.evaluate(() => document.getElementById("savebar").hidden),
       "dt double tap: a row under the detail's Mark activated opens the detail, the second tap saves nothing (" + J([D && D.detail, D && D.controls]) + ")");
+    // The same over the Custom Cash focus picker: the second tap neither focuses nor opens it.
+    await dtBackArrow();
+    D = await cbGo(CC);
+    const sBox = await page.locator("#dtbody .bfocus select").boundingBox();
+    await dtBackArrow();
+    const cBox = await page.locator("#cb li[data-eid='" + CC + "'] .cbgo").boundingBox();
+    await page.evaluate(dy => window.scrollBy(0, dy), Math.round(cBox.y + cBox.height / 2 - (sBox.y + sBox.height / 2)));
+    const cBox2 = await page.locator("#cb li[data-eid='" + CC + "'] .cbgo").boundingBox();
+    await page.mouse.dblclick(sBox.x + 20, cBox2.y + cBox2.height / 2);
+    await page.waitForTimeout(450);
+    ok(await page.evaluate(() => window.__detail() && window.__detail().view === "cb:citi-custom-cash/standing" && document.activeElement.tagName !== "SELECT" &&
+      !document.querySelector("#dtbody .bfocus select").matches(":open")), "dt double tap: a second tap landing on the focus picker neither focuses nor opens it");
+    await dtBackArrow();
     await page.mouse.dblclick(30, 30); // the back arrow, twice: home, and nothing opened by the second tap
     await page.waitForTimeout(450);
     ok(await page.evaluate(() => window.__detail() === null && document.activeElement !== document.body), "dt double tap on the back arrow: home, nothing reopened");

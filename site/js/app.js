@@ -3049,10 +3049,11 @@
     if (ev.detail > 0 && ev.timeStamp - dtSwapT >= 0 && ev.timeStamp - dtSwapT < 400 && ev.target.closest && ev.target.closest("#dt, #qp, #cb")) {
       ev.preventDefault();
       ev.stopPropagation();
-      // The press already focused the control under the finger; that focus isn't the owner using it (it mustn't hold
-      // the day redraw).
-      dtAutoFocus = document.activeElement;
     }
+  }, true);
+  // The press of that second tap is cancelled too, so it neither focuses nor opens anything (a picker opens on the press).
+  document.addEventListener("mousedown", function (ev) {
+    if (ev.timeStamp - dtSwapT >= 0 && ev.timeStamp - dtSwapT < 400 && ev.target.closest && ev.target.closest("#dt, #qp, #cb")) ev.preventDefault();
   }, true);
   function openDetail(view, from, ev) {
     if (wc) return;
@@ -3139,11 +3140,13 @@
   }
   // Does another live rate group of card C (its bonus entries' groups and its standing groups, not g) name merchant n?
   // Names compared as whole words either way ("BJ's" and "BJ's Wholesale").
-  function ownCovers(C, g, n, today) {
+  // Only a rate at least the one shown counts (a lower one doesn't make the shown rate true there), and an online-only
+  // rate never covers a topic that isn't online.
+  function ownCovers(C, g, n, today, rate) {
     var a = normKw(n), gs = (C.standing || []).slice();
     bonus.entries.forEach(function (e) { if (e.card === C.bonus_card && bonusLive(e, today)) gs = gs.concat(e.match); });
     return gs.some(function (h) {
-      return h !== g && h.name !== g.name && !!h._list && h._list.kws.some(function (k) {
+      return h !== g && h.name !== g.name && h._rate >= rate && !(h.channel === "online" && g.channel !== "online") && !!h._list && h._list.kws.some(function (k) {
         return k.c === a.c || k.s.indexOf(a.s + " ") === 0 || a.s.indexOf(k.s + " ") === 0;
       });
     });
@@ -3338,7 +3341,7 @@
         if (!l) return;
         // Names another of this card's own live rates covers aren't excluded for it (Costco for Costco Visa, which pays at
         // Costco gas and Costco; Costco, Sam's Club and BJ's for Customized Cash's wholesale clubs).
-        var ex = (l.exclude || []).filter(function (n) { return !ownCovers(x.C, g, n, today); });
+        var ex = (l.exclude || []).filter(function (n) { return !ownCovers(x.C, g, n, today, x.rate); });
         if (ex.length) put("ex|" + ex.join("|"), who, "excludes " + ex.join(", ") + ".");
         // "Speedway, Circle K and Wawa may not count: convenience-store chains may code as …" (names sharing a reason).
         var m = {}, mo = [];
