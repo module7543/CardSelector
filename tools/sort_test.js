@@ -1960,7 +1960,7 @@ function listRows(sel) {
     const quick = () => page.evaluate(() => {
       const q = document.getElementById("qp");
       if (q.hidden) return null;
-      const txt = e => { if (!e) return null; const c = e.cloneNode(true); c.querySelectorAll(".sr-only, .usegain").forEach(x => x.remove()); return c.textContent.replace(/\u00a0/g, " "); };
+      const txt = e => { if (!e) return null; const c = e.cloneNode(true); c.querySelectorAll(".sr-only, .usegain, .likely").forEach(x => x.remove()); return c.textContent.replace(/\u00a0/g, " "); };
       const gain = e => e && e.querySelector(".usegain") ? e.querySelector(".usegain").textContent : null;
       const tiles = {};
       q.querySelectorAll(".qpgrid > li.qpt").forEach(li => {
@@ -1970,6 +1970,8 @@ function listRows(sel) {
           cond: c ? (txt(c) + (gain(c) || "")).trim() : null, condKind: c ? (c.classList.contains("strong") ? "strong" : "muted") : null,
           condSr: c ? (c.querySelector(".sr-only") || {}).textContent : null, note: txt(li.querySelector(".qpnote")),
           likely: li.querySelector(".qpw .likely") ? li.querySelector(".qpw .likely").textContent : null,
+          afterLikely: a && a.querySelector(".likely") ? a.querySelector(".likely").textContent : null,
+          afterLikelyLast: a && a.querySelector(".likely") ? a.lastElementChild === a.querySelector(".likely") : null,
           empty: [...li.querySelectorAll("*")].filter(x => !x.textContent.trim() && !x.classList.contains("idot")).length,
           over: li.scrollWidth > li.clientWidth + 1, h: Math.round(li.getBoundingClientRect().height) };
       });
@@ -1994,7 +1996,7 @@ function listRows(sel) {
       const a = await page.evaluate(() => {
         const u = document.getElementById("use");
         const hs = [...u.querySelectorAll(":scope > .usehead:not(.usechan)")].map(e => ({ t: e.innerText.replace(/\s+/g, " "),
-          s: (e.querySelector("strong") || {}).textContent || "", g: (e.querySelector(".usegain") || {}).textContent || null }));
+          s: (e.querySelector("strong") || {}).textContent || "", g: (e.querySelector(".usegain") || {}).textContent || null, l: !!e.querySelector(".likely") }));
         const c = u.querySelector(":scope > .usecond.strong"), m = u.querySelector(":scope > .usecond:not(.strong)");
         return { hs, cond: c ? { k: "strong", s: c.querySelector("strong").textContent, g: (c.querySelector(".usegain") || {}).textContent || null } :
           m ? { k: "muted", s: m.textContent, g: null } : null };
@@ -2007,7 +2009,7 @@ function listRows(sel) {
       const n = r ? r.s.split(" or ").length + +((/\+(\d+) more ready/.exec(r.t) || [0, 0])[1]) + (r.t.match(/ also [\d.]+%/g) || []).length : 0;
       const fNames = f ? f.s.split(" or ").map(x => /^(.+?) [\d.]+%/.exec(x)[1]) : null;
       const fN = f ? fNames.length + +((/\+(\d+) more at/.exec(f.t) || [0, 0])[1]) : 0;
-      return { ready: r ? Object.assign(first(r.s), { n }) : null, after: f ? Object.assign(first(f.s), { gain: f.g, names: fNames, n: fN }) : null,
+      return { ready: r ? Object.assign(first(r.s), { n }) : null, after: f ? Object.assign(first(f.s), { gain: f.g, names: fNames, n: fN, likely: f.l }) : null,
         cond: a.cond ? Object.assign(first(a.cond.s), { kind: a.cond.k, gain: a.cond.g }) : null, raw: a.hs.map(h => h.t) };
     };
     const open = async (c, when) => {
@@ -2034,6 +2036,8 @@ function listRows(sel) {
           J(tAfter) === J(s.after ? [s.after.names, s.after.n, s.after.rate, s.after.gain] : null) &&
           J(tCond) === J(s.cond ? [s.cond.kind, s.cond.card, s.cond.rate, s.cond.gain] : null);
         ok(same, "qp " + name + ": " + topic + " matches the Step 2 answer for \"" + PAR[topic][0] + "\" (tile " + J(t) + "; Step 2 " + J(s.raw) + ")");
+        // Likely on the activation line exactly when Step 2's After activating line (the last line) carries it.
+        if (t.after || s.after) ok(!!t.afterLikely === !!(s.after && s.after.likely), "qp " + name + ": " + topic + " activation Likely matches Step 2's After activating (" + J([t.afterLikely, s.after && s.after.likely]) + ")");
       }
     };
     const tileIs = (name, Q, topic, want) => {
@@ -2042,6 +2046,7 @@ function listRows(sel) {
       ok(J(got) === J(want), "qp " + name + ": " + topic + " " + J(want) + (J(got) === J(want) ? "" : " (got " + J(got) + ")"));
     };
     const BOOST = "Incl. 75% Preferred Rewards (50% after Dec 15)", Q4 = "Q4 · through Dec 31";
+    const LIKELY = "Likely, not certain: how the merchant codes the purchase decides it."; // likelyTag(), with its screen-reader text
 
     // A. Every bonus activated: the six tiles in order, ready winners, +N more ready, Smartly's tie, notes from the data.
     let Q = await open({});
@@ -2053,6 +2058,7 @@ function listRows(sel) {
     tileIs("A/E", Q, "Gas stations", { rate: "4%", card: "Smartly", more: "+1 more ready", dated: null, after: null, cond: null, note: "Costco Visa also 4%, 5% at Costco gas" });
     tileIs("A", Q, "Entertainment", { rate: "5%", card: "Discover it", more: null, dated: Q4, after: null, cond: null, note: ENT_NOTE });
     tileIs("A/H", Q, "Utilities", { rate: "5%", card: "Discover it", more: null, dated: Q4, after: null, cond: null, note: null });
+    ok(Object.keys(Q.tiles).every(k => !Q.tiles[k].after && !Q.tiles[k].afterLikely), "qp A: nothing to activate, so no activation line and no activation Likely");
     ok(Object.keys(Q.tiles).every(k => !Q.tiles[k].empty && !Q.tiles[k].over), "qp H: no empty parts and nothing wider than its tile (" + J(Object.keys(Q.tiles).map(k => [k, Q.tiles[k].empty, Q.tiles[k].over])) + ")");
     ok(Q.ev === "Everyday default · Smartly 4% First $10,000 per billing cycle, then 2%; some categories always 2%" && Q.evFull,
       "qp everyday: full-width tile, rate and caveat from Smartly's headline_note (" + Q.ev + ")");
@@ -2095,7 +2101,17 @@ function listRows(sel) {
     // C / I. Both Chase cards not activated: Smartly 4% stays the ready answer for grocery stores, with the 5%
     // after activating (+1 pt); a not-activated bonus never leads or counts as ready.
     Q = await open({ set: { "Freedom Flex": "not_confirmed", "Freedom": "not_confirmed" } });
-    tileIs("C", Q, "Grocery stores", { rate: "4%", card: "Smartly", more: null, dated: null, after: "Activate Flex or Freedom: 5% · +1 pt", cond: null, note: null, likely: null });
+    tileIs("C", Q, "Grocery stores", { rate: "4%", card: "Smartly", more: null, dated: null, after: "Activate Flex or Freedom: 5% · +1 pt", cond: null, note: null, likely: null,
+      afterLikely: LIKELY, afterLikelyLast: true });
+    // The activation Likely is likelyTag() itself (same screen-reader wording), compact, and the tile still fits.
+    const qpaL = await page.evaluate(() => {
+      const a = document.querySelector("#qp li.qpt[data-topic='Grocery stores'] .qpa"), l = a && a.querySelector(".likely"), w = document.querySelector("#qp .qpw .likely");
+      const li = a.closest("li");
+      return { sr: l && l.querySelector(".sr") ? l.querySelector(".sr").textContent : null, font: l ? getComputedStyle(l).fontSize : null,
+        border: l ? getComputedStyle(l).borderTopStyle : null, over: li.scrollWidth > li.clientWidth + 1 };
+    });
+    ok(qpaL.sr === ", not certain: how the merchant codes the purchase decides it." && qpaL.font === "11.5px" && qpaL.border === "solid" && !qpaL.over,
+      "qp C: the activation line's Likely has likelyTag's screen-reader text and the compact tag style, inside the tile (" + J(qpaL) + ")");
     tileIs("C", Q, "Dining", { rate: "5%", card: "Discover it", more: null, after: null });
     await parity("C", Q);
 
@@ -2112,7 +2128,9 @@ function listRows(sel) {
     // D with the 5% cards not activated instead: both the activation and the conditional alternative, Smartly still leads.
     Q = await open({ set: { "Freedom Flex": "not_confirmed", "Freedom": "not_confirmed", "Discover it": "not_confirmed" } });
     tileIs("D/I", Q, "Dining", { rate: "4%", card: "Smartly", more: null, after: "Activate Flex, Freedom or Discover it: 5% · +1 pt",
-      afterCards: ["Freedom Flex", "Freedom", "Discover it"], cond: "Citi Custom Cash 5% · conditional · +1 pt", condKind: "strong" });
+      afterCards: ["Freedom Flex", "Freedom", "Discover it"], cond: "Citi Custom Cash 5% · conditional · +1 pt", condKind: "strong", likely: null, afterLikely: LIKELY });
+    ok(Object.keys(Q.tiles).every(k => !!Q.tiles[k].after === !!Q.tiles[k].afterLikely && !Q.tiles[k].over),
+      "qp D/I: every activation line (and only those) carries Likely, every tile fits (" + J(Object.keys(Q.tiles).map(k => [k, Q.tiles[k].after, Q.tiles[k].afterLikely, Q.tiles[k].over])) + ")");
     // Only one card's activation improves the answer: only it is named.
     tileIs("I", Q, "Utilities", { rate: "4%", card: "Smartly", after: "Activate Discover it: 5% · +1 pt", afterCards: ["Discover it"] });
     await parity("D/I", Q);
@@ -2149,28 +2167,109 @@ function listRows(sel) {
     ok(await page.evaluate(() => [...document.querySelectorAll("#qp .qpd, #qp .qpnote")].every(e => !/[A-Z][a-z]{2} \d/.test(e.textContent))), "qp: tile dates use a no-break space");
     ok(errs.length === 0, "qp: no page errors (" + errs.join("; ") + ")");
     await ctx5.close();
-    // The Preferred Rewards switch (Dec 15 -> 16) with the tab open: the day redraw keeps the tile's note in step with
-    // the rate it shows (the rate itself follows the answer card's, which is worked out when the files are readied),
-    // and the tile still matches the Step 2 answer.
-    const ctx6 = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: "block" });
-    page = await ctx6.newPage();
-    page.on("pageerror", e => errs.push(e.message));
-    for (const k of Object.keys(ROUTES)) await page.route("**/data/" + k, ROUTES[k]);
+    // The Preferred Rewards switch (Dec 15 -> 16) with the tab open: a day redraw prepares the boosted rates again, so
+    // the rolled-over tab shows exactly what a fresh load on Dec 16 shows. Fixture tier: 75% through Dec 15, then 50%
+    // (Customized Cash online shopping 3% -> 5.25%, then 4.5%). Three tabs in one context (one clock): the home screen
+    // (Quick picks), the Step 2 answer card for "temu" (an online_stores keyword) under Online, and a Bank of America
+    // "10% Cash back" online-only offer whose Best offer row total is 10% + the boosted 5.25% (then 4.5%).
+    const ROLL_OFFER = Object.assign(fx("roll", "Zqroll Shop", "Marketplaces & Department Stores", "online"),
+      { id: "test/qp-roll", card: "Bank of America", bonus: "10% Cash back", activation: "already_activated" });
+    const rollRoutes = async p => {
+      for (const k of Object.keys(ROUTES)) await p.route("**/data/" + k, k === "offers.json" ?
+        r => r.fulfill({ json: Object.assign({}, real, { offers: FX.concat([ROLL_OFFER]) }) }) : ROUTES[k]);
+    };
+    // One tab's view: the Online shopping tile, or the answer card (lines, Likely, notes) and the row totals.
+    const rollView = p => p.evaluate(() => {
+      const q = document.getElementById("qp"), u = document.getElementById("use");
+      const tile = q.hidden ? null : q.querySelector("li.qpt[data-topic='Online shopping']");
+      const plain = e => { const c = e.cloneNode(true); c.querySelectorAll(".sr, .sr-only").forEach(x => x.remove()); return c.textContent.replace(/ /g, " ").trim(); };
+      return {
+        tile: tile ? { rate: plain(tile.querySelector(".qpr")), card: plain(tile.querySelector(".qpc")),
+          note: tile.querySelector(".qpnote") ? plain(tile.querySelector(".qpnote")) : null, likely: !!tile.querySelector(".qpw .likely") } : null,
+        tiles: q.hidden ? null : [...q.querySelectorAll("li.qpt")].map(plain),
+        use: u.hidden ? null : [...u.children].filter(c => !c.matches(".chansel, details.rates")).map(plain),
+        rates: u.hidden || !u.querySelector("details.rates > summary") ? null : plain(u.querySelector("details.rates > summary")),
+        totals: [...document.querySelectorAll("#main > ul.results li.offer")].map(li => li.dataset.oid + " " + plain(li.querySelector(".obig") || li) + " " + plain(li.querySelector(".obreak") || li))
+      };
+    });
+    const rollOpen = async (ctx, q) => {
+      const p = await ctx.newPage();
+      p.on("pageerror", e => errs.push(e.message));
+      await rollRoutes(p);
+      await p.goto(base);
+      await p.waitForFunction(() => window.__cardsReady && window.__bonusReady && !document.getElementById("qp").hidden);
+      if (q) {
+        await p.fill("#q", q);
+        await p.waitForTimeout(150);
+        await p.click("#use .chansel button[data-ch=online]");
+        await p.waitForTimeout(100);
+      }
+      return p;
+    };
+    const rollTabs = async ctx => ({ home: await rollOpen(ctx, null), temu: await rollOpen(ctx, "temu"), roll: await rollOpen(ctx, "zqroll") });
+    const rollAll = async T => ({ home: await rollView(T.home), temu: await rollView(T.temu), roll: await rollView(T.roll) });
+    const BOOST50 = "Incl. 50% Preferred Rewards";
     CASE = {};
-    await page.clock.install({ time: new Date(2026, 11, 15, 23, 59, 0) });
-    await page.goto(base);
-    await page.waitForFunction(() => window.__cardsReady && window.__bonusReady && !document.getElementById("qp").hidden);
-    const before = (await quick()).tiles["Online shopping"];
-    await page.clock.runFor(120000);
-    await page.evaluate(() => window.dispatchEvent(new Event("focus")));
-    await page.waitForTimeout(100);
-    Q = await quick();
-    const tOn = Q.tiles["Online shopping"], tierOf = n => +((/Incl\. (\d+)% Preferred/.exec(n || "") || [0, 0])[1]);
-    ok(before.rate === "5.25%" && tierOf(before.note) === 75 && /\(50% after Dec 15\)/.test(before.note) && tOn.rate === (5.25 / 1.75 * (1 + tierOf(tOn.note) / 100)) + "%" && !/after Dec 15/.test(tOn.note),
-      "qp rollover: after midnight on Dec 15 the note's tier matches the rate shown (" + J([before.rate, before.note, tOn.rate, tOn.note]) + ")");
-    await parity("rollover", Q);
+    // A fresh load on Dec 16: what every rolled-over tab must equal.
+    const ctxF = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: "block" });
+    await ctxF.clock.install({ time: new Date(2026, 11, 16, 0, 0, 30) });
+    const fresh = await rollAll(await rollTabs(ctxF));
+    await ctxF.close();
+    ok(J(fresh.home.tile) === J({ rate: "4.5%", card: "Customized Cash", note: BOOST50, likely: true }),
+      "qp rollover: fresh load on Dec 16, Online shopping tile Customized Cash 4.5%, " + BOOST50 + " (" + J(fresh.home.tile) + ")");
+    ok(/^Ready now: Customized Cash 4\.5%/.test((fresh.temu.use || [])[0] || "") && (fresh.temu.use || []).some(l => /50% Preferred Rewards boost\.$/.test(l)) &&
+      !(fresh.temu.use || []).some(l => /75%/.test(l)),
+      "qp rollover: fresh load on Dec 16, Step 2 \"temu\" (Online) Ready now Customized Cash 4.5%, 50% boost note (" + J(fresh.temu.use) + ")");
+    ok(fresh.roll.totals.some(t => /^test\/qp-roll 14\.5% /.test(t)), "qp rollover: fresh load on Dec 16, the 10% BofA online offer's row total is 14.5% (" + J(fresh.roll.totals) + ")");
+    for (const how of ["midnight timer", "focus", "visibilitychange", "bfcache pageshow"]) {
+      const ctx6 = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: "block" });
+      await ctx6.clock.install({ time: new Date(2026, 11, 15, 23, 59, 0) });
+      const T = await rollTabs(ctx6);
+      await ctx6.clock.pauseAt(new Date(2026, 11, 15, 23, 59, 50));
+      const before = await rollAll(T);
+      ok(J(before.home.tile) === J({ rate: "5.25%", card: "Customized Cash", note: BOOST, likely: true }),
+        "qp rollover " + how + ": at 23:59 on Dec 15 the Online shopping tile is Customized Cash 5.25%, " + BOOST + " (" + J(before.home.tile) + ")");
+      ok(/^Ready now: Customized Cash 5\.25%/.test((before.temu.use || [])[0] || "") && (before.temu.use || []).some(l => /75% Preferred Rewards boost \(50% after Dec 15\)\.$/.test(l)),
+        "qp rollover " + how + ": at 23:59 on Dec 15 Step 2 \"temu\" (Online) Ready now Customized Cash 5.25%, 75% boost note (" + J(before.temu.use) + ")");
+      ok(before.roll.totals.some(t => /^test\/qp-roll 15\.25% /.test(t)), "qp rollover " + how + ": at 23:59 the 10% BofA online offer's row total is 15.25% (" + J(before.roll.totals) + ")");
+      const renders = async () => Promise.all([T.home, T.temu, T.roll].map(p => p.evaluate(() => window.__renders)));
+      const r0 = await renders();
+      if (how === "midnight timer") await ctx6.clock.runFor(15000);
+      else {
+        await ctx6.clock.setSystemTime(new Date(2026, 11, 16, 0, 0, 30)); // no timer runs
+        const mid = await rollAll(T);
+        ok(J(mid) === J(before), how + ": nothing redrawn before the event");
+        for (const p of [T.home, T.temu, T.roll]) await p.evaluate(h => {
+          if (h === "focus") window.dispatchEvent(new Event("focus"));
+          else if (h === "bfcache pageshow") window.dispatchEvent(new PageTransitionEvent("pageshow", { persisted: true }));
+          else {
+            Object.defineProperty(document, "hidden", { configurable: true, get: () => false });
+            Object.defineProperty(document, "visibilityState", { configurable: true, get: () => "visible" });
+            document.dispatchEvent(new Event("visibilitychange"));
+          }
+        }, how);
+      }
+      const after = await rollAll(T), r1 = await renders();
+      ok(J(after.home.tile) === J({ rate: "4.5%", card: "Customized Cash", note: BOOST50, likely: true }),
+        "qp rollover " + how + ": after midnight, no reload, the Online shopping tile is Customized Cash 4.5%, " + BOOST50 + " (" + J(after.home.tile) + ")");
+      ok(/^Ready now: Customized Cash 4\.5%/.test((after.temu.use || [])[0] || "") && !(after.temu.use || []).some(l => /75%|5\.25/.test(l)),
+        "qp rollover " + how + ": after midnight, no reload, Step 2 \"temu\" (Online) Ready now Customized Cash 4.5% (" + J(after.temu.use) + ")");
+      ok(r1.every((n, i) => n - r0[i] === 1), how + ": one redraw per tab (" + J([r0, r1]) + ")");
+      ok(J(after) === J(fresh), "qp rollover " + how + ": every tab equals a fresh load on Dec 16 (tiles, answer card, Card rates here, row totals)" +
+        (J(after) === J(fresh) ? "" : " (" + J(after) + " vs " + J(fresh) + ")"));
+      // Repeated comebacks the same day draw nothing more and change nothing.
+      for (const p of [T.home, T.temu, T.roll]) await p.evaluate(() => {
+        document.dispatchEvent(new Event("visibilitychange")); window.dispatchEvent(new Event("focus")); window.dispatchEvent(new PageTransitionEvent("pageshow", { persisted: true }));
+      });
+      ok(J(await renders()) === J(r1) && J(await rollAll(T)) === J(fresh), how + ": later focus, visibilitychange and pageshow the same day redraw nothing, values unchanged");
+      // Clearing the search on the rolled-over tab: Quick picks drawn from the recomputed rates too.
+      await T.temu.fill("#q", "");
+      await T.temu.waitForTimeout(100);
+      const cleared = (await rollView(T.temu)).tile;
+      ok(J(cleared) === J(fresh.home.tile), how + ": the searched tab, cleared, shows the Dec 16 Online shopping tile (" + J(cleared) + ")");
+      await ctx6.close();
+    }
     ok(errs.length === 0, "qp rollover: no page errors (" + errs.join("; ") + ")");
-    await ctx6.close();
     page = mainPage;
   }
 

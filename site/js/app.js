@@ -2708,7 +2708,8 @@
     return {
       rate: p.total, card: lead.C.name, more: p.wins.length - 1, cat: !!lead.base.cat, dated: datedLabel(lead.base.e),
       after: L.after ? { names: L.after.wins.map(function (c) { return (c.base.e && c.base.e.short) || c.C.name; }),
-        cards: L.after.wins.map(function (c) { return c.C.name; }), rate: L.after.total, gain: aLine.gain } : null,
+        cards: L.after.wins.map(function (c) { return c.C.name; }), rate: L.after.total, gain: aLine.gain,
+        cat: L.after.wins.some(function (c) { return !!(c.base && c.base.cat); }) } : null,
       cond: L.cond || null, note: quickNote(p)
     };
   }
@@ -2744,6 +2745,8 @@
         a.setAttribute("data-cards", p.after.cards.join("|"));
         ag.appendChild(el("span", "usegain", p.after.gain));
         a.appendChild(ag);
+        // "Likely" when that better rate is a category rate (merchant coding decides it), as on Step 2's After activating.
+        if (p.after.cat) a.appendChild(likelyTag());
         li.appendChild(a);
       }
       if (p.cond) {
@@ -3350,6 +3353,9 @@
       var b = sel.parentNode.querySelector("button");
       return b && !b.hidden;
     }).map(function (sel) { return [sel.id, sel.value]; });
+    // Rates prepared from today's date (the Preferred Rewards boost on bonus and standing groups) are prepared
+    // again, so the new day's rates match a fresh load; then the Best offer totals are worked out again.
+    cardsCfg = null; prepCards();
     totalCache = {}; totalSig = ""; // Best offer totals, worked out again for today
     renderCats(); renderCards(); renderStrip(); renderCuisines(); render();
     var ex2 = main.querySelector("details.expired");
