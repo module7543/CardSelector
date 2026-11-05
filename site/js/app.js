@@ -1280,14 +1280,21 @@
     if (category === "Dining" && cuisine !== null) on.push({ k: "cuis", label: cuisine });
     return on;
   }
-  // The row under the search box (phones). listShown: a list is on the page (the Sort button shows with it).
-  function renderFbar(usedOn, listShown) {
-    fbar.hidden = !data || !!dt;
+  // The row under the search box (phones). listShown: a list is on the page (the Sort button shows with it). quiet: the
+  // plain home screen (no list, so no filter is on): the Filters button is just an icon at the end of the search field and
+  // the row isn't drawn, so Quick picks stay right under the search box.
+  var searchBarEl = document.querySelector(".searchbar");
+  function renderFbar(usedOn, listShown, quiet) {
+    var inSearch = quiet && isPhone();
+    if (inSearch && ftoggle.parentNode !== searchBarEl) searchBarEl.appendChild(ftoggle);
+    else if (!inSearch && ftoggle.parentNode !== fbar) fbar.insertBefore(ftoggle, fbar.firstChild);
+    searchBarEl.classList.toggle("withf", inSearch);
+    fbar.hidden = !data || !!dt || inSearch;
     // Under the search box (and the Ending chip); in What changed, under its panel.
     var anchor = wc ? wcEl : endBar;
     if (anchor.nextElementSibling !== fbar) anchor.parentNode.insertBefore(fbar, anchor.nextSibling);
     var on = activeFilters(usedOn), n = on.length;
-    fbn.textContent = usedOn ? "Used" + (n ? " · " + n : "") : n ? String(n) : "Filters";
+    fbn.textContent = inSearch ? "" : usedOn ? "Used" + (n ? " · " + n : "") : n ? String(n) : "Filters";
     ftoggle.classList.toggle("on", n > 0 || usedOn);
     ftoggle.setAttribute("aria-label", "Filters" + (n ? ", " + n + " on" : "") + (usedOn ? ", showing used offers" : ""));
     fsortBtn.hidden = !listShown || usedOn; // the Used list ignores the sort
@@ -4098,7 +4105,8 @@
     // Ending soon's window); the Used list has none.
     facetCtx = { query: query, cuis: cuis, used: usedOn, listed: wc ? (wc.tab === "new" ? function (o) { return isNew(o, today); } : isDropped) :
       function (o) { return isLive(o, today) && inEnd(o); } };
-    renderFbar(usedOn, !!wc || hasQuery || narrowed);
+    var listShown = !!wc || hasQuery || narrowed;
+    renderFbar(usedOn, listShown, !listShown && !usedOn && !ending && category === null && card === null);
     renderUsed(editing() && !wc && !ending ? search(query, function (o) { return o.status === "used" && inUsedScope(o); }).length : null);
     // The Used list ignores In store / Online and Activation: their rows are greyed out and can't be changed.
     [chansEl, actsEl].forEach(function (g) {

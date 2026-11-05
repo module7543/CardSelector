@@ -3389,8 +3389,9 @@ function listRows(sel) {
       await ctxG.close();
     }
 
-    // Step 5 on the home screen: the Filters button sits under the search box (no Filters row with the utilities). A
-    // remembered channel lists offers there: its chip shows and the Sort button joins; picking one in the sheet does the same.
+    // Step 5 on the home screen: with nothing on, the Filters button is an icon at the end of the search field (no row of
+    // its own, Quick picks right under the search box; no Filters row with the utilities). A remembered channel lists offers
+    // there: the control row under the search box shows its chip and the Sort button; picking one in the sheet does the same.
     {
       const ctxF = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: "block" });
       page = await ctxF.newPage();
@@ -3400,8 +3401,10 @@ function listRows(sel) {
       await page.evaluate(() => { localStorage.clear(); localStorage.setItem("cardselector.channel", "store"); });
       await load4d();
       const pos = () => page.evaluate(() => { const f = document.getElementById("ftoggle"), m = document.querySelector("#main > ul.results"), qp = document.getElementById("qp");
-        const sb = document.querySelector(".searchbar").getBoundingClientRect(), fr = f.getBoundingClientRect();
+        const sb = document.querySelector(".searchbar").getBoundingClientRect(), fr = f.getBoundingClientRect(), q = document.getElementById("q").getBoundingClientRect();
         return { list: !!m, underSearch: !!(f.compareDocumentPosition(qp) & Node.DOCUMENT_POSITION_FOLLOWING) && fr.top >= sb.bottom - 1 && fr.top - sb.bottom < 16,
+          inField: f.parentNode.classList.contains("searchbar") && fr.top >= q.top && fr.bottom <= q.bottom && fr.right <= q.right && fr.left > q.left + q.width / 2,
+          qpGap: Math.round(qp.getBoundingClientRect().top - sb.bottom), row: !!document.getElementById("fbar").offsetParent,
           util: !document.getElementById("homeutil").hidden, chips: [...document.querySelectorAll("#fbar .flchip")].map(c => c.getAttribute("aria-label")),
           label: f.getAttribute("aria-label"), text: f.innerText.trim(), sort: !document.getElementById("fsortbtn").hidden, h: Math.round(fr.height), home: !!window.__shortcuts() }; });
       const s1 = await pos();
@@ -3410,8 +3413,8 @@ function listRows(sel) {
       await page.evaluate(() => localStorage.setItem("cardselector.channel", "any"));
       await load4d();
       const s2 = await pos();
-      ok(s2.home && !s2.list && s2.underSearch && !s2.util && !s2.chips.length && !s2.sort && s2.text === "Filters" && s2.label === "Filters" && s2.h >= 40,
-        "s5 home with no list: just the Filters button under the search box, no chips, no Sort, no Filters row with the utilities (" + J(s2) + ")");
+      ok(s2.home && !s2.list && s2.inField && !s2.row && s2.qpGap < 16 && !s2.util && !s2.chips.length && !s2.sort && s2.text === "" && s2.label === "Filters" && s2.h >= 40,
+        "s5 home with nothing on: the Filters button is an icon (named Filters) at the end of the search field, no control row, Quick picks right under the search box, no Filters row with the utilities (" + J(s2) + ")");
       await openFilters();
       await page.locator("#chans button", { hasText: /^In store/ }).click();
       await closeFilters();
@@ -3462,7 +3465,7 @@ function listRows(sel) {
           }).map(x => x.textContent),
           rateLines: [...document.querySelectorAll("#qp .qpr")].map(x => x.getClientRects().length), minFont: Math.min.apply(null, [...document.querySelectorAll("#qp *, #cb *, #sc *")].filter(x => vis(x) && x.textContent.trim() && !x.closest(".likely")).map(x => parseFloat(getComputedStyle(x).fontSize))) };
       });
-      ok(L.dom && L.ordered && !L.freshOpen, "4d layout " + scheme + " " + w + ": search, Filters button, Quick picks, Card bonuses, shortcuts, freshness (closed), Recently unavailable, Edit mode (" + J(L.tops.map(Math.round)) + ")");
+      ok(L.dom && L.ordered && !L.freshOpen, "4d layout " + scheme + " " + w + ": search (its Filters icon inside), Quick picks, Card bonuses, shortcuts, freshness (closed), Recently unavailable, Edit mode (" + J(L.tops.map(Math.round)) + ")");
       ok(L.pageW <= w && !L.over.length && L.scH >= 44 && L.scChev === 0 && L.sideBySide === (w >= 350) && L.rateLines.every(n => n === 1) && !L.splitWords.length && L.minFont >= 12,
         "4d layout " + scheme + " " + w + ": no sideways scroll or overflow, shortcuts " + (w >= 350 ? "side by side" : "stacked") + " and " + L.scH + "px tall, no chevron on them, rates on one line, no word split (" + J([L.pageW, L.over, L.sideBySide, L.rateLines, L.splitWords, L.minFont]) + ")");
       ok(L.glyphs.length === L.places && L.places >= 8 && L.glyphs.every(Boolean) && L.tileBg !== L.bg,
@@ -3973,7 +3976,8 @@ function listRows(sel) {
           s: document.getElementById("fsortbtn").hidden ? null : [Math.round(r(document.getElementById("fsortbtn")).width), Math.round(r(document.getElementById("fsortbtn")).height)],
           chips: [...document.querySelectorAll("#fbar .flchip, #fbar .fcuis")].map(c => Math.round(r(c).height)), lines: new Set([...document.querySelectorAll("#fbar > *:not([hidden])")].map(x => Math.round(r(x).top))).size }; });
       let o = await over(), c = await ctl();
-      ok(o.sw <= w && !o.out.length && c.f[0] >= 44 && c.f[1] >= 40 && c.s === null, tag + "closed, nothing on: the Filters button alone, " + J(c.f) + " (" + J(o) + ")");
+      const inF = await page.evaluate(() => document.getElementById("ftoggle").parentNode.classList.contains("searchbar") && document.getElementById("ftoggle").getAttribute("aria-label") === "Filters");
+      ok(o.sw <= w && !o.out.length && c.f[0] >= 44 && c.f[1] >= 40 && c.s === null && inF, tag + "closed, nothing on: the Filters icon in the search field, " + J(c.f) + " (" + J(o) + ")");
       await search("zs");
       await openFilters();
       await pick("#chans", "Online"); await pick("#acts", "Activate or add"); await pick("#cards", "Citi Double Cash"); await pick("#cats", "Marketplaces");

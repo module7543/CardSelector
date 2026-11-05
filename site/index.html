@@ -235,6 +235,15 @@
   /* Filters are on: the count in the accent color. */
   .fbtn.on .fbn { color: var(--accent); }
   .fbtn.fsort { margin-left: auto; padding: 0; width: 44px; }
+  /* The plain home screen: the Filters button is only an icon at the end of the search field (no row of its own). */
+  .searchbar.withf #q { padding-right: 50px; }
+  .searchbar > #ftoggle {
+    position: absolute; right: 4px; top: 16px; width: 44px; min-width: 44px; height: 40px; min-height: 40px; padding: 0; gap: 0;
+    color: var(--muted); background: transparent; border: 0; border-radius: 10px; box-shadow: none;
+  }
+  .searchbar > #ftoggle svg { width: 20px; height: 20px; }
+  .searchbar > #ftoggle .fbn:empty { display: none; }
+  @media (min-width: 700px) { .searchbar > #ftoggle { display: none; } .searchbar.withf #q { padding-right: 18px; } }
   .fbtn.fsort[hidden] { display: none; }
   /* A chip is one button: the filter's name and a ×; the whole chip removes that filter. */
   .flchip {
