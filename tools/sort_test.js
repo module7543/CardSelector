@@ -109,6 +109,11 @@ function listRows(sel) {
   const browser = await chromium.launch(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {});
   // Service workers blocked: the saved copy (sw.js) would answer requests before page.route sees them.
   let page = await browser.newPage({ viewport: { width: 390, height: 844 }, serviceWorkers: "block" });
+  // Redesign step 5: on phones the filters are in the filter sheet. openFilters opens it with the Filters button (no-op
+  // when open or on a wide screen), closeFilters shuts it with Show results; each waits out the double-tap guard's 400 ms.
+  const sheetUp = () => page.$eval("#fsheet", e => !e.hidden);
+  const openFilters = async () => { if (!(await sheetUp()) && await page.locator("#ftoggle").isVisible()) { await page.click("#ftoggle"); await page.waitForTimeout(420); } };
+  const closeFilters = async () => { if (await sheetUp()) { await page.click("#fsdone"); await page.waitForTimeout(420); } };
   const rows = () => page.evaluate(listRows, "#main > ul.results");
   // Merchants the per-merchant "Use:" headline names (none for the category headline).
   const useNames = () => page.$$eval("#use .usemname, #use .useat", es => es.map(e => e.textContent.replace(/:\s*$/, "").replace(/^At /, "")).sort());
@@ -121,13 +126,14 @@ function listRows(sel) {
     await page.evaluate(() => { try { localStorage.clear(); } catch (e) {} });
     await page.goto(base);
     await page.waitForFunction(() => /active offers loaded/.test(document.body.innerText));
-    if (await page.locator("#ftoggle").isVisible()) await page.click("#ftoggle");
+    await openFilters();
     await page.selectOption("#sort", o.sort || "best");
     const pick = async (box, text) => page.locator(box + " button", { hasText: new RegExp("^" + text) }).first().click();
     if (o.cat) await pick("#cats", o.cat);
     if (o.card) await pick("#cards", o.card);
     if (o.act) await pick("#acts", o.act);
     if (o.chan) await pick("#chans", o.chan);
+    await closeFilters();
     await page.fill("#q", q);
     await page.waitForTimeout(100);
     if (o.all) await moreAll();
@@ -163,29 +169,29 @@ function listRows(sel) {
   ok(bestOrderBreak(sh, "shell") === -1, "shell: whole-word Shell, then the partial matches in reward order");
   if (!sh.some(r => /^(Bombshell Sportswear|Shelly)$/.test(r.merchant))) skip("shell: Bombshell Sportswear and Shelly are no longer active");
 
-  // 3. Needs activation, Highest percent: every definite percent above every "Up to" percent.
-  const na = await setup("", { act: "Needs activation", sort: "percent", all: true });
+  // 3. Activate or add (the old Needs activation), Highest percent: every definite percent above every "Up to" percent.
+  const na = await setup("", { act: "Activate or add", sort: "percent", all: true });
   // Percent first (no percent last), definite above "Up to", then the percent high to low: inside each container and
   // across containers (by their first row).
   const pctKey = r => { const m = /(\d+(?:\.\d+)?)\s*%/.exec(r.bonus), sv = /^\s*save\b/i.test(r.bonus); return m && !sv ? [0, /^\s*up to\b/i.test(r.bonus) ? 1 : 0, -m[1]] : [1, 0, 0]; };
   const nah = heads(na), pct = nah.filter(r => pctKey(r)[0] === 0);
   const firstUp = pct.findIndex(r => /^\s*up to\b/i.test(r.bonus)), lastDef = pct.map(r => !/^\s*up to\b/i.test(r.bonus)).lastIndexOf(true);
   ok(pct.length > 0 && (firstUp === -1 || lastDef < firstUp) && orderBreak(na, pctKey) === -1,
-    "Needs activation, Highest percent: definite percents above \"Up to\" percents, in each container and across them (" + na.length + " rows, " + nah.length + " merchants)");
+    "Activate or add, Highest percent: definite percents above \"Up to\" percents, in each container and across them (" + na.length + " rows, " + nah.length + " merchants)");
   const yt = nah.findIndex(r => /^50%/.test(r.bonus)), up50 = nah.findIndex(r => /^up to (\d+)/i.test(r.bonus) && +/^up to (\d+)/i.exec(r.bonus)[1] >= 50);
-  if (yt === -1 || up50 === -1) skip("Needs activation: no definite 50% or no \"Up to 50%\"-or-more offer is active");
-  else ok(yt < up50, "Needs activation, Highest percent: a merchant led by a definite 50% (" + (yt + 1) + ") above one led by \"Up to\" 50%+ (" + (up50 + 1) + ")");
-  const nb = await setup("", { act: "Needs activation" });
-  ok(bestOrderBreak(nb, "") === -1, "Needs activation, Best offer: first page in tier order (definite % before \"Up to\" %)");
-  const nr = await setup("", { act: "Needs activation", sort: "rate", all: true });
+  if (yt === -1 || up50 === -1) skip("Activate or add: no definite 50% or no \"Up to 50%\"-or-more offer is active");
+  else ok(yt < up50, "Activate or add, Highest percent: a merchant led by a definite 50% (" + (yt + 1) + ") above one led by \"Up to\" 50%+ (" + (up50 + 1) + ")");
+  const nb = await setup("", { act: "Activate or add" });
+  ok(bestOrderBreak(nb, "") === -1, "Activate or add, Best offer: first page in tier order (definite % before \"Up to\" %)");
+  const nr = await setup("", { act: "Activate or add", sort: "rate", all: true });
   const nrh = heads(nr), ru = nrh.findIndex(r => /^\s*up to\b.*%/i.test(r.bonus)), rd = nrh.map(r => /\d\s*%/.test(r.bonus) && !/^\s*(up to|save)\b/i.test(r.bonus)).lastIndexOf(true);
-  ok(ru !== -1 && rd !== -1 && rd < ru, "Needs activation, Best rate: merchants led by definite percents (last at " + (rd + 1) + ") above those led by \"Up to\" percents (first at " + (ru + 1) + ")");
+  ok(ru !== -1 && rd !== -1 && rd < ru, "Activate or add, Best rate: merchants led by definite percents (last at " + (rd + 1) + ") above those led by \"Up to\" percents (first at " + (ru + 1) + ")");
 
   // Ties break by merchant A to Z, then card, in every reward sort: 021 Originals and 1Password (both 30%) keep
   // one order in Best offer and Highest percent.
   const tie = (list, m) => list.findIndex(r => r.merchant === m);
   const [b021, b1p, p021, p1p] = [tie(nb, "021 Originals"), tie(nb, "1Password"), tie(na, "021 Originals"), tie(na, "1Password")];
-  if ([b021, b1p, p021, p1p].includes(-1)) skip("ties: 021 Originals or 1Password is not on the Needs activation lists");
+  if ([b021, b1p, p021, p1p].includes(-1)) skip("ties: 021 Originals or 1Password is not on the Activate or add lists");
   else ok((b021 < b1p) === (p021 < p1p), "ties: 021 Originals / 1Password in the same order in Best offer and Highest percent");
 
   // 4. Show more continues the same order with no repeats (a search with more than 60 merchants: Show more pages by
@@ -490,7 +496,7 @@ function listRows(sel) {
   page = mainPage;
 
   // Day rollover: loaded at 23:59 on Oct 21 with a search, the Dining and Chase Freedom Flex filters, a cuisine,
-  // Online, Needs activation, A to Z, one offer's details, the Filters panel, one bonus row, Recently unavailable,
+  // Online, Activate or add, A to Z, one offer's details, the Filters panel, one bonus row, Recently unavailable,
   // Offer freshness and Edit mode open, scrolled down, focus on the open
   // offer's row. Crossing midnight (the timer; a tab hidden across it and shown again; a bfcache pageshow) redraws
   // once: the offer that ended Oct 21 moves to Recently unavailable, "Ends tomorrow" becomes "Ends today", and every
@@ -517,7 +523,7 @@ function listRows(sel) {
         f ? f.tagName + "#" + f.id + "." + f.className : null,
       cats: pressed("cats"), cards: pressed("cards"), cuis: pressed("cuis"), chans: pressed("chans"), acts: pressed("acts"), sort: document.getElementById("sort").value,
       open: [...document.querySelectorAll("li.mc > button.mchead[aria-expanded=true]")].map(b => b.querySelector(".mcname").textContent),
-      filters: document.getElementById("filters").classList.contains("open"),
+      filters: !document.getElementById("fsheet").hidden, // the filter sheet (closed here; step 5's own checks redraw it open)
       rates: (document.querySelector("#use details.rates") || {}).open,
       rows: [...document.querySelectorAll("#use details.bonusrow[open]")].map(d => d.getAttribute("data-topic")),
       leads: [...document.querySelectorAll("#use details.bonusrow[open] .bhead")].map(h => h.textContent),
@@ -539,15 +545,18 @@ function listRows(sel) {
     return ctx;
   };
   const daySetup = async () => {
-    if (await page.locator("#ftoggle").isVisible()) await page.click("#ftoggle");
+    await openFilters();
     await page.selectOption("#sort", "az");
     await page.locator("#cats button", { hasText: /^Dining/ }).first().click();
     await page.locator("#cards button", { hasText: /^Chase Freedom Flex/ }).first().click();
     await page.locator("#chans button", { hasText: /^Online/ }).first().click();
-    await page.locator("#acts button", { hasText: /^Needs activation/ }).first().click();
+    await page.locator("#acts button", { hasText: /^Activate or add/ }).first().click();
+    await closeFilters();
     await page.fill("#q", "zzday");
     await page.waitForTimeout(900); // past the after-typing scroll
+    await openFilters();
     await page.locator("#cuis button", { hasText: /^Unclassified/ }).first().click();
+    await closeFilters();
     await page.locator("li.mc:has(li.offer[data-oid='test/zzday-1']) > button.mchead").first().click();
     await page.click("#use details.rates > summary");
     await page.locator("#use details.bonusrow > summary").first().click();
@@ -588,7 +597,7 @@ function listRows(sel) {
     ok(after.today === "gone" && after.gone.includes("Zzday Ends Today") && after.soonTomorrow === "Ends today",
       how + ": the offer that ended moved to Recently unavailable, \"Ends tomorrow\" -> \"" + after.soonTomorrow + "\"");
     const lost = sameState(before, after);
-    ok(!lost.length && before.open.length === 1 && before.rows.length === 1 && before.filters && before.expired === false && before.fresh && before.edit,
+    ok(!lost.length && before.open.length === 1 && before.rows.length === 1 && before.expired === false && before.fresh && before.edit,
       how + ": search, caret, focus, filters, sort, open details, bonus row, Recently unavailable, freshness and Edit mode kept" + (lost.length ? " (lost: " + lost.map(k => k + " " + JSON.stringify(before[k]) + " -> " + JSON.stringify(after[k])).join("; ") + ")" : ""));
     ok(Math.abs(after.y - before.y) <= 2, how + ": scroll kept (" + before.y + " -> " + after.y + ")");
     // A later visibilitychange, focus and pageshow on the new day draw nothing more.
@@ -882,10 +891,10 @@ function listRows(sel) {
     await page.emulateMedia({ colorScheme: "light" });
 
     // Entering from a row: state before it (search, Online, A to Z, scrolled to the footer) is put back on leaving.
-    await page.click("#ftoggle");
+    await openFilters();
     await page.selectOption("#sort", "az");
     await page.locator("#chans button", { hasText: /^Online/ }).click();
-    await page.click("#ftoggle"); // closed again
+    await closeFilters();
     const stored = () => page.evaluate(() => ["cardselector.sort", "cardselector.channel", "cardselector.activation"].map(k => localStorage.getItem(k)));
     const st0 = await stored();
     await freshRowBtn("Chase Freedom Flex").scrollIntoViewIfNeeded();
@@ -903,23 +912,27 @@ function listRows(sel) {
     ok(await page.evaluate(() => history.length) === hist0 + 1, "what changed: entering pushes one history entry");
     const geo = await page.evaluate(() => {
       const r = e => e.getBoundingClientRect(), back = document.getElementById("wcback"), tabs = [...document.querySelectorAll("#wctabs button")];
-      const panel = document.getElementById("wc"), ft = document.getElementById("ftoggle"), sel = getComputedStyle(tabs[0]), card = document.querySelector("#cards button[aria-pressed=true]");
+      const panel = document.getElementById("wc"), fb = document.getElementById("fbar"), sel = getComputedStyle(tabs[0]), card = document.querySelector("#cards button[aria-pressed=true]");
+      const gap = r(fb).top - r(panel).bottom;
       return { back: [r(back).width, r(back).height], tabs: tabs.map(t => [Math.round(r(t).width), r(t).height]), sub: getComputedStyle(document.getElementById("wcsub")).fontSize,
-        joined: Math.abs(r(panel).bottom - r(ft).top) < 1.5, selBg: sel.backgroundColor === getComputedStyle(card).backgroundColor };
+        below: panel.nextElementSibling === fb && gap >= 0 && gap <= 12, selBg: sel.backgroundColor === getComputedStyle(card).backgroundColor };
     });
-    ok(geo.back[0] >= 44 && geo.back[1] >= 44 && geo.tabs.every(t => t[1] >= 44) && geo.tabs[0][0] === geo.tabs[1][0] && geo.sub === "13px" && geo.joined && geo.selBg,
-      "what changed: 44px back arrow, two equal 44px buttons in the card button's selected colors, 13px read line, Filters joined below (" + JSON.stringify(geo) + ")");
+    ok(geo.back[0] >= 44 && geo.back[1] >= 44 && geo.tabs.every(t => t[1] >= 44) && geo.tabs[0][0] === geo.tabs[1][0] && geo.sub === "13px" && geo.below && geo.selBg,
+      "what changed: 44px back arrow, two equal 44px buttons in the card button's selected colors, 13px read line, the filter controls right below (" + JSON.stringify(geo) + ")");
 
     // Counts follow the category, the search and the card; the other filters reset on entering.
-    if ((await page.getAttribute("#ftoggle", "aria-expanded")) !== "true") await page.click("#ftoggle");
+    await openFilters();
     await page.locator("#cats button", { hasText: /^Dining/ }).click();
+    await closeFilters();
     s = await wcState();
     ok(JSON.stringify(s.tabs) === JSON.stringify(["New 1", "Gone 1"]) && JSON.stringify(s.rows) === JSON.stringify(["Zq Alpha Coffee | Chase Freedom Flex"]), "what changed: Dining gives New 1, Gone 1 (" + JSON.stringify(s.tabs) + ")");
     await page.locator("#wctabs button", { hasText: /^Gone/ }).click();
     s = await wcState();
     ok(s.picked[0] === "Gone" && JSON.stringify(s.groups) === JSON.stringify(["Pulled early 1"]) && JSON.stringify(s.rows) === JSON.stringify(["Zq Juliet Cafe | Chase Freedom Flex | Was to end Nov 9"]),
       "what changed: Dining, Gone: only the Pulled early 1 heading (no empty Ended heading), Zq Juliet Cafe \"Was to end Nov 9\" (" + JSON.stringify(s) + ")");
+    await openFilters();
     await page.locator("#cats button", { hasText: /^All$/ }).click();
+    await closeFilters();
     s = await wcState();
     ok(JSON.stringify(s.groups) === JSON.stringify(["Pulled early 2", "Ended 2"]) &&
       JSON.stringify(s.rows) === JSON.stringify(["Zq Foxtrot Pulled | Chase Freedom Flex | Was to end Nov 25", "Zq Juliet Cafe | Chase Freedom Flex | Was to end Nov 9",
@@ -958,12 +971,16 @@ function listRows(sel) {
     s = await wcState();
     ok(JSON.stringify(s.groups) === JSON.stringify(["Pulled early 2", "Ended 2"]), "what changed: both headings back with the search widened (" + JSON.stringify(s.groups) + ")");
     await page.fill("#q", "");
+    await openFilters();
     await page.locator("#cards button", { hasText: /^Capital One/ }).click();
+    await closeFilters();
     s = await wcState();
     ok(s.name === "Capital One" && /i-cap1/.test(s.dot) && s.sub === "Read Oct 27 · compared with Oct 18" && JSON.stringify(s.tabs) === JSON.stringify(["New 1", "Gone 1"]) &&
       !s.groups.length && JSON.stringify(s.rows) === JSON.stringify(["Zq Lima Lamps | Quicksilver / Discover it | Dropped Oct 27"]),
       "what changed: picking Capital One switches the header; a gone offer with no end date reads \"Dropped Oct 27\", no headings (" + JSON.stringify(s) + ")");
+    await openFilters();
     await page.locator("#cards button", { hasText: /^All cards/ }).click();
+    await closeFilters();
     s = await wcState();
     ok(s.name === "All cards" && s.dot === null && s.sub === "Each card's latest read" && JSON.stringify(s.tabs) === JSON.stringify(["New 4", "Gone 6"]) &&
       JSON.stringify(s.groups) === JSON.stringify(["Pulled early 2", "Ended 2", "Dropped 2"]) && s.rows.some(r => r === "Zq Mike Mugs | Customized Cash / Unlimited Cash | Dropped Oct 23") &&
@@ -974,8 +991,10 @@ function listRows(sel) {
       (await page.locator("#main .newtag").count()) === 0, "what changed: All cards New lists the four new offers, no New tags inside the mode (" + s.rows.join("; ") + ")");
 
     // In the mode: In store, Newest added and a search; none of it is saved. The back arrow puts the old state back.
+    await openFilters();
     await page.selectOption("#sort", "newest");
     await page.locator("#chans button", { hasText: /^In store/ }).click();
+    await closeFilters();
     // Every test offer is online: the count line says how many the In store choice hides, as on the main list.
     ok((await page.textContent("#count")) === "0 new offers shown for In store · 4 online only hidden", "what changed: the count line names what the In store filter hides (\"" + (await page.textContent("#count")) + "\")");
     await page.fill("#q", "kilo");
@@ -1020,8 +1039,9 @@ function listRows(sel) {
     // Day rollover in the mode: it stays, with its tab and filters.
     await freshRowBtn("Chase Freedom Flex").click();
     await page.locator("#wctabs button", { hasText: /^Gone/ }).click();
-    if ((await page.getAttribute("#ftoggle", "aria-expanded")) !== "true") await page.click("#ftoggle");
+    await openFilters();
     await page.locator("#cats button", { hasText: /^Dining/ }).click();
+    await closeFilters();
     await page.waitForTimeout(800); // past the tap hold
     const r0 = await page.evaluate(() => window.__renders);
     await page.clock.setSystemTime(new Date(2026, 10, 2, 0, 0, 5));
@@ -1395,8 +1415,9 @@ function listRows(sel) {
     a = await open("ralphs", null, { "Freedom Flex": "not_confirmed", "Freedom": "not_confirmed" });
     ok(/grocery stores 3\.5% \(5% not activated, below Smartly 4%\)/.test(a.rates.sum), "s2 r1 Card rates summary qualifies a rate below the answer (" + a.rates.sum + ")");
     await open("", null);
-    if (await page.locator("#ftoggle").isVisible()) await page.click("#ftoggle");
+    await openFilters();
     await page.locator("#cats button", { hasText: /^Dining/ }).first().click();
+    await closeFilters();
     await page.waitForTimeout(150);
     const top = await page.$eval("#use .usetop", e => e.textContent).catch(() => "");
     ok(/^Top offer: Zqcc Diner 30% with Citi Custom Cash, conditional: only if restaurants is your actual top eligible category this cycle\.$/.test(top),
@@ -1557,8 +1578,9 @@ function listRows(sel) {
       await page.goto(base);
       await page.waitForFunction(() => window.__cardsReady && window.__bonusReady && document.querySelectorAll("#cards button").length > 1);
       if (opts && opts.card) {
-        if (await page.locator("#ftoggle").isVisible()) await page.click("#ftoggle");
+        await openFilters();
         await page.locator("#cards button", { hasText: new RegExp("^" + opts.card) }).first().click();
+        await closeFilters();
       }
       await page.fill("#q", q);
       await page.waitForTimeout(150);
@@ -1859,8 +1881,9 @@ function listRows(sel) {
       "s3 what changed Gone: a container in each group, no offer leaves its group to merge (" + J(w) + ")");
     ok(["gone-nb", "gone-pulled", "gone-ended", "gone-dropped"].every(id => w.still[id] === "Still on Bank of America and U.S. Bank"),
       "s3 what changed: Still on follows merchant identity: the Newport Beach member and the base are one merchant; the alias and the unapproved Irvine name don't count (" + J(w.still) + ")");
-    if ((await page.getAttribute("#ftoggle", "aria-expanded")) !== "true") await page.click("#ftoggle");
+    await openFilters();
     await page.locator("#cards button", { hasText: /^All cards/ }).click();
+    await closeFilters();
     w = await wv();
     ok(J(w.tabs) === J(["New 3", "Gone 6"]), "s3 what changed All cards: counts are offer counts (" + J(w.tabs) + ")");
     ok(w.still["gone-alibaba"] === "Still on Capital One" && w.mcs.some(m => /: Alibaba \[gone-alibaba\]$/.test(m)),
@@ -2082,10 +2105,11 @@ function listRows(sel) {
     // Not on a search, a category or a card (the answer card answers those), back on the home screen.
     const hiddenBy = async act => { await act(); await page.waitForTimeout(80); return page.$eval("#qp", q => q.hidden); };
     const hid = [await hiddenBy(() => page.fill("#q", "ralphs")), await hiddenBy(() => page.fill("#q", "")),
-      await hiddenBy(async () => { await page.click("#ftoggle"); await page.locator("#cats button", { hasText: /^Dining/ }).first().click(); }),
+      await hiddenBy(async () => { await openFilters(); await page.locator("#cats button", { hasText: /^Dining/ }).first().click(); }),
       await hiddenBy(() => page.locator("#cats button", { hasText: /^All/ }).first().click()),
       await hiddenBy(() => page.locator("#cards button", { hasText: /^Capital One/ }).first().click()),
       await hiddenBy(() => page.locator("#cards button", { hasText: /^All cards/ }).first().click())];
+    await closeFilters();
     ok(J(hid) === J([true, false, true, false, true, false]), "qp: hidden on a search, a category or a card, shown again when cleared (" + J(hid) + ")");
 
     // B. Freedom activated, Freedom Flex not: Freedom 5% is the answer; no prompt to activate Flex just to tie.
@@ -2204,7 +2228,7 @@ function listRows(sel) {
         pendWarn: !!c.querySelector(".cbpend.bwarn"), ids: [...c.querySelectorAll("li[data-eid]")].map(l => l.dataset.eid), rows,
         controls: [...c.querySelectorAll("button:not(.cbgo), a, input, select, textarea, details, summary, [tabindex], [role=button], [role=link], [onclick]")].map(x => x.tagName + ":" + x.textContent.trim()),
         text: plain(c), pageW: document.documentElement.scrollWidth,
-        afterQp: !!(qp.compareDocumentPosition(c) & Node.DOCUMENT_POSITION_FOLLOWING), beforeFilters: !!(c.compareDocumentPosition(ft) & Node.DOCUMENT_POSITION_FOLLOWING),
+        afterQp: !!(qp.compareDocumentPosition(c) & Node.DOCUMENT_POSITION_FOLLOWING), filtersAbove: !!(ft.compareDocumentPosition(qp) & Node.DOCUMENT_POSITION_FOLLOWING),
         top: Math.round(c.getBoundingClientRect().top), height: Math.round(c.getBoundingClientRect().height),
         minFont: Math.min.apply(null, [...c.querySelectorAll("*")].filter(x => x.textContent.trim()).map(x => parseFloat(getComputedStyle(x).fontSize))) };
     });
@@ -2230,7 +2254,7 @@ function listRows(sel) {
     const FUTURE = Object.assign(JSON.parse(J(ENTRIES[3])), { id: "discover-it/2027-q1", start: "2027-01-01", end: "2027-03-31", activation: "not_confirmed", activate_by: "2027-03-31" });
     let C = await cbOpen({ entries: l => l.slice(0, 2).concat([ENDED], l.slice(2, 4), [FUTURE], l.slice(4)) });
     ok(J(C.ids) === J(IDS) && new Set(C.ids).size === C.ids.length, "cb A: every live entry exactly once, in file order; the ended and the future entry are absent (" + J(C.ids) + ")");
-    ok(C.shown && C.head === "Card bonuses" && C.afterQp && C.beforeFilters, "cb A: \"Card bonuses\" shows on the home screen, under Quick picks, above the Filters button");
+    ok(C.shown && C.head === "Card bonuses" && C.afterQp && C.filtersAbove, "cb A: \"Card bonuses\" shows on the home screen, under Quick picks (the step 5 Filters button is above them, under the search box)");
     ok(C.pend === "No activations pending" && !C.pendWarn, "cb A: the ended and the future not_confirmed entries are not counted as pending (" + C.pend + ")");
     C = await cbOpen({ entries: l => l.slice().reverse() });
     ok(J(C.ids) === J(IDS.slice().reverse()), "cb A: a reordered file shows in its own order, not sorted by rate or card (" + J(C.ids) + ")");
@@ -2301,10 +2325,11 @@ function listRows(sel) {
     // Hidden off the home screen: a search, a category, a card; back when cleared.
     const cbHid = async act => { await act(); await page.waitForTimeout(80); return page.$eval("#cb", c => c.hidden); };
     const cbH = [await cbHid(() => page.fill("#q", "ralphs")), await cbHid(() => page.fill("#q", "")),
-      await cbHid(async () => { await page.click("#ftoggle"); await page.locator("#cats button", { hasText: /^Dining/ }).first().click(); }),
+      await cbHid(async () => { await openFilters(); await page.locator("#cats button", { hasText: /^Dining/ }).first().click(); }),
       await cbHid(() => page.locator("#cats button", { hasText: /^All/ }).first().click()),
       await cbHid(() => page.locator("#cards button", { hasText: /^Capital One/ }).first().click()),
       await cbHid(() => page.locator("#cards button", { hasText: /^All cards/ }).first().click())];
+    await closeFilters();
     ok(J(cbH) === J([true, false, true, false, true, false]), "cb: hidden on a search, a category or a card, shown again when cleared (" + J(cbH) + ")");
     // The bonus 4C detail text is still worked out (the old strip's More details), just not drawn.
     const det = await page.evaluate(id => window.__bonusDetails(id), CC);
@@ -3145,12 +3170,11 @@ function listRows(sel) {
         sort: document.getElementById("sort").value, chan: press("#chans"), act: press("#acts"), q: document.getElementById("q").value,
         rows: [...document.querySelectorAll("#main > ul.results li.offer")].map(li => li.dataset.oid),
         mcs: mcs.map(m => m.querySelectorAll("li.offer").length), count: document.getElementById("count").textContent,
-        gone: document.querySelectorAll("#main details.expired").length, filtersOpen: document.getElementById("filters").classList.contains("open"),
+        gone: document.querySelectorAll("#main details.expired").length, filtersOpen: !document.getElementById("fsheet").hidden,
         stored: [localStorage.getItem("cardselector.sort"), localStorage.getItem("cardselector.channel"), localStorage.getItem("cardselector.activation")],
         focus: document.activeElement && document.activeElement.id, y: Math.round(window.scrollY), home: !document.getElementById("qp").hidden && !document.getElementById("sc").hidden };
     });
     const expiresOf = ids => page.evaluate(ids => ids.map(id => window.__offerOf(id).expires), ids);
-    const openFilters = async () => { if ((await page.getAttribute("#ftoggle", "aria-expanded")) !== "true") await page.click("#ftoggle"); };
 
     // New shortcut: What changed's All-cards New count, 0 / 1 / several cards; a tap opens What changed, All cards, New.
     for (const [set, want, text] of [["zero", 0, "0 new offers"], ["one", 1, "1 new offer"], ["many", 3, "3 new offers"]]) {
@@ -3181,15 +3205,16 @@ function listRows(sel) {
     NEWSET = "many";
 
     // Ending: the count, and the list a tap opens, are the same offers (today, +1 and +7 in; +8, yesterday, no date,
-    // missing and used out). Start from a non-default view: A to Z, Online, Ready now, the Filters panel open.
+    // missing and used out). Start from a non-default view: A to Z, Online, Ready now (picked in the filter sheet).
     await load4d();
     let v = await view4d();
     ok(v.sc.end === END_IDS.length && v.endText === END_IDS.length + " ending in the next 7 days",
       "4d ending: shortcut counts the " + END_IDS.length + " live offers ending today through +7 (\"" + v.endText + "\")");
     await openFilters();
     await page.selectOption("#sort", "az");
-    await page.locator("#chans button", { hasText: /^Online$/ }).click();
+    await page.locator("#chans button", { hasText: /^Online/ }).click();
     await page.locator("#acts button", { hasText: /^Ready now/ }).click();
+    await closeFilters();
     await page.waitForTimeout(50);
     const before = await view4d();
     ok(before.home && before.sc.end === END_IDS.length && J(before.stored) === J(["az", "online", "ready"]),
@@ -3222,7 +3247,8 @@ function listRows(sel) {
     await page.fill("#q", "");
     await openFilters();
     await page.selectOption("#sort", "best");
-    await page.locator("#chans button", { hasText: /^In store$/ }).click();
+    await page.locator("#chans button", { hasText: /^In store/ }).click();
+    await closeFilters();
     await page.waitForTimeout(50);
     const vi = await view4d();
     ok(vi.chip && vi.sort === "best" && vi.chan === "In store" && J(vi.stored) === J(["az", "online", "ready"]),
@@ -3233,7 +3259,7 @@ function listRows(sel) {
     const h2 = await hist(), y0 = await page.evaluate(() => window.__y0);
     ok(!v.chip && !v.ending && v.home && v.sort === before2.sort && v.chan === "Online" && v.act === "Ready now" && v.filtersOpen === before2.filtersOpen &&
       J(v.rows) === J(before2.rows) && J(v.stored) === J(["az", "online", "ready"]) && h2.i === h0.i && v.focus === "sc-end" && Math.abs(v.y - y0) <= 2,
-      "4d ending chip ×: the earlier view comes back (A to Z, Online, Ready now, its list, Filters open), Back entry stepped over, focus on the shortcut, scroll kept (" + J([v.sort, v.chan, v.act, h0, h2, v.focus, v.y, y0]) + ")");
+      "4d ending chip ×: the earlier view comes back (A to Z, Online, Ready now, its list), Back entry stepped over, focus on the shortcut, scroll kept (" + J([v.sort, v.chan, v.act, h0, h2, v.focus, v.y, y0]) + ")");
     // Back leaves it the same way; Forward onto its old entry doesn't bring it back; a reload starts outside.
     await page.click("#sc-end");
     await page.waitForTimeout(450); // a person's next tap comes later than the double-tap guard's 400 ms
@@ -3363,8 +3389,8 @@ function listRows(sel) {
       await ctxG.close();
     }
 
-    // A remembered channel lists offers on the home screen: Filters stays above that list (only with no list does it move
-    // down with the utilities). A channel picked down there keeps the panel in view.
+    // Step 5 on the home screen: the Filters button sits under the search box (no Filters row with the utilities). A
+    // remembered channel lists offers there: its chip shows and the Sort button joins; picking one in the sheet does the same.
     {
       const ctxF = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: "block" });
       page = await ctxF.newPage();
@@ -3373,25 +3399,29 @@ function listRows(sel) {
       await page.goto(base);
       await page.evaluate(() => { localStorage.clear(); localStorage.setItem("cardselector.channel", "store"); });
       await load4d();
-      const pos = () => page.evaluate(() => { const f = document.getElementById("ftoggle"), m = document.querySelector("#main > ul.results"), fr = document.getElementById("fresh");
-        return { above: !!m && !!(f.compareDocumentPosition(m) & Node.DOCUMENT_POSITION_FOLLOWING), afterFresh: !!(fr.compareDocumentPosition(f) & Node.DOCUMENT_POSITION_FOLLOWING),
-          down: f.parentNode.id === "homeutil", top: Math.round(f.getBoundingClientRect().top), filled: getComputedStyle(f).backgroundColor !== "rgba(0, 0, 0, 0)", home: !!window.__shortcuts() }; });
+      const pos = () => page.evaluate(() => { const f = document.getElementById("ftoggle"), m = document.querySelector("#main > ul.results"), qp = document.getElementById("qp");
+        const sb = document.querySelector(".searchbar").getBoundingClientRect(), fr = f.getBoundingClientRect();
+        return { list: !!m, underSearch: !!(f.compareDocumentPosition(qp) & Node.DOCUMENT_POSITION_FOLLOWING) && fr.top >= sb.bottom - 1 && fr.top - sb.bottom < 16,
+          util: !document.getElementById("homeutil").hidden, chips: [...document.querySelectorAll("#fbar .flchip")].map(c => c.getAttribute("aria-label")),
+          label: f.getAttribute("aria-label"), text: f.innerText.trim(), sort: !document.getElementById("fsortbtn").hidden, h: Math.round(fr.height), home: !!window.__shortcuts() }; });
       const s1 = await pos();
-      ok(s1.home && s1.above && s1.afterFresh && !s1.down && s1.filled, "4d Filters with a remembered In store: above the list it opens, under freshness, its usual look (" + J(s1) + ")");
+      ok(s1.home && s1.list && s1.underSearch && !s1.util && J(s1.chips) === J(["Remove In store filter"]) && s1.sort && s1.text === "1" && s1.label === "Filters, 1 on",
+        "s5 home with a remembered In store: the Filters button (\"1\") under the search box, an In store chip, the Sort button, the list below (" + J(s1) + ")");
       await page.evaluate(() => localStorage.setItem("cardselector.channel", "any"));
       await load4d();
       const s2 = await pos();
-      ok(s2.home && s2.down && !s2.filled, "4d Filters with no list: down with the utilities, quiet (" + J(s2) + ")");
-      await page.click("#ftoggle");
-      await page.locator("#chans button", { hasText: /^In store$/ }).click();
-      await page.waitForTimeout(200);
+      ok(s2.home && !s2.list && s2.underSearch && !s2.util && !s2.chips.length && !s2.sort && s2.text === "Filters" && s2.label === "Filters" && s2.h >= 40,
+        "s5 home with no list: just the Filters button under the search box, no chips, no Sort, no Filters row with the utilities (" + J(s2) + ")");
+      await openFilters();
+      await page.locator("#chans button", { hasText: /^In store/ }).click();
+      await closeFilters();
       const s3 = await pos();
-      ok(s3.home && s3.above && !s3.down && s3.top >= 0 && s3.top < 844, "4d Filters: In store picked down there moves the panel above the new list and keeps it in view (" + J(s3) + ")");
+      ok(s3.home && s3.list && J(s3.chips) === J(["Remove In store filter"]) && s3.sort, "s5 home: In store picked in the sheet lists offers under the home screen, with its chip (" + J(s3) + ")");
       await ctxF.close();
     }
 
-    // The home screen at 390, 350 and 320px, light and dark: the frozen order (search, Quick picks, Card bonuses, the
-    // shortcuts, Offer freshness, then Recently unavailable, the temporary Filters and Edit mode), freshness closed,
+    // The home screen at 390, 350 and 320px, light and dark: the frozen order (search, the step 5 Filters button, Quick
+    // picks, Card bonuses, the shortcuts, Offer freshness, then Recently unavailable and Edit mode), freshness closed,
     // the shortcuts side by side when they fit, nothing sideways, real tap targets, no chevron on the shortcuts.
     for (const scheme of ["light", "dark"]) for (const w of [390, 350, 320]) {
       const ctxL = await browser.newContext({ viewport: { width: w, height: 844 }, serviceWorkers: "block", colorScheme: scheme });
@@ -3406,8 +3436,8 @@ function listRows(sel) {
       await page.waitForFunction(() => !document.getElementById("qp").hidden && !document.getElementById("cb").hidden);
       const L = await page.evaluate(() => {
         const at = e => e ? e.getBoundingClientRect().top + window.scrollY : null;
-        const seq = [document.getElementById("q"), document.getElementById("qp"), document.getElementById("cb"), document.getElementById("sc"),
-          document.getElementById("fresh"), document.querySelector("#main details.expired"), document.getElementById("ftoggle"), document.getElementById("editmode")];
+        const seq = [document.getElementById("q"), document.getElementById("ftoggle"), document.getElementById("qp"), document.getElementById("cb"), document.getElementById("sc"),
+          document.getElementById("fresh"), document.querySelector("#main details.expired"), document.getElementById("editmode")];
         const tops = seq.map(at), dom = seq.every((e, i) => !i || (seq[i - 1].compareDocumentPosition(e) & Node.DOCUMENT_POSITION_FOLLOWING));
         const vis = x => { const r = x.getBoundingClientRect(); return r.width > 0 && !x.closest(".sr-only, [hidden]"); };
         const over = [...document.querySelectorAll(".wrap *")].filter(x => vis(x) && (x.getBoundingClientRect().right > window.innerWidth + 0.5 || x.getBoundingClientRect().left < -0.5)).map(x => x.className || x.tagName).slice(0, 5);
@@ -3432,13 +3462,580 @@ function listRows(sel) {
           }).map(x => x.textContent),
           rateLines: [...document.querySelectorAll("#qp .qpr")].map(x => x.getClientRects().length), minFont: Math.min.apply(null, [...document.querySelectorAll("#qp *, #cb *, #sc *")].filter(x => vis(x) && x.textContent.trim() && !x.closest(".likely")).map(x => parseFloat(getComputedStyle(x).fontSize))) };
       });
-      ok(L.dom && L.ordered && !L.freshOpen, "4d layout " + scheme + " " + w + ": search, Quick picks, Card bonuses, shortcuts, freshness (closed), Recently unavailable, Filters, Edit mode (" + J(L.tops.map(Math.round)) + ")");
+      ok(L.dom && L.ordered && !L.freshOpen, "4d layout " + scheme + " " + w + ": search, Filters button, Quick picks, Card bonuses, shortcuts, freshness (closed), Recently unavailable, Edit mode (" + J(L.tops.map(Math.round)) + ")");
       ok(L.pageW <= w && !L.over.length && L.scH >= 44 && L.scChev === 0 && L.sideBySide === (w >= 350) && L.rateLines.every(n => n === 1) && !L.splitWords.length && L.minFont >= 12,
         "4d layout " + scheme + " " + w + ": no sideways scroll or overflow, shortcuts " + (w >= 350 ? "side by side" : "stacked") + " and " + L.scH + "px tall, no chevron on them, rates on one line, no word split (" + J([L.pageW, L.over, L.sideBySide, L.rateLines, L.splitWords, L.minFont]) + ")");
       ok(L.glyphs.length === L.places && L.places >= 8 && L.glyphs.every(Boolean) && L.tileBg !== L.bg,
         "4d layout " + scheme + " " + w + ": one card glyph per tile and Card bonuses row (" + L.places + "), aria-hidden, in its card's issuer color; tiles stand off the page (" + J([L.tileBg, L.bg]) + ")");
       await ctxL.close();
     }
+    page = mainPage;
+  }
+
+  // ---- Redesign step 5: the phone filter sheet and the active filter chips. Injected offers, batches and cuisines, fixed
+  // clock (Nov 5, 2026). The sheet holds the same filters (one state, one result pipeline); every choice applies at once;
+  // Show results only closes it; Reset clears the sheet's filters only; chips remove one filter each.
+  {
+    const J = x => JSON.stringify(x);
+    const S5_BATCHES = [["Chase Freedom Flex", "2026-10-18"], ["Chase Freedom Flex", "2026-10-31"], ["U.S. Bank", "2026-10-18"], ["Capital One", "2026-10-18"],
+      ["Bank of America", "2026-10-18"], ["Citi Double Cash", "2026-10-18"]].map(([card, read_date]) => ({ card, read_date, offers_found: 10 }));
+    const FF = "Chase Freedom Flex", USB = "U.S. Bank", C1 = "Capital One", BOA = "Bank of America", CDC = "Citi Double Cash";
+    const z = (id, card, merchant, category, extra) => Object.assign({ id: "test/s5-" + id, card, merchant, category, bonus: "5% cash back", expires: null,
+      expires_text: null, activation: "already_activated", channel: "online", spend_cap: null, minimum_spend: null, fine_print: null, other_details: [],
+      last_read: "2026-10-31", first_seen: "2026-10-18", status: "active", status_since: "2026-10-18" }, extra || {});
+    const S5 = [
+      z("a", FF, "Zs Alpha Cafe", "Dining", { activation: "needs_activation", bonus: "10% cash back", expires: "2026-11-08", first_seen: "2026-10-31" }),
+      z("b", FF, "Zs Bravo Bistro", "Dining", { channel: "in_store", bonus: "8% cash back" }),
+      z("c", USB, "Zs Charlie Deli", "Dining", { channel: "none_shown", expires: "2026-11-07" }),
+      z("d", C1, "Zs Delta Shop", "Clothing & Jewelry", { activation: "none_shown", bonus: "3% back" }),
+      z("e", C1, "Zs Echo Diner", "Dining", { activation: "none_shown", channel: "none_shown", bonus: "4% back" }),
+      z("f", BOA, "Zs Foxtrot Store", "Clothing & Jewelry", { activation: "via_shop_link", bonus: "6% Cash back" }),
+      z("g", BOA, "Zs Golf Grill", "Dining", { activation: "auto_enrolled", channel: "in_store_and_online", bonus: "7% Cash back", expires: "2026-11-09" }),
+      z("h", CDC, "Zs Hotel Tea", "Dining", { activation: "needs_activation", channel: "none_shown", bonus: "9% Back", expires_text: "5d left", expires: "2026-11-10" }),
+      z("i", FF, "Zs India Gear", "Marketplaces & Department Stores", { channel: "in_store", bonus: "2% cash back", first_seen: "2026-10-31" }),
+      z("j", USB, "Zs Juliet Pump", "Auto & Gas", { channel: "pay_at_pump", bonus: "1% cash back" })
+    ];
+    const ALL = S5.map(o => o.id.replace("test/s5-", ""));
+    const of = id => S5.find(o => o.id === "test/s5-" + id);
+    const CUIS = { "Zs Alpha Cafe": "Cafés, Coffee & Tea", "Zs Bravo Bistro": "Mexican", "Zs Charlie Deli": "Gift Cards & Dining Services", "Zs Golf Grill": "American", "Zs Hotel Tea": "Cafés, Coffee & Tea" };
+    // The page's rules, written out here: the channel and activation filters keep exactly these.
+    const CH = { store: ["in_store", "in_store_and_online", "in_store_and_app", "pay_at_pump", "none_shown"], online: ["online", "in_store_and_online", "in_store_and_app", "none_shown"] };
+    const inChan = (m, o) => m === "any" || CH[m].includes(o.channel);
+    const actOf = o => o.activation === "none_shown" && o.card === C1 ? "add_to_card" : o.activation;
+    const inAct = (m, o) => m === "any" || (m === "ready" ? ["already_activated", "auto_enrolled", "none_shown"] : ["needs_activation", "add_to_card"]).includes(actOf(o));
+    const ids = f => ALL.filter(id => f(of(id))).sort();
+    const s5ctx = async (w, scheme, setup) => {
+      const ctx = await browser.newContext({ viewport: { width: w || 390, height: 844 }, serviceWorkers: "block", colorScheme: scheme || "light" });
+      page = await ctx.newPage();
+      page.on("pageerror", e => s5errs.push(e.message));
+      await page.clock.install({ time: new Date(2026, 10, 5, 12, 0, 0) });
+      await page.route("**/data/offers.json", async route => {
+        const d = await (await route.fetch()).json();
+        await route.fulfill({ json: { categories: d.categories, batches: S5_BATCHES, offers: S5 } });
+      });
+      await page.route("**/data/cuisines.json", async route => {
+        const d = await (await route.fetch()).json();
+        Object.keys(CUIS).forEach(m => { d.merchants[m] = { cuisine: CUIS[m], confidence: "Likely", detail: null, evidence: "test", source: "test", checked: "2026-10-19", locked: false }; });
+        await route.fulfill({ json: d });
+      });
+      await page.route("**/data/phone-edits.json", route => route.fulfill({ json: {} }));
+      await page.goto(base);
+      await page.evaluate(s => { try { localStorage.clear(); Object.keys(s || {}).forEach(k => localStorage.setItem("cardselector." + k, s[k])); } catch (e) {} }, setup);
+      await page.goto(base);
+      await page.waitForFunction(() => window.__shortcuts && window.__bonusReady && window.__cardsReady && window.__cuisinesReady && document.querySelectorAll("#cards button").length > 1);
+      return ctx;
+    };
+    const s5errs = [];
+    const st = () => page.evaluate(() => {
+      // A picked button's name, without its count.
+      const pr = id => { const b = document.querySelector("#" + id + " button[aria-pressed=true]"); if (!b) return null; const c = b.cloneNode(true); c.querySelectorAll(".n").forEach(n => n.remove()); return c.textContent.trim(); };
+      const txt = sel => [...document.querySelectorAll(sel)].map(b => b.textContent.replace(/\s+/g, " ").trim());
+      const ae = document.activeElement, cb = document.querySelector("#use .chansel button[aria-pressed=true]");
+      return { open: !document.getElementById("fsheet").hidden, pick: !document.getElementById("psheet").hidden,
+        chan: pr("chans"), act: pr("acts"), card: pr("cards"), cat: pr("cats"), cuis: pr("cuis"), sort: document.getElementById("sort").value, q: document.getElementById("q").value,
+        rows: [...document.querySelectorAll("#main > ul.results li.offer")].map(li => li.dataset.oid.replace("test/s5-", "")),
+        chips: [...document.querySelectorAll("#fbar .flchip")].map(c => c.textContent.replace("×", "").trim()),
+        chipNames: [...document.querySelectorAll("#fbar .flchip, #fbar .fcuisx")].map(c => c.getAttribute("aria-label")),
+        cuisCtl: document.querySelector("#fbar .fcuisb") ? document.querySelector("#fbar .fcuisb").textContent.trim() : null,
+        ans: cb ? cb.textContent : null, focus: ae ? ae.id || ae.className : null, inert: document.querySelector(".wrap").hasAttribute("inert"),
+        lock: document.documentElement.classList.contains("fsopen"), expanded: document.getElementById("ftoggle").getAttribute("aria-expanded"),
+        stored: ["sort", "channel", "activation"].map(k => localStorage.getItem("cardselector." + k)), ending: !!window.__ending(),
+        wc: !document.getElementById("wc").hidden, y: Math.round(window.scrollY), fbn: document.getElementById("fbn").textContent,
+        sortBtn: !document.getElementById("fsortbtn").hidden, chans: txt("#chans button"), acts: txt("#acts button"), cards: txt("#cards button"),
+        note: document.getElementById("chans-note").hidden ? null : document.getElementById("chans-note").textContent,
+        actNotes: ["acts-explain", "acts-note"].map(id => document.getElementById(id)).filter(e => !e.hidden).map(e => e.textContent),
+        count: document.getElementById("count").textContent };
+    });
+    const sorted = a => a.slice().sort();
+    const click = async sel => { await page.click(sel); };
+    const pick = async (box, text) => { await page.locator(box + " button", { hasText: new RegExp("^" + text) }).first().click(); await page.waitForTimeout(30); };
+    const search = async q => { await page.fill("#q", q); await page.waitForTimeout(120); };
+
+    // Open and close: the Filters button opens the sheet with the current values; Show results, Escape and the dimmed
+    // page close it; focus goes back to the Filters button; the page behind can't be used and doesn't scroll.
+    let ctx = await s5ctx(390, "light", { sort: "az", channel: "online" });
+    await search("zs");
+    let v = await st();
+    ok(J(v.chips) === J(["Online"]) && v.fbn === "1" && v.sortBtn && !v.open, "s5 closed: an Online chip (remembered), the Filters button reads 1, the Sort button shows (" + J([v.chips, v.fbn]) + ")");
+    await page.evaluate(() => window.scrollTo(0, 120));
+    const y0 = await page.evaluate(() => Math.round(window.scrollY));
+    await page.evaluate(() => document.getElementById("ftoggle").click()); // no scroll to reach it
+    v = await st();
+    const dlg = await page.evaluate(() => { const p = document.querySelector("#fsheet .fspanel"); return { role: p.getAttribute("role"), modal: p.getAttribute("aria-modal"),
+      label: document.getElementById(p.getAttribute("aria-labelledby")).textContent, focused: document.activeElement === p }; });
+    ok(v.open && v.inert && v.lock && v.expanded === "true" && v.chan === "Online" && v.act === "Any" && v.card === "All cards" && v.cat === "All" && v.sort === "az" &&
+      J(dlg) === J({ role: "dialog", modal: "true", label: "Filters", focused: true }),
+      "s5 open: a modal dialog labelled Filters, focus in it, the page behind inert and locked, the current values picked (Online, A to Z) (" + J([dlg, v.chan, v.sort]) + ")");
+    await click("#fsdone");
+    await page.waitForTimeout(420);
+    v = await st();
+    ok(!v.open && !v.inert && !v.lock && v.expanded === "false" && v.focus === "ftoggle" && v.y === y0 && v.chan === "Online",
+      "s5 Show results: closes, the page usable again, focus back on the Filters button, scroll kept, the choices stay (" + J([v.focus, y0, v.y]) + ")");
+    await page.evaluate(() => document.getElementById("ftoggle").click());
+    await page.keyboard.press("Escape");
+    v = await st();
+    ok(!v.open && v.focus === "ftoggle" && v.y === y0, "s5 Escape closes the sheet, focus back on the Filters button (" + v.focus + ")");
+    await page.evaluate(() => document.getElementById("ftoggle").click());
+    await page.mouse.click(200, 40); // the dimmed page above the sheet
+    await page.waitForTimeout(420);
+    v = await st();
+    ok(!v.open && v.focus === "ftoggle", "s5 a tap on the dimmed page closes the sheet");
+    // Keyboard: Enter opens; Tab stays in the sheet; a pick by keyboard keeps focus on that choice; Escape closes.
+    await page.focus("#ftoggle");
+    await page.keyboard.press("Enter");
+    for (let i = 0; i < 4; i++) await page.keyboard.press("Tab");
+    const inSheet = await page.evaluate(() => document.getElementById("fsheet").contains(document.activeElement));
+    await page.focus("#chans button[data-v=store]");
+    await page.keyboard.press("Enter");
+    const kf = await page.evaluate(() => ({ v: document.activeElement.dataset.v, live: document.activeElement.isConnected, pressed: document.activeElement.getAttribute("aria-pressed") }));
+    v = await st();
+    ok(inSheet && J(kf) === J({ v: "store", live: true, pressed: "true" }) && v.open && v.chan === "In store",
+      "s5 keyboard: Tab stays inside the sheet; Enter on In store picks it and focus stays on it in the redrawn row (" + J(kf) + ")");
+    await page.keyboard.press("Escape");
+    ok((await st()).focus === "ftoggle", "s5 keyboard: Escape returns focus to the Filters button");
+    await ctx.close();
+
+    // Live: every dimension changes the list at once while the sheet stays open.
+    ctx = await s5ctx(390, "light");
+    await search("zs");
+    await openFilters();
+    const live = [];
+    const step = async (label, act, want) => { await act(); v = await st(); live.push(label); ok(v.open && J(sorted(v.rows)) === J(sorted(want)), "s5 live " + label + ": the list follows at once, the sheet still open (" + J(v.rows) + ")"); return v; };
+    v = await step("In store", () => pick("#chans", "In store"), ids(o => inChan("store", o)));
+    ok(v.ans === "In store" && J(v.chips) === J(["In store"]), "s5 live In store: the answer card's selector and the chip follow (" + J([v.ans, v.chips]) + ")");
+    v = await step("Online", () => pick("#chans", "Online"), ids(o => inChan("online", o)));
+    ok(J(v.stored) === J([null, "online", null]), "s5 live Online: remembered as cardselector.channel, the one setting (" + J(v.stored) + ")");
+    await step("Ready now", () => pick("#acts", "Ready now"), ids(o => inChan("online", o) && inAct("ready", o)));
+    await step("Any activation", () => pick("#acts", "Any"), ids(o => inChan("online", o)));
+    await step("Any channel", () => pick("#chans", "Any"), ALL);
+    await step("card Chase Freedom Flex", () => pick("#cards", "Chase Freedom Flex"), ids(o => o.card === FF));
+    await step("All cards", () => pick("#cards", "All cards"), ALL);
+    v = await step("Dining", () => pick("#cats", "Dining"), ids(o => o.category === "Dining"));
+    ok(await page.isVisible("#cuis-filter") && v.cuisCtl === "All cuisines", "s5 live Dining: the cuisine row shows in the sheet, the cuisine picker in the control row");
+    await step("cuisine Cafés, Coffee & Tea", () => pick("#cuis", "Cafés"), ids(o => CUIS[o.merchant] === "Cafés, Coffee & Tea"));
+    await step("All cuisines", () => pick("#cuis", "All cuisines"), ids(o => o.category === "Dining"));
+    await page.selectOption("#sort", "za");
+    v = await st();
+    const names = v.rows.map(id => of(id).merchant);
+    ok(v.open && v.sort === "za" && J(names) === J(names.slice().sort().reverse()), "s5 live Z to A: the order changes at once (" + J(names) + ")");
+    await closeFilters();
+    await ctx.close();
+
+    // Counts in the sheet: each channel, activation and card count is what picking it lists (no approximations), and the
+    // channel note counts the offers with no channel in the view.
+    ctx = await s5ctx(390, "light");
+    await search("zs");
+    await openFilters();
+    v = await st();
+    const cnt = (list, label) => { const b = list.find(t => t.startsWith(label + " ")); return b ? +b.slice(label.length + 1).replace(/\D/g, "") : null; };
+    const noneN = S5.filter(o => o.channel === "none_shown").length;
+    ok(cnt(v.chans, "Any") === 10 && cnt(v.chans, "In store") === ids(o => inChan("store", o)).length && cnt(v.chans, "Online") === ids(o => inChan("online", o)).length &&
+      v.note === noneN + " offers show no channel. They stay under both In store and Online, marked Channel not shown.",
+      "s5 counts: Any 10, In store and Online as their lists, the no-channel note counts " + noneN + " (" + J([v.chans, v.note]) + ")");
+    const cardCounts = {};
+    for (const c of [FF, USB, C1, BOA, CDC]) cardCounts[c] = cnt(v.cards, c);
+    ok(cnt(v.cards, "All cards") === 10 && Object.keys(cardCounts).every(c => cardCounts[c] === S5.filter(o => o.card === c).length),
+      "s5 counts: All cards 10 and each card's own count (" + J(cardCounts) + ")");
+    await pick("#chans", "Online");
+    v = await st();
+    ok(Object.keys(cardCounts).every(c => cnt(v.cards, c) === S5.filter(o => o.card === c && inChan("online", o)).length) && cnt(v.cards, "All cards") === v.rows.length,
+      "s5 counts follow Online: each card's count is its Online offers, All cards the list (" + J(v.cards) + ")");
+    await pick("#cats", "Dining");
+    v = await st();
+    const dNone = S5.filter(o => o.category === "Dining" && o.channel === "none_shown").length;
+    ok(v.note === dNone + " Dining offers show no channel. They stay under both In store and Online, marked Channel not shown.", "s5 note follows the category (" + v.note + ")");
+    await pick("#chans", "Any");
+    await pick("#cats", "All");
+    await closeFilters();
+    await search("zs charlie");
+    await openFilters();
+    v = await st();
+    ok(v.note === "1 offer shows no channel. It stays under both In store and Online, marked Channel not shown.", "s5 note singular (" + v.note + ")");
+    await closeFilters();
+    await ctx.close();
+
+    // Activation: Activate or add keeps what Needs activation kept (needs_activation, Capital One add-to-card offers); the
+    // Shop now link only offer stays under Any only, and the note says so.
+    ctx = await s5ctx(390, "light");
+    await search("zs");
+    await openFilters();
+    v = await st();
+    const needs = ids(o => inAct("needs", o)), ready = ids(o => inAct("ready", o));
+    ok(J(v.acts.map(t => t.replace(/ \d+$/, ""))) === J(["Any", "Ready now", "Activate or add"]) && cnt(v.acts, "Activate or add") === needs.length && cnt(v.acts, "Ready now") === ready.length,
+      "s5 activation: Any, Ready now, Activate or add, with their counts (" + J(v.acts) + ")");
+    ok(J(v.actNotes) === J(["Activate or add: offers to activate, and Capital One offers to add to a card.", "1 offer pays only through the card's Shop now link, so it shows under Any only."]),
+      "s5 activation notes: what Activate or add keeps, and the Shop now link offer (" + J(v.actNotes) + ")");
+    await pick("#acts", "Activate or add");
+    v = await st();
+    ok(J(sorted(v.rows)) === J(["a", "d", "e", "h"]) && J(sorted(v.rows)) === J(needs) && !v.rows.includes("f") && J(v.chips) === J(["Activate or add"]),
+      "s5 activation: Activate or add lists the two to activate and the two Capital One add-to-card offers, never the Shop now one (" + J(v.rows) + ")");
+    await pick("#acts", "Ready now");
+    v = await st();
+    ok(J(sorted(v.rows)) === J(ready) && !v.rows.includes("f"), "s5 activation: Ready now leaves the Shop now offer out too (" + J(v.rows) + ")");
+    await pick("#acts", "Any");
+    ok((await st()).rows.includes("f"), "s5 activation: the Shop now offer is under Any");
+    await closeFilters();
+    const statuses = await page.evaluate(() => [...document.querySelectorAll("#main li.offer")].map(li => li.dataset.oid.replace("test/s5-", "") + ":" + window.__offerOf(li.dataset.oid).activation).sort());
+    ok(J(statuses) === J(S5.map(o => o.id.replace("test/s5-", "") + ":" + o.activation).sort()), "s5 activation: no offer's status changed");
+    await ctx.close();
+
+    // Channel: the sheet, the answer card's selector and the chip are one setting; removing the chip is Any everywhere;
+    // none_shown stays under both and reads "Channel not shown".
+    ctx = await s5ctx(390, "light");
+    await search("zs");
+    await page.locator("#use .chansel button", { hasText: /^Online$/ }).click();
+    v = await st();
+    ok(v.ans === "Online" && J(v.chips) === J(["Online"]) && J(sorted(v.rows)) === J(ids(o => inChan("online", o))), "s5 channel: the answer card's Online gives the Online chip and list");
+    await openFilters();
+    v = await st();
+    ok(v.chan === "Online", "s5 channel: the sheet opens on Online");
+    await pick("#chans", "In store");
+    v = await st();
+    ok(v.ans === "In store" && J(v.chips) === J(["In store"]), "s5 channel: In store in the sheet moves the answer card and the chip");
+    const nsRows = await page.$$eval("#main li.offer", ls => ls.filter(li => window.__offerOf(li.dataset.oid).channel === "none_shown").map(li => li.querySelector(".oterms").textContent));
+    ok(nsRows.length === noneN && nsRows.every(t => /Channel not shown/.test(t) && !/In store|Online/.test(t.replace("Channel not shown", ""))), "s5 channel: none_shown offers stay under In store, labelled Channel not shown (" + J(nsRows) + ")");
+    await closeFilters();
+    await page.click("#fbar .flchip");
+    await page.waitForTimeout(420);
+    v = await st();
+    ok(v.ans === "Any" && !v.chips.length && J(v.stored) === J([null, "any", null]) && v.rows.length === 10, "s5 channel: removing the chip is Any everywhere, remembered (" + J([v.ans, v.stored]) + ")");
+    await openFilters();
+    ok((await st()).chan === "Any", "s5 channel: the sheet shows Any after the chip is removed");
+    await closeFilters();
+    // The same answer whichever way the channel is picked (the answer card, the sheet): one setting, one answer.
+    await search("zs golf");
+    const ansOf = () => page.evaluate(() => [document.getElementById("use").innerText, [...document.querySelectorAll("#main li.offer")].map(l => l.innerText).join("|")]);
+    await page.locator("#use .chansel button", { hasText: /^In store$/ }).click();
+    const viaCard = await ansOf();
+    await page.locator("#use .chansel button", { hasText: /^Any$/ }).click();
+    await openFilters();
+    await pick("#chans", "In store");
+    await closeFilters();
+    ok(J(await ansOf()) === J(viaCard), "s5 channel: In store from the sheet gives the same answer card and rows as from the answer card");
+    await ctx.close();
+
+    // Chips: each removes only its own filter; Dining also clears the cuisine; a cuisine's × leaves Dining.
+    ctx = await s5ctx(390, "light");
+    await search("zs");
+    const setAll = async () => {
+      await openFilters();
+      await pick("#chans", "Online"); await pick("#acts", "Ready now"); await pick("#cards", "Bank of America"); await pick("#cats", "Dining"); await pick("#cuis", "American");
+      await closeFilters();
+    };
+    await setAll();
+    v = await st();
+    ok(J(v.chips) === J(["Online", "Ready now", "Bank of America", "Dining"]) && v.cuisCtl === "American" && v.fbn === "5" &&
+      J(v.chipNames) === J(["Remove Online filter", "Remove Ready now filter", "Remove Bank of America filter", "Remove Dining filter", "Remove American filter"]),
+      "s5 chips: one per filter, each a button named Remove <filter> filter, the cuisine picker shows American (" + J([v.chips, v.cuisCtl, v.chipNames]) + ")");
+    const removes = [["Online", { chan: "Any", act: "Ready now", card: "Bank of America", cat: "Dining", cuis: "American" }],
+      ["Ready now", { chan: "Online", act: "Any", card: "Bank of America", cat: "Dining", cuis: "American" }],
+      ["Bank of America", { chan: "Online", act: "Ready now", card: "All cards", cat: "Dining", cuis: "American" }],
+      ["Dining", { chan: "Online", act: "Ready now", card: "Bank of America", cat: "All", cuis: null }],
+      ["American", { chan: "Online", act: "Ready now", card: "Bank of America", cat: "Dining", cuis: "All cuisines" }]];
+    for (const [name, want] of removes) {
+      await setAll();
+      await page.click("#fbar [aria-label='Remove " + name + " filter']");
+      await page.waitForTimeout(420);
+      await openFilters();
+      v = await st();
+      const got = { chan: v.chan, act: v.act, card: v.card, cat: v.cat, cuis: v.cuis };
+      ok(J(got) === J(want) && !v.chipNames.includes("Remove " + name + " filter") && (name !== "Dining" || (v.cuisCtl === null && v.chipNames.length === 3)) &&
+        (name !== "American" || v.cuisCtl === "All cuisines"),
+        "s5 chip " + name + " ×: only that filter back to its default" + (name === "Dining" ? ", the cuisine cleared too, no cuisine chip left" : name === "American" ? ", Dining stays" : "") + " (" + J([got, v.chipNames, v.cuisCtl]) + ")");
+      await closeFilters();
+    }
+    // Wrapping, not sideways scrolling: with every chip on at 390px the row takes more than one line.
+    await setAll();
+    const wrap = await page.evaluate(() => { const tops = new Set([...document.querySelectorAll("#fbar > *:not([hidden])")].map(x => Math.round(x.getBoundingClientRect().top)));
+      return { lines: tops.size, sw: document.documentElement.scrollWidth, fbarSw: document.getElementById("fbar").scrollWidth, fbarW: document.getElementById("fbar").clientWidth }; });
+    ok(wrap.lines > 1 && wrap.sw <= 390 && wrap.fbarSw <= wrap.fbarW, "s5 chips wrap onto more lines, nothing scrolls sideways (" + J(wrap) + ")");
+    // Reset: Online, Ready now, a card, Dining, a cuisine, Z to A and a search; Reset clears the sheet's filters only.
+    await openFilters();
+    await page.selectOption("#sort", "za");
+    await page.click("#fsreset");
+    v = await st();
+    ok(v.open && v.chan === "Any" && v.act === "Any" && v.card === "All cards" && v.cat === "All" && v.cuis === null && v.sort === "za" && v.q === "zs" &&
+      J(v.stored) === J(["za", "any", "any"]) && J(sorted(v.rows)) === J(ALL) && !v.chips.length && v.cuisCtl === null,
+      "s5 Reset: Any, Any, All cards, All, no cuisine (remembered channel and activation saved as Any); the sort (Z to A), the search and the open sheet stay (" + J(v) + ")");
+    await closeFilters();
+    // The Sort button opens the sort picker on the current sort; nothing changes until a pick; a pick is the one sort.
+    await page.click("#fsortbtn");
+    await page.waitForTimeout(420);
+    let pk = await page.evaluate(() => ({ open: !document.getElementById("psheet").hidden, title: document.getElementById("ps-h").textContent,
+      opts: [...document.querySelectorAll("#plist .popt")].map(b => b.querySelector(".pl").textContent + (b.getAttribute("aria-pressed") === "true" ? "*" : "")),
+      label: document.getElementById("fsortbtn").getAttribute("aria-label") }));
+    ok(pk.open && pk.title === "Sort" && pk.opts.length === 9 && pk.opts.includes("Z to A*") && pk.opts.filter(o => o.endsWith("*")).length === 1 && pk.label === "Sort: Z to A",
+      "s5 Sort button: opens the sort picker, every sort option, Z to A ticked (" + J(pk) + ")");
+    await page.keyboard.press("Escape");
+    v = await st();
+    ok(v.sort === "za" && v.focus === "fsortbtn", "s5 Sort picker: Escape changes nothing, focus back on the Sort button");
+    await page.click("#fsortbtn");
+    await page.waitForTimeout(420);
+    await page.locator("#plist .popt", { hasText: /^A to Z$/ }).click();
+    await page.waitForTimeout(420);
+    v = await st();
+    const names2 = v.rows.map(id => of(id).merchant);
+    ok(!v.pick && v.sort === "az" && v.stored[0] === "az" && J(names2) === J(names2.slice().sort()) && v.focus === "fsortbtn",
+      "s5 Sort picker: A to Z applies (the same sort the sheet's select shows, remembered), closes, focus back (" + J([v.sort, v.stored]) + ")");
+    // The cuisine picker (Dining): the cuisine row's choices with counts; a pick is the sheet's cuisine.
+    await openFilters();
+    await pick("#cats", "Dining");
+    await closeFilters();
+    await page.click("#fcuisbtn");
+    await page.waitForTimeout(420);
+    pk = await page.evaluate(() => ({ title: document.getElementById("ps-h").textContent, opts: [...document.querySelectorAll("#plist .popt")].map(b => b.querySelector(".pl").textContent + (b.querySelector(".pn") ? " " + b.querySelector(".pn").textContent : "")) }));
+    ok(pk.title === "Cuisine" && J(pk.opts) === J(["All cuisines", "Mexican 1", "American 1", "Cafés, Coffee & Tea 2", "Gift Cards & Dining Services 1", "Unclassified 1"]),
+      "s5 cuisine picker: All cuisines, then each cuisine with its count in the list's order, Unclassified last (" + J(pk.opts) + ")");
+    await page.locator("#plist .popt", { hasText: /^Gift Cards/ }).click();
+    await page.waitForTimeout(420);
+    v = await st();
+    await openFilters();
+    const vin = await st();
+    ok(v.cuisCtl === "Gift Cards & Dining Services" && J(v.rows) === J(["c"]) && vin.cuis === "Gift Cards & Dining Services" && v.focus === "fcuisbtn",
+      "s5 cuisine picker: the pick is the sheet's cuisine (one state), the list follows, focus back on the picker (" + J([v.cuisCtl, v.rows, vin.cuis, v.focus]) + ")");
+    await closeFilters();
+    // Persistence: the channel is remembered; card, category and cuisine are not; the sheet never reopens on a reload.
+    await openFilters();
+    await pick("#chans", "Online");
+    await pick("#cards", "Chase Freedom Flex");
+    await page.reload();
+    await page.waitForFunction(() => window.__cardsReady && document.querySelectorAll("#cards button").length > 1);
+    v = await st();
+    ok(!v.open && !v.inert && v.chan === "Online" && v.card === "All cards" && v.cat === "All" && v.cuis === null && J(v.stored) === J(["az", "online", "any"]),
+      "s5 reload: the sheet is closed; the channel and sort are remembered as before, card, category and cuisine aren't (" + J([v.chan, v.card, v.cat, v.stored]) + ")");
+    await ctx.close();
+
+    // Double taps: the second tap of a double tap on the Filters button, Show results, the dimmed page, Reset or a chip
+    // never reaches the page (or a second chip); a deliberate tap a moment later works.
+    ctx = await s5ctx(390, "light", { channel: "online", activation: "ready" });
+    await search("zs");
+    // Every click that reaches the page (bubbling to .wrap), by the button it lands on.
+    await page.evaluate(() => { window.__hits = []; document.querySelector(".wrap").addEventListener("click", e => { const b = e.target.closest("button"); window.__hits.push(b ? b.id || b.className : e.target.tagName); }); });
+    const hits = () => page.evaluate(() => { const h = window.__hits; window.__hits = []; return h; });
+    const mid = async sel => { const b = await page.locator(sel).first().boundingBox(); return [b.x + b.width / 2, b.y + b.height / 2]; };
+    await page.evaluate(() => window.scrollTo(0, 0));
+    let [x, y] = await mid("#ftoggle");
+    await page.mouse.dblclick(x, y);
+    await page.waitForTimeout(420);
+    v = await st();
+    ok(v.open && J(await hits()) === J(["ftoggle"]), "s5 double tap on the Filters button: the sheet opens and stays open (the second tap doesn't close it)");
+    [x, y] = await mid("#fsdone");
+    await page.mouse.dblclick(x, y);
+    await page.waitForTimeout(420);
+    v = await st();
+    ok(!v.open && J(await hits()) === "[]", "s5 double tap on Show results: closes, the second tap reaches nothing on the page");
+    await page.evaluate(() => document.getElementById("ftoggle").click());
+    await hits();
+    await page.mouse.dblclick(200, 40);
+    await page.waitForTimeout(420);
+    ok(!(await st()).open && J(await hits()) === "[]", "s5 double tap on the dimmed page: closes, the second tap reaches nothing");
+    await page.evaluate(() => document.getElementById("ftoggle").click());
+    await page.waitForTimeout(300); // the sheet has finished rising
+    await hits();
+    [x, y] = await mid("#fsreset");
+    await page.mouse.dblclick(x, y);
+    await page.waitForTimeout(100);
+    v = await st();
+    const hr = await hits();
+    ok(v.open && v.chan === "Any" && v.act === "Any" && J(hr) === "[]", "s5 double tap on Reset: reset once, the sheet stays open, nothing behind it hit (" + J([v.open, v.chan, v.act, hr]) + ")");
+    await pick("#chans", "Online");
+    await pick("#acts", "Ready now");
+    await closeFilters();
+    [x, y] = await mid("#fbar .flchip");
+    await page.mouse.dblclick(x, y);
+    await page.waitForTimeout(420);
+    v = await st();
+    ok(J(v.chips) === J(["Ready now"]) && J(await hits()) === J(["flchip"]), "s5 double tap on a chip: only that chip goes (the next chip, now under the finger, stays) (" + J(v.chips) + ")");
+    await page.click("#fbar .flchip");
+    await page.waitForTimeout(100);
+    ok(!(await st()).chips.length, "s5 a deliberate tap a moment later removes the next chip");
+    await ctx.close();
+
+    // Ending soon: from non-default remembered settings, the Ending view keeps its chip; sheet changes narrow it and are not
+    // remembered; the chip's × (or Back) puts the earlier view back; Reset inside clears the ordinary filters only.
+    ctx = await s5ctx(390, "light", { sort: "az", channel: "online", activation: "ready" });
+    const h0 = await page.evaluate(() => navigation.currentEntry.index);
+    await page.click("#sc-end");
+    await page.waitForTimeout(450);
+    v = await st();
+    const endIds = ids(o => o.expires && o.expires >= "2026-11-05" && o.expires <= "2026-11-12");
+    ok(v.ending && v.chan === "Any" && v.sort === "expiring" && J(sorted(v.rows)) === J(endIds) && !v.chips.length && await page.isVisible("#endchip"),
+      "s5 ending: the Ends within 7 days chip, its offers, no ordinary chips (" + J(v.rows) + ")");
+    await openFilters();
+    await pick("#chans", "In store");
+    await closeFilters();
+    v = await st();
+    ok(v.ending && J(v.chips) === J(["In store"]) && J(sorted(v.rows)) === J(endIds.filter(id => inChan("store", of(id)))) && J(v.stored) === J(["az", "online", "ready"]) &&
+      await page.isVisible("#endchip"), "s5 ending: In store narrows it, both chips show, nothing remembered changed (" + J([v.rows, v.stored]) + ")");
+    await page.click("#endchip");
+    await page.waitForTimeout(450);
+    v = await st();
+    ok(!v.ending && v.chan === "Online" && v.act === "Ready now" && v.sort === "az" && J(v.chips) === J(["Online", "Ready now"]) && J(v.stored) === J(["az", "online", "ready"]) &&
+      (await page.evaluate(() => navigation.currentEntry.index)) === h0, "s5 ending chip ×: the earlier view back exactly (Online, Ready now, A to Z) (" + J([v.chan, v.act, v.sort, v.chips]) + ")");
+    await page.click("#sc-end");
+    await page.waitForTimeout(450);
+    await openFilters();
+    await pick("#chans", "Online");
+    await pick("#cats", "Dining");
+    await page.click("#fsreset");
+    v = await st();
+    ok(v.ending && v.chan === "Any" && v.cat === "All" && v.sort === "expiring" && J(sorted(v.rows)) === J(endIds) && J(v.stored) === J(["az", "online", "ready"]),
+      "s5 ending Reset: the ordinary filters clear inside the Ending view, which stays (sorted Expiring soonest); nothing remembered changed (" + J([v.chan, v.cat, v.rows, v.stored]) + ")");
+    await closeFilters();
+    await page.goBack();
+    await page.waitForTimeout(450);
+    v = await st();
+    ok(!v.ending && v.chan === "Online" && v.act === "Ready now" && v.sort === "az" && J(v.stored) === J(["az", "online", "ready"]),
+      "s5 ending Back: the remembered pre-Ending view comes back (" + J([v.chan, v.act, v.sort]) + ")");
+    await ctx.close();
+
+    // What changed: the sheet works on its list (its counts are the New list's); Back and the New shortcut count unchanged.
+    ctx = await s5ctx(390, "light");
+    const newCount = (await page.evaluate(() => window.__shortcuts())).new;
+    const hw = await page.evaluate(() => navigation.currentEntry.index);
+    await page.click("#sc-new");
+    await page.waitForTimeout(450);
+    const tabs = () => page.$$eval("#wctabs button", bs => bs.map(b => b.textContent.replace(/\s+/g, " ").trim()));
+    v = await st();
+    ok(v.wc && newCount === 2 && J(sorted(v.rows)) === J(["a", "i"]) && J(await tabs()) === J(["New 2", "Gone 0"]), "s5 what changed: New lists the two new offers (" + J(v.rows) + ")");
+    const fbPos = await page.evaluate(() => document.getElementById("wc").nextElementSibling === document.getElementById("fbar"));
+    await openFilters();
+    v = await st();
+    ok(fbPos && cnt(v.cards, "All cards") === 2 && cnt(v.cards, FF) === 2 && cnt(v.cards, USB) === 0 && cnt(v.chans, "In store") === 1 && cnt(v.chans, "Online") === 1,
+      "s5 what changed: the control row under its panel; the sheet counts the New list (" + J([v.cards, v.chans]) + ")");
+    await pick("#cats", "Dining");
+    v = await st();
+    ok(J(v.rows) === J(["a"]) && J(await tabs()) === J(["New 1", "Gone 0"]) && v.open, "s5 what changed: Dining narrows New at once, its button counts follow");
+    await closeFilters();
+    await page.goBack();
+    await page.waitForTimeout(450);
+    v = await st();
+    ok(!v.wc && v.cat === "All" && (await page.evaluate(() => window.__shortcuts())).new === newCount && (await page.evaluate(() => navigation.currentEntry.index)) === hw && v.focus === "sc-new",
+      "s5 what changed Back: home again, the category from before, the New shortcut still " + newCount + ", history where it was");
+    await ctx.close();
+
+    // Day rollover with the sheet open: one redraw, the sheet stays open with its choices.
+    ctx = await s5ctx(390, "light");
+    await page.clock.pauseAt(new Date(2026, 10, 5, 23, 59, 40));
+    await search("zs");
+    await openFilters();
+    await page.clock.runFor(500); // a paused clock stops event times too: the pick comes after the double-tap guard's 400 ms
+    await pick("#chans", "Online");
+    const r0 = await page.evaluate(() => window.__renders);
+    await page.clock.runFor(25000);
+    await page.waitForTimeout(50);
+    v = await st();
+    const r1 = await page.evaluate(() => window.__renders);
+    ok(v.open && v.chan === "Online" && r1 === r0 + 1 && v.inert, "s5 day rollover: one redraw, the sheet stays open on Online (" + J([v.open, v.chan, r1 - r0, v.inert]) + ")");
+    await closeFilters();
+    await ctx.close();
+
+    // Wide screens keep the filters in the page (no Filters button, no sheet); a phone-width window moves them into it.
+    ctx = await s5ctx(1000, "light");
+    await search("zs");
+    let wd = await page.evaluate(() => ({ fbar: !!document.getElementById("fbar").offsetParent, inPage: document.querySelector(".wrap").contains(document.getElementById("filters")),
+      shown: !!document.getElementById("filters").offsetParent, note: !!document.getElementById("chans-note").offsetParent }));
+    ok(!wd.fbar && wd.inPage && wd.shown && !wd.note, "s5 wide: no control row, the filters in the page as before (" + J(wd) + ")");
+    await pick("#chans", "Online");
+    v = await st();
+    ok(!v.open && J(sorted(v.rows)) === J(ids(o => inChan("online", o))) && v.ans === "Online", "s5 wide: Online works in the page");
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.waitForTimeout(100);
+    await openFilters();
+    await page.setViewportSize({ width: 1000, height: 844 });
+    await page.waitForTimeout(100);
+    wd = await page.evaluate(() => ({ open: !document.getElementById("fsheet").hidden, inert: document.querySelector(".wrap").hasAttribute("inert"),
+      inPage: document.querySelector(".wrap").contains(document.getElementById("filters")), shown: !!document.getElementById("filters").offsetParent }));
+    ok(!wd.open && !wd.inert && wd.inPage && wd.shown, "s5 wide again: the sheet closes and the filters are back in the page (" + J(wd) + ")");
+    await ctx.close();
+
+    // Layout at 390, 350 and 320px, light and dark: the sheet (header, Reset, sort, both segmented rows, the card grid,
+    // categories, Dining's cuisines, Show results, scrolling) and the closed controls (none, several chips, long names,
+    // the Ending chip with ordinary chips). Nothing wider than the screen.
+    const contrast = (a, b) => {
+      const lum = c => { const v = c.match(/\d+(\.\d+)?/g).slice(0, 3).map(Number).map(x => { x /= 255; return x <= 0.03928 ? x / 12.92 : Math.pow((x + 0.055) / 1.055, 2.4); }); return 0.2126 * v[0] + 0.7152 * v[1] + 0.0722 * v[2]; };
+      const p = lum(a), q = lum(b);
+      return Math.round((Math.max(p, q) + 0.05) / (Math.min(p, q) + 0.05) * 100) / 100;
+    };
+    for (const scheme of ["light", "dark"]) for (const w of [390, 350, 320]) {
+      ctx = await s5ctx(w, scheme);
+      const tag = "s5 layout " + scheme + " " + w + ": ";
+      // Anything drawn past the screen's edge (not clipped by a box that fits, like the answer card's one-line bonus entries).
+      const over = () => page.evaluate(w => ({ sw: document.documentElement.scrollWidth,
+        out: [...document.querySelectorAll(".wrap *, #fsheet *, #psheet *")].filter(x => {
+          const r = x.getBoundingClientRect();
+          if (!(r.width > 0 && (r.right > w + 0.5 || r.left < -0.5)) || x.closest(".sr-only, [hidden]")) return false;
+          for (let a = x.parentElement; a; a = a.parentElement) if (getComputedStyle(a).overflowX !== "visible" && a.getBoundingClientRect().right <= w + 0.5) return false;
+          return true;
+        }).map(x => x.className || x.tagName).slice(0, 5) }), w);
+      const ctl = () => page.evaluate(() => { const r = e => e.getBoundingClientRect();
+        return { f: [Math.round(r(document.getElementById("ftoggle")).width), Math.round(r(document.getElementById("ftoggle")).height)],
+          s: document.getElementById("fsortbtn").hidden ? null : [Math.round(r(document.getElementById("fsortbtn")).width), Math.round(r(document.getElementById("fsortbtn")).height)],
+          chips: [...document.querySelectorAll("#fbar .flchip, #fbar .fcuis")].map(c => Math.round(r(c).height)), lines: new Set([...document.querySelectorAll("#fbar > *:not([hidden])")].map(x => Math.round(r(x).top))).size }; });
+      let o = await over(), c = await ctl();
+      ok(o.sw <= w && !o.out.length && c.f[0] >= 44 && c.f[1] >= 40 && c.s === null, tag + "closed, nothing on: the Filters button alone, " + J(c.f) + " (" + J(o) + ")");
+      await search("zs");
+      await openFilters();
+      await pick("#chans", "Online"); await pick("#acts", "Activate or add"); await pick("#cards", "Citi Double Cash"); await pick("#cats", "Marketplaces");
+      await closeFilters();
+      o = await over(); c = await ctl();
+      ok(o.sw <= w && !o.out.length && c.s && c.s[0] >= 44 && c.s[1] >= 40 && c.chips.every(h => h >= 38) && c.chips.length === 4 && c.lines >= 2,
+        tag + "four chips with long names wrap onto " + c.lines + " lines, the Sort button " + J(c.s) + ", nothing sideways (" + J([o, c]) + ")");
+      await openFilters();
+      await page.click("#fsreset");
+      await pick("#cats", "Dining");
+      await closeFilters();
+      await page.click("#fcuisbtn");
+      await page.waitForTimeout(420);
+      o = await over();
+      ok(o.sw <= w && !o.out.length, tag + "cuisine picker fits (" + J(o) + ")");
+      await page.locator("#plist .popt", { hasText: /^Gift Cards/ }).click();
+      await page.waitForTimeout(420);
+      o = await over(); c = await ctl();
+      ok(o.sw <= w && !o.out.length && c.chips.length === 2, tag + "Dining and the long cuisine Gift Cards & Dining Services fit (" + J([o, c]) + ")");
+      // The sheet itself, Dining's cuisine row in it.
+      await openFilters();
+      const S = await page.evaluate(() => {
+        const r = e => e.getBoundingClientRect(), p = document.querySelector("#fsheet .fspanel"), body = document.getElementById("fsbody");
+        const rowTop = sel => [...document.querySelectorAll(sel)].map(b => Math.round(r(b).top));
+        const cards = [...document.querySelectorAll("#cards button")];
+        const cs = getComputedStyle, chip = document.querySelector("#fbar .flchip");
+        return { panelTop: Math.round(r(p).top), h2: Math.round(r(document.getElementById("fs-h")).top), reset: [Math.round(r(document.getElementById("fsreset")).right), Math.round(r(document.getElementById("fsreset")).height)],
+          chans: rowTop("#chans button"), acts: rowTop("#acts button"), segH: Math.min(...[...document.querySelectorAll("#chans button, #acts button")].map(b => r(b).height)),
+          cardCols: new Set(cards.map(b => Math.round(r(b).left))).size, cardH: Math.min(...cards.map(b => r(b).height)),
+          done: [Math.round(r(document.getElementById("fsdone")).bottom), Math.round(r(document.getElementById("fsdone")).height)], vh: innerHeight,
+          scroll: body.scrollHeight > body.clientHeight, cuis: !document.getElementById("cuis-filter").hidden,
+          panelBg: cs(p).backgroundColor, pageBg: cs(document.body).backgroundColor, text: cs(document.getElementById("fs-h")).color,
+          chipFg: chip ? cs(chip).color : null, chipBg: chip ? cs(chip).backgroundColor : null,
+          segSel: cs(document.querySelector("#chans button[aria-pressed=true]")).backgroundColor, segTrack: cs(document.getElementById("chans")).backgroundColor,
+          scrim: cs(document.getElementById("fsback")).backgroundColor };
+      });
+      o = await over();
+      ok(S.h2 >= S.panelTop && S.reset[0] <= w && S.reset[1] >= 44 && new Set(S.chans).size === 1 && new Set(S.acts).size === 1 && S.segH >= 44 && S.cardCols === 2 && S.cardH >= 44 &&
+        S.done[0] <= S.vh && S.done[1] >= 44 && S.scroll && S.cuis && o.sw <= w && !o.out.length,
+        tag + "sheet: Filters and Reset at the top, one row each for the channel and activation segments (44px+), a two-column card grid, the cuisine row under Dining, Show results on screen, the body scrolls, nothing sideways (" + J([S, o]) + ")");
+      ok(contrast(S.text, S.panelBg) >= 4.5 && contrast(S.chipFg, S.chipBg) >= 4.5 && S.panelBg !== S.pageBg && S.segSel !== S.segTrack && /rgba\(.*0\.\d+\)/.test(S.scrim),
+        tag + "colours: sheet text " + contrast(S.text, S.panelBg) + ":1, chip " + contrast(S.chipFg, S.chipBg) + ":1, the sheet stands off the page, the picked segment stands out, the page behind dimmed (" + J([S.panelBg, S.chipBg, S.segSel, S.segTrack, S.scrim]) + ")");
+      if (process.env.S5_SHOTS) await page.screenshot({ path: path.join(process.env.S5_SHOTS, "sheet-" + scheme + "-" + w + ".png") });
+      await page.evaluate(() => { document.getElementById("fsbody").scrollTop = 1e6; });
+      if (process.env.S5_SHOTS) await page.screenshot({ path: path.join(process.env.S5_SHOTS, "sheet-end-" + scheme + "-" + w + ".png") });
+      await closeFilters();
+      // The Ending chip with ordinary chips.
+      await search("");
+      await page.click("#fbar [aria-label='Remove Dining filter']");
+      await page.waitForTimeout(420);
+      await page.click("#sc-end");
+      await page.waitForTimeout(450);
+      await openFilters();
+      await pick("#chans", "In store"); await pick("#cards", "Bank of America");
+      await closeFilters();
+      o = await over(); c = await ctl();
+      const ec = await page.evaluate(() => { const e = document.getElementById("endchip").getBoundingClientRect(), f = document.getElementById("fbar").getBoundingClientRect(); return e.bottom <= f.top + 1; });
+      ok(o.sw <= w && !o.out.length && c.chips.length === 2 && ec, tag + "the Ends within 7 days chip above two ordinary chips, nothing sideways (" + J([o, c]) + ")");
+      if (process.env.S5_SHOTS) await page.screenshot({ path: path.join(process.env.S5_SHOTS, "chips-end-" + scheme + "-" + w + ".png") });
+      await ctx.close();
+    }
+    ok(!s5errs.length, "s5: no page errors (" + s5errs.join("; ") + ")");
     page = mainPage;
   }
 
