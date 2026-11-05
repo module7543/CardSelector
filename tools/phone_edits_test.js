@@ -835,8 +835,8 @@ async function detailChecks(br, base) {
       grocery: tile("Grocery stores"), dining: tile("Dining"), online: tile("Online shopping"), hist: navigation.currentEntry.index + "/" + navigation.entries().length,
       bar: b.hidden ? null : (btns => document.getElementById("savemsg").firstChild.textContent + (btns.length ? " · " + btns.join(" ") : ""))([...document.querySelectorAll("#savebtns button")].map(x => x.textContent)) };
   });
-  const openCb = async id => { await page.click("#cb li[data-eid='" + id + "'] .cbgo"); await page.waitForFunction(i => window.__detail() && window.__detail().view === "cb:" + i, id); };
-  const back = async () => { await page.click("#dtback"); await page.waitForFunction(() => !window.__detail()); };
+  const openCb = async id => { await page.click("#cb li[data-eid='" + id + "'] .cbgo"); await page.waitForFunction(i => window.__detail() && window.__detail().view === "cb:" + i, id); await page.waitForTimeout(450); };
+  const back = async () => { await page.click("#dtback"); await page.waitForFunction(() => !window.__detail()); await page.waitForTimeout(450); };
   const deployedTick = async () => { deployed = true; await page.clock.runFor(6000); await page.waitForFunction(() => document.getElementById("savebar").classList.contains("live")); deployed = false; };
 
   // Signed out: readable, no control.

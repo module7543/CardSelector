@@ -2667,10 +2667,11 @@
         go.appendChild(l1);
         go.appendChild(goChev());
         go.appendChild(el("span", "sr-only", ", details"));
-        go.addEventListener("click", function () { openDetail({ kind: "cb", id: e.id }, { cb: e.id }); });
-        var st = bonusState(e, ed);
+        go.addEventListener("click", function (ev) { openDetail({ kind: "cb", id: e.id }, { cb: e.id }, ev); });
+        var st = bonusState(e, ed), ids = [];
         st.id = "cbst-" + compact(e.id);
-        go.setAttribute("aria-describedby", st.id);
+        Array.prototype.forEach.call(st.children, function (c, i) { if (c.tagName !== "BUTTON") { c.id = st.id + "-" + i; ids.push(c.id); } });
+        go.setAttribute("aria-describedby", ids.join(" "));
         li.appendChild(go);
         li.appendChild(st);
         ul.appendChild(li);
@@ -2803,7 +2804,7 @@
       qpBody(p, b);
       b.appendChild(goChev());
       b.appendChild(el("span", "sr-only", ", details"));
-      b.addEventListener("click", function () { openDetail({ kind: "qp", topic: x.topic, label: x.label }, { qp: x.label }); });
+      b.addEventListener("click", function (ev) { openDetail({ kind: "qp", topic: x.topic, label: x.label }, { qp: x.label }, ev); });
       li.appendChild(b);
       ul.appendChild(li);
     });
@@ -3038,8 +3039,20 @@
   var dt = null, dtHist = 0;
   function dtView() { return dt ? dt.stack[dt.stack.length - 1] : null; }
   function goChev() { var c = el("span", "gochev"); c.setAttribute("aria-hidden", "true"); return c; }
-  function openDetail(view, from) {
+  // A page swap (into, between or out of the details) under a finger: the second tap of a double tap must not land on
+  // whatever the new page has there (a Mark activated would save). Pointer clicks (detail > 0; keyboard clicks are 0)
+  // on the details, Quick picks or Card bonuses within 400 ms of the event that swapped the page are dropped.
+  var dtSwapT = -1e9;
+  function dtSwapped(ev) { dtSwapT = ev && typeof ev.timeStamp === "number" ? ev.timeStamp : -1e9; }
+  document.addEventListener("click", function (ev) {
+    if (ev.detail > 0 && ev.timeStamp - dtSwapT >= 0 && ev.timeStamp - dtSwapT < 400 && ev.target.closest && ev.target.closest("#dt, #qp, #cb")) {
+      ev.preventDefault();
+      ev.stopPropagation();
+    }
+  }, true);
+  function openDetail(view, from, ev) {
     if (wc) return;
+    dtSwapped(ev);
     if (!dt) {
       dt = { token: String(Date.now()) + Math.random(), y: window.scrollY, stack: [], ahead: [], draft: {}, focus: null };
       // On an entry of an earlier visit (reached with Forward), make it a plain page entry first, so Back and a reload
@@ -3079,8 +3092,9 @@
   }
   // The back arrow steps back at once, then over the history entry it left (so a quick double tap steps back twice
   // at most and never leaves the site).
-  dtBack.addEventListener("click", function () {
+  dtBack.addEventListener("click", function (ev) {
     if (!dt) return;
+    dtSwapped(ev);
     var n = dt.stack.length - 1, steps = dtHist - n;
     dtTo(n);
     if (steps > 0) { dtHist = n; try { history.go(-steps); } catch (e) {} }
@@ -3090,6 +3104,7 @@
     var st = ev.state, d = dt && st && st.cardselectorDt === dt.token ? st.depth : 0;
     dtHist = d;
     if (!dt) return;
+    dtSwapped(ev);
     if (d < dt.stack.length) dtTo(d);
     else if (d > dt.stack.length && dt.ahead.length >= d - dt.stack.length) {
       // Forward again into a detail left with Back: shown again as it was.
@@ -3128,7 +3143,7 @@
   // A button that opens a Card Bonus detail from a Quick Pick detail (one more history entry, so Back returns here).
   function dtGo(node, e, key) {
     node.setAttribute("data-f", key);
-    node.addEventListener("click", function () { openDetail({ kind: "cb", id: e.id }, { link: key }); });
+    node.addEventListener("click", function (ev) { openDetail({ kind: "cb", id: e.id }, { link: key }, ev); });
     return node;
   }
   function dtLink(text, e, key) {
@@ -3160,10 +3175,14 @@
       var q = function (k) { return dtBody.querySelector("[data-f=\"" + CSS.escape(k) + "\"]"); };
       var t = q(keep);
       if ((!t || t.hidden) && /^save-/.test(keep)) t = q(keep.replace(/^save-/, "pick-"));
-      if (t && !t.hidden && !t.disabled) { t.focus({ preventScroll: true }); dt.focus = null; }
+      if (t && !t.hidden && !t.disabled) { t.focus({ preventScroll: true }); dt.focus = null; dtAutoFocus = t; }
     }
     if (window.scrollY !== y) window.scrollTo(0, y);
   }
+  // Focus the page put back after a redraw is not the owner using that control: it doesn't hold the day redraw (the
+  // redraw keeps the focus and an unsaved pick anyway). A press or key there makes it the owner's again.
+  var dtAutoFocus = null;
+  ["pointerdown", "keydown"].forEach(function (t) { dtBody.addEventListener(t, function () { dtAutoFocus = null; }, true); });
   window.__detail = function () { return dt ? { depth: dt.stack.length, view: dtView().kind === "qp" ? "qp:" + dtView().label : "cb:" + dtView().id, hist: dtHist } : null; };
 
   // ---- Quick Pick detail: the topic's answer as its tile gives it, every card that pays on the topic best rate
@@ -3277,30 +3296,37 @@
       if (e.choices && e.choice && e.choices.some(on)) links.appendChild(dtLink("Choice: " + e.choice, e, "choice-link"));
     });
     if (links.children.length) dtBody.appendChild(links);
-    // What counts: Likely, then each paying group's caveats from the data (cuisine caveats, notes, the names its
-    // keyword lists exclude, and "may not count" names), each once.
-    var lines = [LIKELY_TEXT], exSeen = {};
+    // What counts: Likely (when a category rate is shown), then each paying group's caveats from the data: cuisine
+    // caveats and notes (the data names the card), and what its keyword lists exclude or say may not count, each
+    // under the cards it applies to ("Citi Custom Cash (live entertainment): excludes AMC, …"), never pooled as if it
+    // held for the whole topic.
+    var lines = rows.some(function (x) { return x.base.cat; }) ? [LIKELY_TEXT] : [], by = {}, order = [];
+    var join = function (n) { return n.length > 1 ? n.slice(0, -1).join(", ") + " and " + n[n.length - 1] : n[0]; };
+    var put = function (k, who, text) {
+      if (!by[k]) { by[k] = { who: [], text: text }; order.push(k); }
+      if (by[k].who.indexOf(who) === -1) by[k].who.push(who);
+    };
     rows.forEach(function (x) {
       var g = x.base.g;
       if (!g) return;
       Object.keys(g.caveat_cuisines || {}).forEach(function (c) { lines.push(g.caveat_cuisines[c]); });
       (g.notes || []).forEach(function (n) { lines.push(n); });
-      listsOf(g).forEach(function (l) {
-        var ex = (l.exclude || []).join(", ");
-        if (ex && !exSeen[ex]) { exSeen[ex] = 1; lines.push("Excluded: " + ex + "."); }
+      var who = x.C.name + (x.e && x.e.eligible ? " (" + (x.item ? x.item.name : x.e.planned) + ")" : "");
+      [].concat(g.list == null ? [] : g.list).forEach(function (ln) {
+        var l = bonus.keyword_lists[ln];
+        if (!l) return;
+        if ((l.exclude || []).length) put("ex|" + ln, who, "excludes " + l.exclude.join(", ") + ".");
         // "Speedway, Circle K and Wawa may not count: convenience-store chains may code as …" (names sharing a reason).
-        var by = {}, order = [];
+        var m = {}, mo = [];
         Object.keys(l.may_not_count || {}).forEach(function (k) {
           var why = l.may_not_count[k];
-          if (!by[why]) { by[why] = []; order.push(why); }
-          by[why].push(k);
+          if (!m[why]) { m[why] = []; mo.push(why); }
+          m[why].push(k);
         });
-        order.forEach(function (why) {
-          var n = by[why];
-          lines.push((n.length > 1 ? n.slice(0, -1).join(", ") + " and " + n[n.length - 1] : n[0]) + " may not count: " + why + ".");
-        });
+        mo.forEach(function (why) { put("mnc|" + ln + "|" + why, who, join(m[why]) + " may not count: " + why + "."); });
       });
     });
+    order.forEach(function (k) { lines.push(join(by[k].who) + ": " + by[k].text); });
     var wc2 = dtSec("What counts"), wl = el("ul", "dtlist");
     uniq(lines).forEach(function (t) { wl.appendChild(el("li", null, t)); });
     wc2.appendChild(wl);
@@ -3394,7 +3420,7 @@
       // Ended (a new day) or gone with new data: the page says so.
       var old = bonus.entries.filter(function (x) { return x.id === v.id; })[0];
       dtH.textContent = old ? old.card : "Card bonus";
-      dtBody.appendChild(el("p", "empty", "This card bonus isn't live today."));
+      dtBody.appendChild(el("p", "empty", old ? "This card bonus isn't live today." : "This card bonus is no longer listed."));
       return;
     }
     var ed = editing(), C = cardOfEntry(e), ev = everyday(today);
@@ -3850,7 +3876,7 @@
   function dayBlocked() {
     if (saving || tapping) return true;
     var f = document.activeElement;
-    return !!f && (main.contains(f) || cbEl.contains(f) || dtBody.contains(f)) && f.matches("select, .edsm, .edfill, .edlink");
+    return !!f && f !== dtAutoFocus && (main.contains(f) || cbEl.contains(f) || dtBody.contains(f)) && f.matches("select, .edsm, .edfill, .edlink");
   }
   // Is t a day the results or Card bonuses weren't drawn for yet? (Card bonuses not drawn yet, e.g. its file didn't load: only
   // the results count.)

@@ -378,11 +378,13 @@ class Hub {
   const choice0 = JSON.parse(hub.files["site/data/bonus-categories.json"]).entries.find(e => e.id === CC).choice;
   await page.fill("#q", "");
   await page.click("#cb li[data-eid='" + CC + "'] .cbgo");
+  await page.waitForTimeout(450); // a tap within 400 ms of a page swap is dropped (double-tap guard)
   await page.selectOption("#dt .bfocus select", "gas & EV charging stations");
   await page.click("#dt .bfocus button:has-text('Save')");
   await waitBar(/Deploying/);
   ok(await page.$eval("#dt", d => /Choice: gas & EV charging stations/.test(d.innerText)), "the detail shows the saved choice");
   await page.click("#dtback");
+  await page.waitForTimeout(450);
   await search(q5);
   const use1 = await page.$eval("#use", e => e.innerText);
   ok(choice0 !== "gas & EV charging stations" && /Customized Cash/.test(use1) && use1 !== use0 && await choiceRow() === "Choice: gas & EV charging stations",
@@ -503,10 +505,13 @@ class Hub {
   await page.evaluate(() => { document.getElementById("editmode").open = false; });
   // In a Quick Pick or Card Bonus detail (a mode of the page; an unsaved Focus or Choice pick lives there): no reload.
   await page.click("#qp li.qpt[data-topic='Dining'] .qpgo");
+  await page.waitForTimeout(450);
   await comeBack8();
   await stays("in a Quick Pick detail");
   await page.click("#dtback");
+  await page.waitForTimeout(450);
   await page.click("#cb li[data-eid='bank-of-america-customized-cash/standing'] .cbgo");
+  await page.waitForTimeout(450);
   await page.selectOption("#dt .bfocus select", "dining");
   await page.focus("#dtback");
   await comeBack8();

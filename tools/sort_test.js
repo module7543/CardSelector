@@ -2265,6 +2265,7 @@ function listRows(sel) {
     // A real tap on the state line text (the row's button covers it, so the tap lands on the button).
     const stBox = await page.locator("#cb li[data-eid='" + FLEX + "'] .cbst").boundingBox();
     await page.mouse.click(stBox.x + 20, stBox.y + stBox.height / 2);
+    await page.waitForTimeout(450);
     ok(J(await page.evaluate(() => window.__detail())) === J({ depth: 1, view: "cb:" + FLEX, hist: 1 }) && J(await page.evaluate(() => [location.href, navigation.currentEntry.index])) === J([r0[0], r0[1] + 1]),
       "cb: tapping a row's state line opens its detail, one history entry, same URL");
     await page.click("#dtback");
@@ -2367,9 +2368,10 @@ function listRows(sel) {
         minFont: Math.min.apply(null, [...d.querySelectorAll("*")].filter(x => vis(x) && x.textContent.trim()).map(x => parseFloat(getComputedStyle(x).fontSize))) };
     });
     const tileText = label => page.$eval("#qp li.qpt[data-topic='" + label + "'] .qpgo", e => window.__ans(e));
-    const qpGo = async label => { await page.click("#qp li.qpt[data-topic='" + label + "'] .qpgo"); await page.waitForFunction(() => !document.getElementById("dt").hidden); return dtv(); };
-    const cbGo = async id => { await page.click("#cb li[data-eid='" + id + "'] .cbgo"); await page.waitForFunction(() => !document.getElementById("dt").hidden); return dtv(); };
-    const dtBackArrow = async () => { await page.click("#dtback"); await page.waitForTimeout(80); };
+    // Each page swap is followed by a pause, as a person's next tap is: taps within 400 ms of a swap are dropped (double-tap guard).
+    const qpGo = async label => { await page.click("#qp li.qpt[data-topic='" + label + "'] .qpgo"); await page.waitForFunction(() => !document.getElementById("dt").hidden); await page.waitForTimeout(450); return dtv(); };
+    const cbGo = async id => { await page.click("#cb li[data-eid='" + id + "'] .cbgo"); await page.waitForFunction(() => !document.getElementById("dt").hidden); await page.waitForTimeout(450); return dtv(); };
+    const dtBackArrow = async () => { await page.click("#dtback"); await page.waitForTimeout(450); };
     const rk = D => D.ranks.map(r => [r.rate, r.card, r.status, r.muted]);
     // A signed-in save that answers at once (the real store.js path is checked in tools/phone_edits_test.js): the record
     // the save leaves, from the bonus file the page loaded.
@@ -2422,8 +2424,9 @@ function listRows(sel) {
     ok(/Not the same as Groceries & Food Delivery/.test(D.cat) && /Grocery stores only, not meal kits, wine clubs or delivery services\./.test(D.cat) &&
       /Top offer in Groceries & Food Delivery: Zqgrocer Market 14% with Smartly\./.test(D.cat) && /not every merchant in Groceries & Food Delivery/.test(D.cat),
       "dt Grocery stores: not the same as Groceries & Food Delivery, with that category's top offer (" + D.cat + ")");
-    ok(D.counts.includes("Excluded: Walmart, Target, Costco, Sam's Club, BJ's.") && D.counts.includes("Instacart and Shipt may not count: delivery services can code as delivery, not as a grocery store."),
-      "dt Grocery stores: What counts lists the excluded names and the may-not-count ones (" + J(D.counts) + ")");
+    ok(D.counts.includes("Freedom Flex, Freedom, Citi Custom Cash (grocery stores) and Customized Cash: excludes Walmart, Target, Costco, Sam's Club, BJ's.") &&
+      D.counts.includes("Freedom Flex, Freedom, Citi Custom Cash (grocery stores) and Customized Cash: Instacart and Shipt may not count: delivery services can code as delivery, not as a grocery store.") &&
+      !D.counts.some(l => /^Excluded:/.test(l)), "dt Grocery stores: What counts names the cards each exclusion and may-not-count line applies to (" + J(D.counts) + ")");
     ok(J(D.links) === J(["CardSelector focus: restaurants"]), "dt Grocery stores: links to the Custom Cash focus only (grocery isn't a Customized Cash choice) (" + J(D.links) + ")");
     await dtBackArrow();
 
@@ -2441,7 +2444,8 @@ function listRows(sel) {
     await dtBackArrow();
     await cbOpen({ choice: "dining" });
     D = await qpGo("Online shopping");
-    ok(J(rk(D)) === J([["4%", "Smartly", "Always on", false]]) && J(D.links) === J(["Choice: dining"]), "dt Online shopping, Choice dining: no Customized Cash rate here, the link names the Choice (" + J([rk(D), D.links]) + ")");
+    ok(J(rk(D)) === J([["4%", "Smartly", "Always on", false]]) && J(D.links) === J(["Choice: dining"]) && !D.counts.includes(LIKELY),
+      "dt Online shopping, Choice dining: no Customized Cash rate here, the link names the Choice, no Likely line (only the everyday rate) (" + J([rk(D), D.links, D.counts]) + ")");
     await dtBackArrow();
     await cbOpen({}, false, new Date(2026, 11, 20, 12, 0, 0));
     D = await qpGo("Online shopping");
@@ -2454,10 +2458,14 @@ function listRows(sel) {
       D = await qpGo(t);
       const first = D.ranks.find(r => r.status === "Always on" || r.status === "Activated");
       ok(D.answer === tt && first && tt.startsWith(first.rate + " " + first.card) && D.cat && D.counts[0] === LIKELY, "dt " + t + ": the tile's answer, its first ready card leads the list (" + J([tt, rk(D), D.cat]) + ")");
+      if (t === "Entertainment") ok(D.counts.includes("Discover it: excludes Netflix, Hulu, Disney+, Max, Peacock, Paramount+, Spotify, YouTube.") &&
+        D.counts.includes("Citi Custom Cash (live entertainment): excludes AMC, Regal, Cinemark, Fandango, Landmark Theatres, Alamo Drafthouse.") &&
+        D.counts.some(l => /^Citi Custom Cash \(live entertainment\): Eventbrite may not count/.test(l)) && !D.counts.some(l => /^Excluded:/.test(l)),
+        "dt Entertainment: one card's exclusions are never stated for the topic (Citi's AMC exclusion names Citi; Discover it pays at AMC) (" + J(D.counts) + ")");
       await dtBackArrow();
     }
     D = await qpGo("Gas stations");
-    ok(/Not the same as Auto & Gas/.test(D.cat) && D.counts.some(l => /^Speedway, Circle K, Wawa, Sheetz, QuikTrip, Casey's and Quik Stop may not count: /.test(l)) &&
+    ok(/Not the same as Auto & Gas/.test(D.cat) && D.counts.some(l => /^Citi Custom Cash \(gas stations\), Costco Visa and Customized Cash: Speedway, Circle K, Wawa, Sheetz, QuikTrip, Casey's and Quik Stop may not count: /.test(l)) &&
       J(rk(D).slice(0, 2)) === J([["5%", "Citi Custom Cash", "Conditional", true], ["4%", "Smartly", "Always on", false]]),
       "dt Gas stations: Custom Cash conditional above Smartly, Costco Visa tied; names sharing a reason on one line; not the same as Auto & Gas (" + J([rk(D), D.cat]) + ")");
     await dtBackArrow();
@@ -2517,6 +2525,7 @@ function listRows(sel) {
     const hD = D.hist;
     // Quick Pick -> its pending Freedom Flex row -> that Card Bonus detail (one more entry).
     await page.click("#dtbody .dtrow[data-f='r-Freedom Flex']");
+    await page.waitForTimeout(450);
     D = await dtv();
     ok(D.detail.depth === 2 && D.detail.view === "cb:" + FLEX && D.hist === hD + 1 && J(D.controls) === J(["BUTTON:Mark activated"]),
       "dt nested: a Quick Pick row opens its Card Bonus detail, one more history entry, Mark activated signed in (" + J([D.detail, D.hist - hD, D.controls]) + ")");
@@ -2527,11 +2536,13 @@ function listRows(sel) {
       "dt Mark activated in the detail: activated, Mark not activated in its place (focused), no history entry, where it stands follows (" + J([D.controls, D.stands]) + ")");
     await page.goBack();
     await page.waitForFunction(() => window.__detail() && window.__detail().depth === 1);
+    await page.waitForTimeout(450);
     D = await dtv();
     ok(D.ranks[0].card === "Freedom Flex" && D.ranks[0].status === "Activated" && /^5% Freedom Flex/.test(D.answer) && D.focused === "r-Freedom Flex",
       "dt nested Back: the Quick Pick detail again, its ranking and answer updated (Freedom Flex Activated, 5%), focus on the row that opened it (" + J([rk(D), D.answer, D.focused]) + ")");
     await page.goBack();
     await page.waitForFunction(() => !window.__detail());
+    await page.waitForTimeout(450);
     const home1 = await homeOf();
     ok(home0.pend === "⚠ 2 activations pending" && home1.pend === "⚠ 1 activation pending" && /^4% Smartly/.test(home0.gro) && /^5% Freedom Flex/.test(home1.gro) &&
       await page.evaluate(() => document.activeElement.closest("li.qpt") && document.activeElement.closest("li.qpt").dataset.topic) === "Grocery stores",
@@ -2546,6 +2557,23 @@ function listRows(sel) {
     await page.waitForFunction(() => /1 activation pending/.test(document.querySelector("#cb .cbpend").textContent));
     ok(await page.evaluate(() => window.__detail()) === null && await page.evaluate(() => navigation.currentEntry.index) === hh && J(await page.evaluate(() => window.__saves.slice(-1)[0])) ===
       J({ type: "bonus.activation", id: FREE, from: "not_confirmed", to: "activated" }), "dt: the home row's inline Mark activated saves and doesn't open the detail");
+    // A double tap on a row whose detail has Mark activated right where the second tap lands: the row opens, nothing saves.
+    await page.locator("#savebar button.xbtn").click();
+    D = await cbGo(FLEX);
+    const mBox = await page.locator("#dtbody button[data-f='act']").boundingBox();
+    await dtBackArrow();
+    const rBox = await page.locator("#cb li[data-eid='" + FLEX + "'] .cbgo").boundingBox();
+    await page.evaluate(dy => window.scrollBy(0, dy), Math.round(rBox.y + rBox.height / 2 - (mBox.y + mBox.height / 2)));
+    const rBox2 = await page.locator("#cb li[data-eid='" + FLEX + "'] .cbgo").boundingBox(), nSaves = await page.evaluate(() => window.__saves.length);
+    await page.mouse.dblclick(mBox.x + mBox.width / 2, rBox2.y + rBox2.height / 2);
+    await page.waitForTimeout(450);
+    D = await dtv();
+    ok(Math.abs(rBox2.y + rBox2.height / 2 - (mBox.y + mBox.height / 2)) < 6 && D && D.detail.view === "cb:" + FLEX && await page.evaluate(() => window.__saves.length) === nSaves &&
+      J(D.controls) === J(["BUTTON:Mark activated"]) && await page.evaluate(() => document.getElementById("savebar").hidden),
+      "dt double tap: a row under the detail's Mark activated opens the detail, the second tap saves nothing (" + J([D && D.detail, D && D.controls]) + ")");
+    await page.mouse.dblclick(30, 30); // the back arrow, twice: home, and nothing opened by the second tap
+    await page.waitForTimeout(450);
+    ok(await page.evaluate(() => window.__detail() === null && document.activeElement !== document.body), "dt double tap on the back arrow: home, nothing reopened");
     D = await cbGo(FREE);
     ok(J(D.controls) === J(["BUTTON:Mark not activated"]), "dt: the activated entry's detail has Mark not activated");
     await page.click("#dtbody button[data-f='act']");
@@ -2610,12 +2638,14 @@ function listRows(sel) {
     ok(y0 === 180 && D.hist === n0 + 1 && D.y === 0 && D.detail.view === "qp:Entertainment", "dt history: from scroll 180 a tile opens its detail at the top, one entry added (" + J([y0, D.hist - n0, D.y]) + ")");
     await page.goBack();
     await page.waitForFunction(() => !window.__detail());
+    await page.waitForTimeout(450);
     let back = await page.evaluate(() => ({ y: Math.round(window.scrollY), f: document.activeElement.closest("li.qpt") && document.activeElement.closest("li.qpt").dataset.topic, dt: !document.getElementById("dt").hidden }));
     ok(back.y === 180 && back.f === "Entertainment" && !back.dt && await hist() === n0, "dt history: the browser's Back returns home at scroll 180, focus on the tile (" + J(back) + ")");
     await page.locator("#cb li[data-eid='" + COSTCO + "'] .cbgo").scrollIntoViewIfNeeded();
     await page.evaluate(() => window.scrollBy(0, 37));
     y0 = await page.evaluate(() => Math.round(window.scrollY));
     await page.evaluate(id => document.querySelector("#cb li[data-eid='" + id + "'] .cbgo").click(), COSTCO);
+    await page.waitForTimeout(450);
     D = await dtv();
     ok(y0 > 0 && D.detail.view === "cb:" + COSTCO && D.y === 0, "dt history: a Card bonuses row opens its detail (from scroll " + y0 + ")");
     await dtBackArrow();
@@ -2625,14 +2655,17 @@ function listRows(sel) {
     await page.evaluate(() => window.scrollTo(0, 260));
     const yq = await page.evaluate(() => Math.round(window.scrollY)), nq = await hist();
     await page.click("#dtbody .dtlink[data-f='focus-link']");
+    await page.waitForTimeout(450);
     D = await dtv();
     ok(D.detail.depth === 2 && D.detail.view === "cb:" + CC && D.hist === nq + 1 && D.y === 0, "dt history: Quick Pick -> CardSelector focus link -> the Custom Cash detail, one more entry (" + J([D.detail, D.hist - nq]) + ")");
     await page.goBack();
     await page.waitForFunction(() => window.__detail() && window.__detail().depth === 1);
+    await page.waitForTimeout(450);
     D = await dtv();
     ok(D.detail.view === "qp:Dining" && D.y === yq && D.focused === "focus-link", "dt history: Back returns to the Quick Pick detail at its scroll, focus on the link (" + J([D.detail, D.y, yq, D.focused]) + ")");
     await page.goForward();
     await page.waitForFunction(() => window.__detail() && window.__detail().depth === 2);
+    await page.waitForTimeout(450);
     D = await dtv();
     ok(D.detail.view === "cb:" + CC && !D.over.length, "dt history: Forward shows the Custom Cash detail again (" + J(D.detail) + ")");
     await page.dblclick("#dtback");
@@ -2874,6 +2907,7 @@ function listRows(sel) {
         await p.waitForFunction(() => window.__cardsReady && window.__bonusReady && !document.getElementById("qp").hidden);
         await p.click(sel);
         await p.waitForFunction(() => !!window.__detail());
+        await p.waitForTimeout(450);
         return p;
       };
       const st9 = p => p.evaluate(() => {
@@ -2909,6 +2943,7 @@ function listRows(sel) {
       await p3.goto(base);
       await p3.waitForFunction(() => window.__cardsReady && window.__bonusReady && !document.getElementById("cb").hidden);
       await p3.click("#cb li[data-eid='chase-freedom-flex/2026-q4'] .cbgo");
+      await p3.waitForTimeout(450);
       await ctx10.clock.pauseAt(new Date(2026, 11, 31, 23, 59, 50));
       const e0 = await st9(p3);
       await ctx10.clock.runFor(15000);
@@ -2918,6 +2953,36 @@ function listRows(sel) {
       ok(/^Status ✓ Activated/.test(e0.text) && e1.text === "This card bonus isn't live today." && J(e1.d) === J(e0.d) && J(e1.nav) === J(e0.nav) && home.d === null && !home.rows.includes("chase-freedom-flex/2026-q4"),
         "dt rollover Dec 31 -> Jan 1: the open Freedom Flex detail says the bonus isn't live, no history entry; Back returns home, where its row is gone (" + J([e1.text, home.rows]) + ")");
       await ctx10.close();
+      // After a save in the detail the page puts focus back on the control (Mark not activated); that focus doesn't
+      // hold the day redraw: midnight passes, the detail follows the new day at once.
+      CASE = { set: { "Freedom Flex": "not_confirmed" } };
+      const ctx11 = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: "block" });
+      await ctx11.clock.install({ time: new Date(2026, 11, 31, 23, 58, 0) });
+      const p4 = await ctx11.newPage();
+      p4.on("pageerror", e => errs.push(e.message));
+      await rollRoutes(p4);
+      await p4.route("https://api.github.com/**", r => r.abort());
+      await p4.goto(base);
+      await p4.evaluate(() => { try { localStorage.clear(); localStorage.setItem("cardselector.token", "test"); } catch (e) {} });
+      await p4.goto(base);
+      await p4.waitForFunction(() => window.__cardsReady && window.__bonusReady && !document.getElementById("cb").hidden);
+      await p4.evaluate(() => {
+        CardStore.save = c => Promise.resolve({ status: "saved", message: "test save", undo: { type: c.type, id: c.id, from: c.to, to: c.from }, record: { activation: c.to } });
+        CardStore.liveStatus = () => Promise.resolve({ state: "live" });
+      });
+      await p4.click("#cb li[data-eid='chase-freedom-flex/2026-q4'] .cbgo");
+      await p4.waitForTimeout(450);
+      await p4.click("#dtbody button[data-f='act']");
+      await p4.waitForFunction(() => /✓ Activated/.test(document.getElementById("dtbody").innerText));
+      const f0 = await p4.evaluate(() => document.activeElement.getAttribute("data-f"));
+      await ctx11.clock.pauseAt(new Date(2026, 11, 31, 23, 59, 50));
+      await ctx11.clock.runFor(15000);
+      await p4.waitForTimeout(50);
+      const f1 = await st9(p4);
+      ok(f0 === "act" && f1.text === "This card bonus isn't live today." && f1.d && f1.d.view === "cb:chase-freedom-flex/2026-q4",
+        "dt rollover after a save in the detail: the control the page refocused doesn't hold the day redraw; the detail follows Jan 1 (" + J([f0, f1.text]) + ")");
+      await ctx11.close();
+      CASE = {};
     }
     ok(errs.length === 0, "qp rollover: no page errors (" + errs.join("; ") + ")");
     page = mainPage;
