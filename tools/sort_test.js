@@ -1973,7 +1973,7 @@ function listRows(sel) {
           afterLikely: a && a.querySelector(".likely") ? a.querySelector(".likely").textContent : null,
           afterLikelyLast: a && a.querySelector(".likely") ? a.lastElementChild === a.querySelector(".likely") : null,
           afterLikelyIn: a && a.querySelector(".likely") ? a.querySelector(".likely").getBoundingClientRect().right <= li.getBoundingClientRect().right - 1 : null,
-          empty: [...li.querySelectorAll("*")].filter(x => !x.textContent.trim() && !x.classList.contains("idot") && !x.classList.contains("gochev")).length,
+          empty: [...li.querySelectorAll("*")].filter(x => !x.textContent.trim() && !x.classList.contains("idot") && !x.classList.contains("gochev") && !x.classList.contains("cglyph")).length,
           go: [...li.querySelectorAll("button, a, input, select, [tabindex], [role=button], [onclick]")].map(x => x.className), chev: li.querySelectorAll(".qpgo > .gochev[aria-hidden=true]").length,
           over: li.scrollWidth > li.clientWidth + 1, h: Math.round(li.getBoundingClientRect().height) };
       });
@@ -2194,7 +2194,7 @@ function listRows(sel) {
       const plain = e => e ? e.innerText.replace(/\s+/g, " ").trim() : null;
       const rows = {};
       c.querySelectorAll("li[data-eid]").forEach(l => {
-        rows[l.dataset.eid] = { card: plain(l.querySelector(".cbcard")), dot: !!l.querySelector(".cbcard .idot"), summary: plain(l.querySelector(".cbsumm")),
+        rows[l.dataset.eid] = { card: plain(l.querySelector(".cbcard")), glyph: !!l.querySelector(".cbcard .cglyph[aria-hidden=true]"), summary: plain(l.querySelector(".cbsumm")),
           state: plain(l.querySelector(".cbst")), states: l.querySelectorAll(".cbst").length, buttons: [...l.querySelectorAll("button:not(.cbgo)")].map(b => b.textContent),
           go: l.querySelectorAll(":scope > button.cbgo").length, chev: l.querySelectorAll(".cbgo > .gochev[aria-hidden=true]").length,
           h: Math.round(l.getBoundingClientRect().height), over: l.scrollWidth > l.clientWidth + 1, cursor: getComputedStyle(l).cursor };
@@ -2249,13 +2249,13 @@ function listRows(sel) {
 
     // Row states, signed out: one state line each, no controls at all.
     C = await cbOpen({ set: { "Freedom Flex": "not_confirmed", "Discover it": "not_confirmed" } });
-    cbIs("states", C, SMART, { card: "Smartly", dot: true, summary: "Everyday 4% · first $10,000 per billing cycle, some categories 2%", state: "No activation needed", states: 1, buttons: [] });
-    cbIs("states", C, FLEX, { card: "Freedom Flex", dot: true, summary: "5% grocery, dining, Red Cross", state: "⚠ Not activated, activate by Dec 14", states: 1, buttons: [] });
+    cbIs("states", C, SMART, { card: "Smartly", glyph: true, summary: "Everyday 4% · first $10,000 per billing cycle, some categories 2%", state: "No activation needed", states: 1, buttons: [] });
+    cbIs("states", C, FLEX, { card: "Freedom Flex", glyph: true, summary: "5% grocery, dining, Red Cross", state: "⚠ Not activated, activate by Dec 14", states: 1, buttons: [] });
     cbIs("states", C, FREE, { card: "Freedom", summary: "5% grocery, dining, Red Cross", state: "✓ Activated · ends Dec 31", states: 1, buttons: [] });
     cbIs("states", C, DISC, { card: "Discover it", summary: "5% dining, entertainment, utilities", state: "⚠ Not activated, activate by Dec 31 5% starts the day you activate.", states: 1, buttons: [] });
-    cbIs("states", C, CC, { card: "Citi Custom Cash", dot: true, summary: "5% on top category", state: "CardSelector focus: restaurants", states: 1, buttons: [] });
-    cbIs("states", C, COSTCO, { card: "Costco Visa", dot: true, summary: "5% Costco gas, 4% gas, 3% dining", state: "No activation needed", states: 1, buttons: [] });
-    cbIs("states", C, BOA, { card: "Customized Cash", dot: true, summary: "5.25% online shopping, 3.5% grocery & wholesale clubs", state: "Choice: online shopping", states: 1, buttons: [] });
+    cbIs("states", C, CC, { card: "Citi Custom Cash", glyph: true, summary: "5% on top category", state: "CardSelector focus: restaurants", states: 1, buttons: [] });
+    cbIs("states", C, COSTCO, { card: "Costco Visa", glyph: true, summary: "5% Costco gas, 4% gas, 3% dining", state: "No activation needed", states: 1, buttons: [] });
+    cbIs("states", C, BOA, { card: "Customized Cash", glyph: true, summary: "5.25% online shopping, 3.5% grocery & wholesale clubs", state: "Choice: online shopping", states: 1, buttons: [] });
     ok(!C.controls.length && Object.values(C.rows).every(r => r.go === 1 && r.chev === 1 && !r.buttons.length),
       "cb signed out: each row is one button with a chevron (it opens the row's detail); no other button, picker, link or tap target (" + J(C.controls) + ")");
     ok(!/More details|Undo|Save|Mark not activated|Change it at Bank of America/.test(C.text) && !/Citi elects|at Citi/.test(C.text),
@@ -2263,6 +2263,7 @@ function listRows(sel) {
     // Tapping a row (anywhere on it, its state line too) opens its detail; the back arrow returns (more in "dt …").
     const r0 = await page.evaluate(() => [location.href, navigation.currentEntry.index]);
     // A real tap on the state line text (the row's button covers it, so the tap lands on the button).
+    await page.locator("#cb li[data-eid='" + FLEX + "'] .cbst").scrollIntoViewIfNeeded();
     const stBox = await page.locator("#cb li[data-eid='" + FLEX + "'] .cbst").boundingBox();
     await page.mouse.click(stBox.x + 20, stBox.y + stBox.height / 2);
     await page.waitForTimeout(450);
@@ -2319,12 +2320,14 @@ function listRows(sel) {
       const hs = Object.values(C.rows).map(r => r.h), maxH = Math.max.apply(null, hs);
       ok(C.pageW <= w && Object.values(C.rows).every(r => !r.over) && btn.length === 4 && btn.every(b => b[1] >= 30 && b[1] <= 36 && b[0] <= 140 && b[2]) &&
         // Pixel limits with room for the runner's wider font (CI: a 126px button, a 109px pending row at 390px).
-        maxH <= 150 && C.rows[FLEX].h <= 130 && C.minFont >= 12,
+        // Step 4D: a row is the card name, its summary and the state line (the mockup's compact list), so a row is a line taller.
+        maxH <= 180 && C.rows[FLEX].h <= 140 && C.minFont >= 12,
         "cb " + w + "px: no sideways scroll, no row overflows, four small Mark activated buttons inside their rows, rows at most " + maxH + "px (the long name's four lines), a pending row " + C.rows[FLEX].h + "px, text 12px+ (" + J({ pageW: C.pageW, hs, btn, font: C.minFont, height: C.height }) + ")");
       if (w === 390) {
         if (process.env.SHOT_DIR) await page.screenshot({ path: path.join(process.env.SHOT_DIR, "cb-390-signed-in.png"), fullPage: true });
         C = await cbOpen({}, false);
-        ok(C.top + C.height < 1400 && Object.values(C.rows).every(r => r.h <= 80), "cb 390px, signed out: seven rows of at most 80px (" + J([C.top, C.height, Object.values(C.rows).map(r => r.h)]) + ")");
+        // Step 4D: the elevated Quick pick tiles and the name / summary / state rows take a little more room (mockup parity).
+        ok(C.top + C.height < 1500 && Object.values(C.rows).every(r => r.h <= 110), "cb 390px, signed out: seven rows of at most 110px (" + J([C.top, C.height, Object.values(C.rows).map(r => r.h)]) + ")");
       }
     }
 
@@ -2335,7 +2338,7 @@ function listRows(sel) {
     const ZQG = Object.assign(fx("zqgrocer", "Zqgrocer Market", "Groceries & Food Delivery", "in_store"), { card: "U.S. Bank", bonus: "10% cash back", activation: "already_activated" });
     // A tile's or the detail's answer box as words: the rate and card, then each line (Likely and screen-reader text left out).
     const ANS = () => {
-      window.__ans = e => !e ? null : [...e.children].filter(c => !c.matches(".qpn, .gochev, .sr-only")).map(c => {
+      window.__ans = e => !e ? null : [...e.children].filter(c => !c.matches(".qpn, .gochev, .sr-only, .cglyph")).map(c => {
         const k = c.cloneNode(true); k.querySelectorAll(".sr, .sr-only, .likely").forEach(x => x.remove());
         return c.matches(".qpw") ? [...k.children].map(x => x.textContent).join(" ") : k.textContent;
       }).join(" ").replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
@@ -2538,7 +2541,8 @@ function listRows(sel) {
 
     // Signed in: Mark activated / Mark not activated in the detail, the save bar's Undo, the home count and the Quick picks.
     const homeOf = () => page.evaluate(() => ({ pend: document.querySelector("#cb .cbpend").textContent,
-      gro: [...document.querySelectorAll("#qp li.qpt[data-topic='Grocery stores'] .qpw > span")].map(s => s.textContent.replace(/ /g, " ")).join(" ") }));
+      // The tile's rate, card and Likely (the card is its own line under the rate since step 4D).
+      gro: [".qpr", ".qpc", ".qpw .likely"].map(s => document.querySelector("#qp li.qpt[data-topic='Grocery stores'] " + s)).filter(Boolean).map(s => s.textContent.replace(/\u00a0/g, " ")).join(" ") }));
     await cbOpen({ set: { "Freedom Flex": "not_confirmed", "Freedom": "not_confirmed" } }, true);
     await stubSave();
     const home0 = await homeOf();
@@ -3074,6 +3078,282 @@ function listRows(sel) {
       CASE = {};
     }
     ok(errs.length === 0, "qp rollover: no page errors (" + errs.join("; ") + ")");
+    page = mainPage;
+  }
+
+  // ---- Redesign step 4D: the New / Ending shortcuts and the final home screen. Injected offers and batches, fixed clock
+  // (Nov 5, 2026). Ending: live offers whose `expires` is today through 7 local days on; the count and the list are one
+  // rule. New: What changed's All-cards New count. Then the first-screen order and layout at 390, 350 and 320px.
+  {
+    const J = x => JSON.stringify(x);
+    const ctx4d = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: "block" });
+    page = await ctx4d.newPage();
+    const errs = [];
+    page.on("pageerror", e => errs.push(e.message));
+    await page.clock.install({ time: new Date(2026, 10, 5, 12, 0, 0) });
+    const D4_BATCHES = [["Chase Freedom Flex", "2026-10-18"], ["Chase Freedom Flex", "2026-10-31"], ["U.S. Bank", "2026-10-18"], ["U.S. Bank", "2026-10-23"],
+      ["Citi Double Cash", "2026-10-18"]].map(([card, read_date]) => ({ card, read_date, offers_found: 10 }));
+    const FF = "Chase Freedom Flex", USB = "U.S. Bank", CDC = "Citi Double Cash";
+    const d4 = (id, card, merchant, expires, extra) => Object.assign({ id: "test/4d-" + id, card, merchant, category: "Clothing & Jewelry",
+      bonus: "5% cash back", expires, expires_text: null, activation: "already_activated", channel: "online", spend_cap: null, minimum_spend: null,
+      fine_print: null, other_details: [], last_read: "2026-10-31", first_seen: "2026-10-18", status: "active", status_since: "2026-10-18" }, extra || {});
+    const END_OFFERS = [
+      d4("e0", FF, "Zd Today Shop", "2026-11-05"), // ends today: in
+      d4("e1", FF, "Zd Tomorrow Tea", "2026-11-06", { channel: "in_store" }), // +1: in
+      d4("e7", USB, "Zd Week Wares", "2026-11-12", { channel: "none_shown" }), // +7: in (the boundary is inclusive)
+      d4("e8", USB, "Zd Eight Eats", "2026-11-13"), // +8: out
+      d4("e8b", FF, "Zd Eight Books", "2026-11-13", { activation: "needs_activation" }), // +8: out
+      d4("ey", FF, "Zd Yesterday Yarn", "2026-11-04"), // ended yesterday (still active in the file): out
+      d4("en", CDC, "Zd Null Nuts", null, { expires_text: "3d left" }), // no expires (expires_text never counts): out
+      d4("em", FF, "Zd Missing Mops", "2026-11-07", { status: "missing", status_since: "2026-10-31" }), // missing: out
+      d4("eu", USB, "Zd Used Umbrellas", "2026-11-07", { status: "used", status_since: "2026-11-01" }), // used: out
+      d4("t1", USB, "Zd Twin Tacos", "2026-11-08", { channel: "in_store", bonus: "10% cash back" }), // one merchant, one card,
+      d4("t2", USB, "Zd Twin Tacos", "2026-11-08", { channel: "online", bonus: "3% cash back" }), //   two offers: two rows
+      d4("m1", FF, "Zd Multi Mart", "2026-11-09"), // one merchant on two cards
+      d4("m2", USB, "Zd Multi Mart", "2026-11-10"),
+      d4("later", FF, "Zd Later Lamps", "2026-12-20") // far off: out
+    ];
+    const END_IDS = ["e0", "e1", "e7", "t1", "t2", "m1", "m2"].map(x => "test/4d-" + x);
+    // New: Freedom Flex read Oct 31 (after Oct 18), U.S. Bank Oct 23 (after Oct 18), Citi Double Cash a first read.
+    const NEW_SETS = {
+      zero: [],
+      one: [d4("n1", FF, "Zn One Hats", "2026-12-31", { first_seen: "2026-10-31" })],
+      many: [d4("n1", FF, "Zn One Hats", "2026-12-31", { first_seen: "2026-10-31" }), d4("n2", FF, "Zn Two Hats", null, { first_seen: "2026-10-31" }),
+        d4("n3", USB, "Zn Three Hats", null, { first_seen: "2026-10-23", last_read: "2026-10-23" }),
+        d4("nu", FF, "Zn Used Hats", null, { first_seen: "2026-10-31", status: "used", status_since: "2026-11-01" }), // used: not new
+        d4("nx", FF, "Zn Ended Hats", "2026-11-01", { first_seen: "2026-10-31" }), // past its end: not new
+        d4("nf", CDC, "Zn First Read Hats", null, { first_seen: "2026-10-18" })] // a first read adds nothing
+    };
+    let NEWSET = "many";
+    await page.route("**/data/offers.json", async route => {
+      const d = await (await route.fetch()).json();
+      await route.fulfill({ json: { categories: d.categories, batches: D4_BATCHES, offers: END_OFFERS.concat(NEW_SETS[NEWSET]) } });
+    });
+    await page.route("**/data/phone-edits.json", route => route.fulfill({ json: {} }));
+    const load4d = async () => {
+      await page.goto(base);
+      // The shortcuts drawn (a remembered channel or activation choice lists offers instead of the hint line).
+      await page.waitForFunction(() => window.__shortcuts && window.__shortcuts() && window.__bonusReady && window.__cardsReady);
+    };
+    const hist = () => page.evaluate(() => ({ i: navigation.currentEntry.index, n: navigation.entries().length }));
+    const view4d = () => page.evaluate(() => {
+      const press = sel => { const b = document.querySelector(sel + " button[aria-pressed=true]"); return b ? b.firstChild.textContent.trim() : null; };
+      const mcs = [...document.querySelectorAll("#main > ul.results > li.mc")];
+      return { sc: window.__shortcuts(), ending: window.__ending(), chip: !document.getElementById("endbar").hidden,
+        newText: document.getElementById("sc-new").innerText.replace(/\s+/g, " ").trim(), endText: document.getElementById("sc-end").innerText.replace(/\s+/g, " ").trim(),
+        sort: document.getElementById("sort").value, chan: press("#chans"), act: press("#acts"), q: document.getElementById("q").value,
+        rows: [...document.querySelectorAll("#main > ul.results li.offer")].map(li => li.dataset.oid),
+        mcs: mcs.map(m => m.querySelectorAll("li.offer").length), count: document.getElementById("count").textContent,
+        gone: document.querySelectorAll("#main details.expired").length, filtersOpen: document.getElementById("filters").classList.contains("open"),
+        stored: [localStorage.getItem("cardselector.sort"), localStorage.getItem("cardselector.channel"), localStorage.getItem("cardselector.activation")],
+        focus: document.activeElement && document.activeElement.id, y: Math.round(window.scrollY), home: !document.getElementById("qp").hidden && !document.getElementById("sc").hidden };
+    });
+    const expiresOf = ids => page.evaluate(ids => ids.map(id => window.__offerOf(id).expires), ids);
+    const openFilters = async () => { if ((await page.getAttribute("#ftoggle", "aria-expanded")) !== "true") await page.click("#ftoggle"); };
+
+    // New shortcut: What changed's All-cards New count, 0 / 1 / several cards; a tap opens What changed, All cards, New.
+    for (const [set, want, text] of [["zero", 0, "0 new offers"], ["one", 1, "1 new offer"], ["many", 3, "3 new offers"]]) {
+      NEWSET = set;
+      await load4d();
+      await page.evaluate(() => { try { localStorage.clear(); } catch (e) {} });
+      await load4d();
+      const v = await view4d();
+      // The freshness rows' "+N new" (the same changeCounts) add up to it too.
+      const fresh = await page.$$eval("#flist .fnew", es => es.reduce((n, e) => n + parseInt(e.textContent.replace(/\D/g, ""), 10), 0));
+      ok(v.sc.new === want && v.newText.startsWith(text + " ") && /from the latest reads$/.test(v.newText) && fresh === want,
+        "4d new " + set + ": shortcut count " + want + " (\"" + v.newText + "\"), matching the freshness rows' +N new (" + fresh + ")");
+      const h0 = await hist();
+      await page.click("#sc-new");
+      await page.waitForTimeout(100);
+      const w = await page.evaluate(() => ({ on: !document.getElementById("wc").hidden, name: document.getElementById("wcname").textContent,
+        tabs: [...document.querySelectorAll("#wctabs button")].map(b => b.textContent.replace(/\s+/g, " ").trim() + (b.getAttribute("aria-pressed") === "true" ? "*" : "")),
+        rows: [...document.querySelectorAll("#main li.offer")].length, focus: document.activeElement.id }));
+      const h1 = await hist();
+      ok(w.on && w.name === "All cards" && w.tabs[0] === "New " + want + "*" && w.rows === want && h1.i === h0.i + 1 && h1.n === h0.i + 2 && w.focus === "wcback",
+        "4d new " + set + ": tap opens What changed, All cards, New " + want + " (same count), one history entry (" + J([w, h0, h1]) + ")");
+      await page.goBack();
+      await page.waitForTimeout(100);
+      const b = await view4d(), h2 = await hist();
+      ok(b.home && !(await page.evaluate(() => !document.getElementById("wc").hidden)) && h2.i === h0.i && b.focus === "sc-new" && b.sc.new === want,
+        "4d new " + set + ": browser Back returns to the home screen, focus back on the shortcut (" + J([h2, b.focus]) + ")");
+    }
+    NEWSET = "many";
+
+    // Ending: the count, and the list a tap opens, are the same offers (today, +1 and +7 in; +8, yesterday, no date,
+    // missing and used out). Start from a non-default view: A to Z, Online, Ready now, the Filters panel open.
+    await load4d();
+    let v = await view4d();
+    ok(v.sc.end === END_IDS.length && v.endText === END_IDS.length + " ending in the next 7 days",
+      "4d ending: shortcut counts the " + END_IDS.length + " live offers ending today through +7 (\"" + v.endText + "\")");
+    await openFilters();
+    await page.selectOption("#sort", "az");
+    await page.locator("#chans button", { hasText: /^Online$/ }).click();
+    await page.locator("#acts button", { hasText: /^Ready now/ }).click();
+    await page.waitForTimeout(50);
+    const before = await view4d();
+    ok(before.home && before.sc.end === END_IDS.length && J(before.stored) === J(["az", "online", "ready"]),
+      "4d ending: a remembered channel and activation choice don't change the shortcut's all-cards count (" + J([before.sc, before.stored]) + ")");
+    await page.locator("#sc-end").scrollIntoViewIfNeeded();
+    const y0 = await page.evaluate(() => Math.round(window.scrollY)), h0 = await hist();
+    const before2 = await view4d();
+    await page.click("#sc-end");
+    await page.waitForTimeout(100);
+    v = await view4d();
+    const h1 = await hist();
+    const exp = await expiresOf(v.rows);
+    ok(v.chip && v.ending && v.sort === "expiring" && v.chan === "Any" && v.act === "Any" && v.q === "" && !v.home,
+      "4d ending tap: the \"Ends within 7 days\" chip, Expiring soonest, every other filter cleared (" + J([v.chip, v.sort, v.chan, v.act]) + ")");
+    ok(J(v.rows.slice().sort()) === J(END_IDS.slice().sort()) && v.rows.length === before.sc.end,
+      "4d ending list: exactly the counted offers, none left out, none extra (" + J(v.rows) + ")");
+    ok(exp.every(e => e >= "2026-11-05" && e <= "2026-11-12") && exp.every((e, i) => !i || exp[i - 1] <= e),
+      "4d ending list: every row ends today through Nov 12, soonest first (" + J(exp) + ")");
+    ok(/^7 offers ending in the next 7 days · /.test(v.count) && v.mcs.reduce((a, b) => a + b, 0) === 7 && J(v.mcs.slice().sort()) === J([1, 1, 1, 2, 2]) && v.gone === 0,
+      "4d ending list: count line " + J(v.count) + "; 5 merchant containers hold the 7 rows (Twin Tacos' two U.S. Bank offers are two rows, Multi Mart two cards); no Recently unavailable");
+    ok(h1.i === h0.i + 1 && J(v.stored) === J(["az", "online", "ready"]) && v.focus === "endchip",
+      "4d ending tap: one history entry, nothing remembered changed, focus on the chip (" + J([h0, h1, v.stored, v.focus]) + ")");
+    // Inside: a search and filters narrow it (nothing remembered); the chip's × puts the earlier view back.
+    await page.fill("#q", "multi");
+    await page.waitForTimeout(80);
+    const vq = await view4d();
+    ok(J(vq.rows.slice().sort()) === J(["test/4d-m1", "test/4d-m2"]) && vq.chip, "4d ending: a search narrows within the scope (" + J(vq.rows) + ")");
+    await page.fill("#q", "");
+    await openFilters();
+    await page.selectOption("#sort", "best");
+    await page.locator("#chans button", { hasText: /^In store$/ }).click();
+    await page.waitForTimeout(50);
+    const vi = await view4d();
+    ok(vi.chip && vi.sort === "best" && vi.chan === "In store" && J(vi.stored) === J(["az", "online", "ready"]),
+      "4d ending: a sort or channel picked inside is not remembered (" + J([vi.sort, vi.chan, vi.stored]) + ")");
+    await page.click("#endchip");
+    await page.waitForTimeout(150);
+    v = await view4d();
+    const h2 = await hist();
+    ok(!v.chip && !v.ending && v.home && v.sort === before2.sort && v.chan === "Online" && v.act === "Ready now" && v.filtersOpen === before2.filtersOpen &&
+      J(v.rows) === J(before2.rows) && J(v.stored) === J(["az", "online", "ready"]) && h2.i === h0.i && v.focus === "sc-end" && Math.abs(v.y - y0) <= 2,
+      "4d ending chip ×: the earlier view comes back (A to Z, Online, Ready now, its list, Filters open), Back entry stepped over, focus on the shortcut, scroll kept (" + J([v.sort, v.chan, v.act, h0, h2, v.focus, v.y, y0]) + ")");
+    // Back leaves it the same way; Forward onto its old entry doesn't bring it back; a reload starts outside.
+    await page.click("#sc-end");
+    await page.waitForTimeout(100);
+    await page.goBack();
+    await page.waitForTimeout(150);
+    v = await view4d();
+    ok(!v.chip && !v.ending && v.sort === "az" && v.chan === "Online" && v.act === "Ready now" && (await hist()).i === h0.i,
+      "4d ending Back: leaves it, the earlier sort and filters back (" + J([v.sort, v.chan, v.act]) + ")");
+    await page.goForward();
+    await page.waitForTimeout(200);
+    ok(!(await page.evaluate(() => window.__ending())) && (await hist()).i === h0.i, "4d ending Forward: an old entry doesn't reopen it (no hidden ending state)");
+    await page.click("#sc-end");
+    await page.waitForTimeout(100);
+    await page.reload();
+    await page.waitForFunction(() => window.__shortcuts && window.__shortcuts());
+    await page.waitForTimeout(200);
+    v = await view4d();
+    ok(!v.chip && !v.ending && v.home && v.sort === "az" && (await hist()).i === h0.i, "4d ending reload: starts outside it, on the remembered sort (" + J([v.sort, await hist()]) + ")");
+    // What changed opened from the Ending view (its freshness row) comes back to the Ending view, then the chip leaves.
+    await page.click("#sc-end");
+    await page.waitForTimeout(100);
+    await page.evaluate(() => { document.getElementById("fresh").open = true; });
+    await page.click("#flist .fhead.fgo");
+    await page.waitForTimeout(100);
+    const inWc = await page.evaluate(() => ({ wc: !document.getElementById("wc").hidden, chip: !document.getElementById("endbar").hidden }));
+    await page.click("#wcback");
+    await page.waitForTimeout(150);
+    v = await view4d();
+    ok(inWc.wc && !inWc.chip && v.chip && v.ending && v.sort === "expiring" && J(v.rows.slice().sort()) === J(END_IDS.slice().sort()),
+      "4d ending -> What changed -> back: the Ending view as it was (" + J([inWc, v.sort, v.rows.length]) + ")");
+    await page.click("#endchip");
+    await page.waitForTimeout(150);
+    ok(!(await page.evaluate(() => window.__ending())) && (await hist()).i === h0.i && (await view4d()).sort === "az", "4d ending: the chip then leaves to the home screen, history back where it started");
+    ok(errs.length === 0, "4d shortcuts: no page errors (" + errs.join("; ") + ")");
+    await ctx4d.close();
+
+    // Day rollover: just before midnight, the count and an open Ending list follow the new day's window (today's offer
+    // leaves, the two +8 offers join) with no new history entry; Offer freshness moves on a day too.
+    const ctxR = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: "block" });
+    page = await ctxR.newPage();
+    const errsR = [];
+    page.on("pageerror", e => errsR.push(e.message));
+    await page.clock.install({ time: new Date(2026, 10, 5, 23, 58, 0) });
+    await page.route("**/data/offers.json", async route => {
+      const d = await (await route.fetch()).json();
+      await route.fulfill({ json: { categories: d.categories, batches: D4_BATCHES, offers: END_OFFERS } });
+    });
+    await page.route("**/data/phone-edits.json", route => route.fulfill({ json: {} }));
+    await load4d();
+    const age = () => page.$eval("#fsum .fsumage", e => e.textContent);
+    const a0 = await age(), r0 = await view4d();
+    await page.click("#sc-end");
+    await page.waitForTimeout(100);
+    const hR = await hist();
+    await ctxR.clock.runFor(3 * 60 * 1000);
+    await page.waitForTimeout(100);
+    const r1 = await view4d(), hR1 = await hist();
+    const NEXT = ["e1", "e7", "e8", "e8b", "t1", "t2", "m1", "m2"].map(x => "test/4d-" + x);
+    ok(r0.sc.end === 7 && r1.chip && r1.sort === "expiring" && J(r1.rows.slice().sort()) === J(NEXT.slice().sort()) && /^8 offers ending/.test(r1.count) && J(hR1) === J(hR),
+      "4d rollover: an open Ending list follows the new day (8 offers: Nov 5 leaves, both Nov 13 join), no new history entry (" + J([r1.rows.length, r1.count, hR, hR1]) + ")");
+    await page.click("#endchip");
+    await page.waitForTimeout(150);
+    const r2 = await view4d(), a1 = await age();
+    ok(r2.home && r2.sc.end === 8 && r2.endText === "8 ending in the next 7 days" && a0 !== a1,
+      "4d rollover: back home the shortcut says 8; Offer freshness moved on a day (" + J([a0, a1]) + ")");
+    // On the home screen itself: the next midnight redraw updates the count (Nov 6 leaves: 7).
+    await ctxR.clock.pauseAt(new Date(2026, 10, 6, 23, 58, 0));
+    await ctxR.clock.runFor(3 * 60 * 1000);
+    await page.waitForTimeout(100);
+    const r3 = await view4d(), hR3 = await hist();
+    ok(r3.home && r3.sc.end === 7 && hR3.n === hR1.n, "4d rollover: on the home screen the count follows the day redraw (" + J([r3.sc, hR3]) + ")");
+    ok(errsR.length === 0, "4d rollover: no page errors (" + errsR.join("; ") + ")");
+    await ctxR.close();
+
+    // The home screen at 390, 350 and 320px, light and dark: the frozen order (search, Quick picks, Card bonuses, the
+    // shortcuts, Offer freshness, then Recently unavailable, the temporary Filters and Edit mode), freshness closed,
+    // the shortcuts side by side when they fit, nothing sideways, real tap targets, no chevron on the shortcuts.
+    for (const scheme of ["light", "dark"]) for (const w of [390, 350, 320]) {
+      const ctxL = await browser.newContext({ viewport: { width: w, height: 844 }, serviceWorkers: "block", colorScheme: scheme });
+      page = await ctxL.newPage();
+      await page.clock.install({ time: new Date(2026, 10, 5, 12, 0, 0) });
+      await page.route("**/data/offers.json", async route => {
+        const d = await (await route.fetch()).json();
+        await route.fulfill({ json: { categories: d.categories, batches: D4_BATCHES, offers: END_OFFERS.concat(NEW_SETS.many) } });
+      });
+      await page.route("**/data/phone-edits.json", route => route.fulfill({ json: {} }));
+      await load4d();
+      await page.waitForFunction(() => !document.getElementById("qp").hidden && !document.getElementById("cb").hidden);
+      const L = await page.evaluate(() => {
+        const at = e => e ? e.getBoundingClientRect().top + window.scrollY : null;
+        const seq = [document.getElementById("q"), document.getElementById("qp"), document.getElementById("cb"), document.getElementById("sc"),
+          document.getElementById("fresh"), document.querySelector("#main details.expired"), document.getElementById("ftoggle"), document.getElementById("editmode")];
+        const tops = seq.map(at), dom = seq.every((e, i) => !i || (seq[i - 1].compareDocumentPosition(e) & Node.DOCUMENT_POSITION_FOLLOWING));
+        const vis = x => { const r = x.getBoundingClientRect(); return r.width > 0 && !x.closest(".sr-only, [hidden]"); };
+        const over = [...document.querySelectorAll(".wrap *")].filter(x => vis(x) && (x.getBoundingClientRect().right > window.innerWidth + 0.5 || x.getBoundingClientRect().left < -0.5)).map(x => x.className || x.tagName).slice(0, 5);
+        const sc = [...document.querySelectorAll("#sc .scgo")].map(b => b.getBoundingClientRect());
+        const tile = getComputedStyle(document.querySelector("#qp .qpt")), bg = getComputedStyle(document.body).backgroundColor;
+        return { tops, dom, ordered: tops.every((t, i) => t !== null && (!i || tops[i - 1] < t)), freshOpen: document.getElementById("fresh").open,
+          sideBySide: Math.abs(sc[0].top - sc[1].top) < 1, scH: Math.min(sc[0].height, sc[1].height), pageW: document.documentElement.scrollWidth, over,
+          scChev: document.querySelectorAll("#sc .gochev, #sc .fchev").length, tileBg: tile.backgroundColor, bg,
+          // Each glyph: aria-hidden, in the color of the card named next to it (the tile's card, the row's card).
+          glyphs: [...document.querySelectorAll("#qp .cglyph, #cb .cglyph")].map(g => {
+            const own = g.closest(".qpgo, .qpe, .cbrow"), name = own.querySelector(".qpc, .cbcard").textContent.trim();
+            return g.getAttribute("aria-hidden") === "true" && g.classList.contains("i-" + window.__issuerOf(name));
+          }),
+          places: document.querySelectorAll("#qp .qpgo").length + document.querySelectorAll("#qp .qpe").length + document.querySelectorAll("#cb li[data-eid]").length,
+          // No word split across lines in a tile's topic, rate or card (Entertainment, 5.25%, Customized Cash at 320px).
+          splitWords: [...document.querySelectorAll("#qp .qpn, #qp .qpc, #qp .qpr")].filter(x => {
+            const t = x.firstChild, re = /\S+/g;
+            if (!t || t.nodeType !== 3) return false;
+            let m;
+            while ((m = re.exec(t.data))) { const r = document.createRange(); r.setStart(t, m.index); r.setEnd(t, m.index + m[0].length); if (r.getClientRects().length > 1) return true; }
+            return false;
+          }).map(x => x.textContent),
+          rateLines: [...document.querySelectorAll("#qp .qpr")].map(x => x.getClientRects().length), minFont: Math.min.apply(null, [...document.querySelectorAll("#qp *, #cb *, #sc *")].filter(x => vis(x) && x.textContent.trim() && !x.closest(".likely")).map(x => parseFloat(getComputedStyle(x).fontSize))) };
+      });
+      ok(L.dom && L.ordered && !L.freshOpen, "4d layout " + scheme + " " + w + ": search, Quick picks, Card bonuses, shortcuts, freshness (closed), Recently unavailable, Filters, Edit mode (" + J(L.tops.map(Math.round)) + ")");
+      ok(L.pageW <= w && !L.over.length && L.scH >= 44 && L.scChev === 0 && L.sideBySide === (w >= 350) && L.rateLines.every(n => n === 1) && !L.splitWords.length && L.minFont >= 12,
+        "4d layout " + scheme + " " + w + ": no sideways scroll or overflow, shortcuts " + (w >= 350 ? "side by side" : "stacked") + " and " + L.scH + "px tall, no chevron on them, rates on one line, no word split (" + J([L.pageW, L.over, L.sideBySide, L.rateLines, L.splitWords, L.minFont]) + ")");
+      ok(L.glyphs.length === L.places && L.places >= 8 && L.glyphs.every(Boolean) && L.tileBg !== L.bg,
+        "4d layout " + scheme + " " + w + ": one card glyph per tile and Card bonuses row (" + L.places + "), aria-hidden, in its card's issuer color; tiles stand off the page (" + J([L.tileBg, L.bg]) + ")");
+      await ctxL.close();
+    }
     page = mainPage;
   }
 

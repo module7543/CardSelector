@@ -42,6 +42,11 @@
     --new-bg: #e3eefc;
     --new-text: #0a58c2;
     --box-shadow: 0 1px 2px rgba(16, 24, 40, .05), 0 2px 6px rgba(16, 24, 40, .04);
+    /* Home screen surfaces (search, Quick picks, Card bonuses, shortcuts): white on the light gray page, a hairline
+       edge and a soft shadow; in dark mode the surface color and a line do the lifting. */
+    --tile-line: #e6e9ee;
+    --tile-shadow: 0 1px 2px rgba(16, 24, 40, .06), 0 2px 8px rgba(16, 24, 40, .06);
+    --soon-bg: #fdeee3;
   }
   @media (prefers-color-scheme: dark) {
     :root {
@@ -76,6 +81,9 @@
       --new-bg: #1a2d4d;
       --new-text: #7ab2ff;
       --box-shadow: inset 0 1px 0 rgba(255, 255, 255, .06);
+      --tile-line: #2c333d;
+      --tile-shadow: inset 0 1px 0 rgba(255, 255, 255, .06);
+      --soon-bg: #3a2616;
     }
   }
   * { box-sizing: border-box; }
@@ -113,11 +121,11 @@
     padding: 0 18px;
     font: inherit; font-size: 17px;
     color: var(--text); background: var(--surface);
-    border: 1.5px solid var(--line); border-radius: 12px;
-    box-shadow: 0 1px 2px rgba(16, 24, 40, .06);
+    border: 1px solid var(--tile-line); border-radius: 12px;
+    box-shadow: var(--tile-shadow);
     -webkit-appearance: none; appearance: none;
   }
-  #q:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 4px rgba(10, 88, 194, .12); }
+  #q:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent), 0 0 0 5px rgba(10, 88, 194, .12); }
   #q::placeholder { color: var(--muted); }
   .count { margin: 12px 2px 0; min-height: 1.4em; color: var(--muted); font-size: 13px; font-weight: 600; }
   .offline { margin: 2px 2px 0; color: var(--muted); font-size: 13px; }
@@ -415,23 +423,26 @@
 
   /* Quick picks (home screen): six compact topic tiles in two columns, then the full-width Everyday default.
      Quieter than the answer card and offer containers: plain surface tiles, one green rate each. */
-  .qp { margin: 2px 0 0; }
+  .qp { margin: 6px 0 0; }
   .qp[hidden] { display: none; }
-  .qphead { display: flex; align-items: center; gap: 8px; margin: 0 2px 6px; }
-  .qph { margin: 0; font-size: 12px; font-weight: 700; letter-spacing: .03em; color: var(--muted); }
+  /* Section labels: compact and dark, the qualifier muted ("Quick picks · no offer needed"). */
+  .qphead { display: flex; align-items: baseline; gap: 8px; margin: 0 2px 8px; }
+  .qph { margin: 0; font-size: 15px; font-weight: 700; line-height: 1.3; color: var(--text); }
+  .qph .qphq { font-weight: 400; color: var(--muted); }
   .qpw .likely, .qpa .likely {
     align-self: center; padding: 0 5px; line-height: 16px; font-size: 11.5px; font-weight: 600; color: var(--muted);
     border: 1px solid var(--line); border-radius: 5px;
   }
-  .qpgrid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .qpgrid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  /* A tile: an elevated surface; the topic and the card glyph on top, the rate big and green, the card, then muted notes. */
   .qpt {
-    min-width: 0; padding: 8px 10px 9px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px;
-    font-size: 13px; line-height: 1.3; overflow-wrap: anywhere;
+    min-width: 0; padding: 10px 12px 11px; background: var(--surface); border: 1px solid var(--tile-line); border-radius: 14px;
+    box-shadow: var(--tile-shadow); font-size: 13px; line-height: 1.3; overflow-wrap: anywhere;
   }
-  .qpn { font-size: 13px; font-weight: 650; color: var(--muted); }
+  .qpn { font-size: 14.5px; font-weight: 700; color: var(--text); overflow-wrap: normal; }
   .qpw { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 6px; margin-top: 1px; }
-  .qpr { font-size: 20px; font-weight: 750; letter-spacing: -0.01em; color: var(--bonus); }
-  .qpc { font-size: 14px; font-weight: 650; }
+  .qpr { font-size: 27px; font-weight: 800; line-height: 1.15; letter-spacing: -0.02em; color: var(--bonus); font-variant-numeric: tabular-nums; white-space: nowrap; overflow-wrap: normal; }
+  .qpc { font-size: 14px; font-weight: 700; line-height: 1.3; overflow-wrap: normal; }
   .qpc .idot { width: 7px; height: 7px; margin-right: 5px; }
   .qpm { font-size: 12.5px; color: var(--muted); }
   .qpx { margin-top: 3px; font-size: 12.5px; font-weight: 600; }
@@ -441,57 +452,80 @@
   /* Citi Custom Cash: a full alternative when it would beat the ready rate, else one short muted line. */
   .qpcond { font-weight: 400; color: var(--muted); }
   .qpcond.strong { font-weight: 600; color: var(--text); }
-  .qpnote { margin-top: 3px; font-size: 12px; color: var(--muted); }
-  .qpe { margin-top: 8px; }
-  .qpe .qpw { align-items: center; }
-  .qpe .qpn { font-size: 14px; }
-  .qpe .qpc { font-size: 15px; font-weight: 750; color: var(--bonus); }
+  .qpnote { margin-top: 3px; font-size: 12.5px; color: var(--muted); }
+  /* The Everyday default tile, full width: glyph, title and caveat, the rate on the right. Information only. */
+  .qpe { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 0 12px; margin-top: 10px; padding: 11px 14px 12px; }
+  .qpe > .cglyph { grid-column: 1; grid-row: 1 / span 2; }
+  .qpe > .qpw { grid-column: 2; grid-row: 1; margin: 0; }
+  .qpe .qpn, .qpe .qpc { font-size: 15px; font-weight: 700; }
+  .qpe > .qpr { grid-column: 3; grid-row: 1 / span 2; }
+  .qpe > .qpnote { grid-column: 2; grid-row: 2; margin-top: 1px; }
+  /* The card glyph: a small card in the issuer's color with a light chip stripe (home screen only; dots elsewhere). */
+  .cglyph {
+    position: relative; display: inline-block; flex: none; width: 28px; height: 19px; border-radius: 4px;
+    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .08);
+  }
+  .cglyph::before { content: ""; position: absolute; left: 4px; top: 5px; width: 8px; height: 5px; border-radius: 1.5px; background: rgba(255, 255, 255, .85); }
+  .cglyph.i-none { background: #8a93a3; }
 
-  /* Card bonuses (home screen, under Quick picks): a quiet status list, one compact row per live bonus entry. */
-  .cb { margin: 10px 0 0; }
+  /* Card bonuses (home screen, under Quick picks): one elevated list, a compact row per live bonus entry. */
+  .cb { margin: 18px 0 0; }
   .cb[hidden] { display: none; }
-  .cbhead { flex-wrap: wrap; gap: 2px 8px; }
-  .cbpend { font-size: 12.5px; }
+  .cbhead { justify-content: space-between; flex-wrap: wrap; gap: 2px 8px; }
+  .cbpend { font-size: 13px; }
   .cbpend.bwarn { padding: 0 6px; }
   .cbnone { color: var(--muted); }
   .cblist {
-    list-style: none; margin: 0; padding: 0 12px; background: var(--surface);
-    border: 1px solid var(--line); border-radius: 10px;
+    list-style: none; margin: 0; padding: 0; background: var(--surface);
+    border: 1px solid var(--tile-line); border-radius: 14px; box-shadow: var(--tile-shadow); overflow: hidden;
   }
-  .cbrow { padding: 7px 0 8px; font-size: 14px; line-height: 1.35; overflow-wrap: anywhere; }
-  .cbrow + .cbrow { border-top: 1px solid var(--line); }
-  .cbcard { font-weight: 650; }
-  .cbcard .idot { width: 7px; height: 7px; margin-right: 5px; }
-  .cb .brate { font-weight: 700; color: var(--bonus); }
-  .cbst { margin-top: 2px; font-size: 12.5px; line-height: 1.5; }
+  /* A row: the card glyph in a left column, the card name, its one-line summary (muted), the state line, a chevron. */
+  .cbrow { position: relative; padding: 10px 30px 11px 54px; font-size: 14px; line-height: 1.35; overflow-wrap: anywhere; }
+  .cbrow + .cbrow::before { content: ""; position: absolute; top: 0; left: 14px; right: 14px; border-top: 1px solid var(--line); }
+  .cbcard { display: block; font-size: 15px; font-weight: 700; }
+  .cbcard .cglyph { position: absolute; left: 14px; top: 12px; }
+  .cbsumm { display: block; margin-top: 1px; font-size: 13.5px; color: var(--muted); }
+  .cb .brate { font-weight: 600; color: inherit; }
+  .cbst { margin-top: 3px; font-size: 13px; line-height: 1.5; }
   .cbinfo { color: var(--muted); }
+  .cbst .bok { font-weight: 650; }
   .cbst .bwarn { display: inline; padding: 1px 6px; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
   /* A slim button after the warning (it wraps under it when the line is full). */
   .cbst .edfill { margin: 2px 0 0 2px; padding: 0 8px; font-size: 13px; vertical-align: middle; }
 
-  /* Quick pick tiles and Card bonuses rows open their detail pages: the tile is one button; a row's button (card and
-     summary) stretches over the whole row, with a right chevron. A row's inline Mark activated sits above it: it
-     saves and never opens the row. */
+  /* Quick pick tiles and Card bonuses rows open their detail pages: the tile is one button (a grid: topic and glyph,
+     rate and chevron, then the rest); a row's button (card and summary) stretches over the whole row, with a right
+     chevron. A row's inline Mark activated sits above it: it saves and never opens the row. */
   .qpt.go { position: relative; padding: 0; }
   .qpgo {
-    display: flex; flex-direction: column; justify-content: flex-start; align-items: stretch; width: 100%; height: 100%; margin: 0; padding: 8px 10px 9px; font: inherit; color: inherit; text-align: left;
-    background: none; border: 0; border-radius: 10px; cursor: pointer; -webkit-tap-highlight-color: transparent;
+    display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; align-content: start; gap: 0 8px; width: 100%; height: 100%; margin: 0;
+    padding: 10px 12px 11px; font: inherit; color: inherit; text-align: left;
+    background: none; border: 0; border-radius: 14px; cursor: pointer; -webkit-tap-highlight-color: transparent;
   }
-  .qpgo > span { display: block; }
-  .qpgo > .qpw { display: flex; }
-  .qpgo .qpn { padding-right: 14px; }
+  .qpgo > span { display: block; grid-column: 1 / -1; }
+  .qpgo > .qpn { grid-column: 1; grid-row: 1; align-self: center; }
+  .qpgo > .cglyph { display: inline-block; grid-column: 2; grid-row: 1; align-self: center; }
+  .qpgo > .qpw { display: flex; grid-column: 1; grid-row: 2; }
+  .qpgo > .gochev { grid-column: 2; grid-row: 2; position: static; display: block; align-self: center; justify-self: end; margin-right: 6px; }
   .qpgo:active { background: var(--neutral-bg); }
   .qpgo:focus-visible { outline: 3px solid var(--accent); outline-offset: -3px; }
-  .gochev {
-    position: absolute; width: 7px; height: 7px;
-    border-right: 1.5px solid var(--muted); border-bottom: 1.5px solid var(--muted); transform: rotate(-45deg);
+  /* Narrow phones (under 360px): the topic gets the whole top line (no word is split), the glyph sits beside the rate,
+     the chevron beside the card. */
+  @media (max-width: 359px) {
+    .qpgo { padding: 10px 10px 11px; }
+    .qpgo > .qpn { grid-column: 1 / -1; }
+    .qpgo > .qpw { grid-row: 2; }
+    .qpgo > .cglyph { grid-row: 2; }
+    .qpgo > .qpc { grid-column: 1; grid-row: 3; }
+    .qpgo > .gochev { grid-row: 3; }
+    .qpgo .qpr { font-size: 24px; }
+    .qpgo > .cglyph { width: 22px; height: 15px; border-radius: 3.5px; }
+    .qpgo > .cglyph::before { left: 3px; top: 4px; width: 6px; height: 4px; }
   }
-  .qpgo .gochev { top: 14px; right: 11px; }
-  /* The rows reach the list's edges (the list's side padding moves into each row), so the whole row is the tap target. */
-  .cblist { overflow: hidden; padding: 0; }
-  .cbrow { position: relative; padding-left: 12px; padding-right: 28px; }
-  .cbrow + .cbrow { border-top: 0; }
-  .cbrow + .cbrow::before { content: ""; position: absolute; top: 0; left: 12px; right: 12px; border-top: 1px solid var(--line); }
+  .gochev {
+    position: absolute; width: 8px; height: 8px;
+    border-right: 1.75px solid var(--muted); border-bottom: 1.75px solid var(--muted); transform: rotate(-45deg);
+  }
   .cbgo {
     display: block; width: 100%; margin: 0; padding: 0; font: inherit; color: inherit; text-align: left;
     background: none; border: 0; cursor: pointer; -webkit-tap-highlight-color: transparent;
@@ -500,9 +534,61 @@
   .cbgo::after { content: ""; position: absolute; top: 0; bottom: 0; left: 0; right: 0; }
   .cbgo:active::after { background: rgba(127, 127, 127, .12); }
   .cbgo:focus-visible { outline: none; }
-  .cbgo:focus-visible::after { outline: 3px solid var(--accent); outline-offset: -3px; border-radius: 10px; }
-  .cbgo .gochev { right: 13px; top: 50%; margin-top: -4px; }
+  .cbgo:focus-visible::after { outline: 3px solid var(--accent); outline-offset: -3px; border-radius: 14px; }
+  .cbgo .gochev { right: 14px; top: 50%; margin-top: -4px; }
   .cbst .edfill { position: relative; z-index: 1; }
+
+  /* New / Ending shortcuts (home screen, between Card bonuses and Offer freshness): two compact actions side by side,
+     stacked when the screen is too narrow for both to read well. */
+  .sc { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin: 16px 0 0; }
+  .sc[hidden] { display: none; }
+  .scgo {
+    display: flex; align-items: center; gap: 10px; min-width: 0; min-height: 60px; margin: 0; padding: 10px 12px;
+    font: inherit; color: var(--text); text-align: left; background: var(--surface); border: 1px solid var(--tile-line);
+    border-radius: 14px; box-shadow: var(--tile-shadow); cursor: pointer; -webkit-tap-highlight-color: transparent;
+  }
+  .scgo:active { background: var(--neutral-bg); }
+  .scgo:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+  .scico { display: inline-flex; flex: none; }
+  .scico svg { width: 20px; height: 20px; }
+  .scnewico { color: var(--new-text); }
+  .scendico { color: var(--soon); }
+  .sctext { display: block; min-width: 0; }
+  .scn { display: block; font-size: 15px; font-weight: 700; line-height: 1.25; overflow-wrap: anywhere; }
+  .scsub { display: block; font-size: 13px; line-height: 1.3; color: var(--muted); }
+  /* Offer freshness on the home screen (moved up from the footer), then the quieter utilities. */
+  .homefresh { margin: 12px 0 0; color: var(--muted); font-size: 14px; }
+  .homefresh[hidden], .homeutil[hidden] { display: none; }
+  .wrap.home .count:empty { min-height: 0; margin: 0; }
+  .wrap.home .hint.homehint { margin: 14px 4px 4px; font-size: 13px; line-height: 1.4; }
+  /* Recently unavailable, Filters (closed) and Edit mode (closed): plain muted rows, each with its expand chevron. */
+  .wrap.home details.expired { margin-top: 0; }
+  .wrap.home details.expired > summary, .wrap.home .ftoggle[aria-expanded="false"], .wrap.home .editmode:not([open]) > summary {
+    min-height: 44px; padding: 0 4px; font-size: 14px; font-weight: 600; color: var(--muted);
+  }
+  .wrap.home details.expired > summary { list-style: none; -webkit-tap-highlight-color: transparent; }
+  .wrap.home details.expired > summary::-webkit-details-marker { display: none; }
+  .wrap.home details.expired > summary::after {
+    content: ""; width: 7px; height: 7px; margin: -3px 4px 0 auto; flex: none;
+    border-right: 1.5px solid var(--muted); border-bottom: 1.5px solid var(--muted); transform: rotate(45deg);
+  }
+  .wrap.home details.expired[open] > summary::after { margin-top: 3px; transform: rotate(-135deg); }
+  .wrap.home details.expired > summary:focus-visible { outline: 3px solid var(--accent); outline-offset: -3px; border-radius: 10px; }
+  .wrap.home .ftoggle[aria-expanded="false"] { margin-top: 0; background: transparent; border-color: transparent; }
+  .wrap.home .ftoggle[aria-expanded="false"] .fsumm .on { color: var(--muted); }
+  .wrap.home footer { margin-top: 0; }
+  .wrap.home .editmode:not([open]) { background: transparent; border-color: transparent; box-shadow: none; }
+
+  /* Ending soon: the one removable chip under the search box (the shortcut's scope). */
+  .endbar { display: flex; flex-wrap: wrap; gap: 6px; margin: 2px 0 6px; }
+  .endbar[hidden] { display: none; }
+  .endchip {
+    display: inline-flex; align-items: center; gap: 8px; min-height: 40px; margin: 0; padding: 0 10px 0 14px;
+    font: inherit; font-size: 14px; font-weight: 650; color: var(--bg); background: var(--accent); border: 0; border-radius: 999px;
+    cursor: pointer; -webkit-tap-highlight-color: transparent;
+  }
+  .endchip:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+  .endx { font-size: 19px; font-weight: 500; line-height: 1; }
 
   /* Quick Pick and Card Bonus details (a mode of the page): a sticky back arrow and title, then quiet sections.
      Everything else on the page hides while it is on (the footer keeps Edit mode). */
@@ -793,7 +879,7 @@
   @media (prefers-color-scheme: dark) {
     #q { box-shadow: none; }
     .searchbar.scrolled { box-shadow: 0 1px 0 #2a3039, 0 6px 12px -6px rgba(0, 0, 0, .6); }
-    #q:focus { box-shadow: 0 0 0 4px rgba(122, 178, 255, .18); }
+    #q:focus { box-shadow: 0 0 0 1px var(--accent), 0 0 0 5px rgba(122, 178, 255, .18); }
     .signin .edbtn { color: #0f1115; }
   }
   .ferr { margin: 0; min-height: 1.2em; font-size: 15px; color: var(--f-old); overflow-wrap: anywhere; }
@@ -806,6 +892,10 @@
     <input id="q" type="search" placeholder="Search a merchant (e.g. amaz)"
            autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false"
            enterkeyhint="search" inputmode="search" autofocus>
+  </div>
+  <!-- Ending soon (from the home screen's Ending shortcut): its one removable chip. Not the step 5 chip row. -->
+  <div class="endbar" id="endbar" hidden>
+    <button class="endchip" id="endchip" type="button">Ends within 7 days<span class="endx" aria-hidden="true">×</span><span class="sr-only">, remove filter</span></button>
   </div>
   <div class="use" id="use" aria-live="polite" hidden></div>
   <!-- What changed (a mode of this page): opened from an Offer freshness row with changes. -->
@@ -832,6 +922,13 @@
   <section class="qp" id="qp" aria-labelledby="qp-h" hidden></section>
   <!-- Card bonuses: every live bonus entry and its status (home screen only). -->
   <section class="cb" id="cb" aria-labelledby="cb-h" hidden></section>
+  <!-- New / Ending shortcuts (home screen only): What changed on New, and the list ending within 7 days. -->
+  <section class="sc" id="sc" aria-label="Offer shortcuts" hidden>
+    <button class="scgo" id="sc-new" type="button"><span class="scico scnewico" aria-hidden="true"><svg viewBox="0 0 20 20" fill="currentColor" focusable="false"><path d="M10 2.5c.4 3.6 1.9 5.1 5.5 5.5-3.6.4-5.1 1.9-5.5 5.5-.4-3.6-1.9-5.1-5.5-5.5 3.6-.4 5.1-1.9 5.5-5.5zM15.5 12.5c.2 1.6.9 2.3 2.5 2.5-1.6.2-2.3.9-2.5 2.5-.2-1.6-.9-2.3-2.5-2.5 1.6-.2 2.3-.9 2.5-2.5z"/></svg></span><span class="sctext"><span class="scn" id="sc-new-n"></span> <span class="scsub">from the latest reads</span></span></button>
+    <button class="scgo" id="sc-end" type="button"><span class="scico scendico" aria-hidden="true"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" focusable="false"><circle cx="6" cy="6" r="4.5"/><path d="M6 3.5V6l1.8 1.2"/></svg></span><span class="sctext"><span class="scn" id="sc-end-n"></span> <span class="scsub">in the next 7 days</span></span></button>
+  </section>
+  <!-- Home screen only: Offer freshness moves up here from the footer (placeHome in app.js). -->
+  <div class="homefresh" id="homefresh" hidden></div>
   <!-- On phones the filters fold behind one button that summarises what is active; wide screens show them all. -->
   <button class="ftoggle" id="ftoggle" type="button" aria-expanded="false" aria-controls="filters"></button>
   <div class="filters" id="filters">
@@ -869,6 +966,9 @@
   <div class="count" id="count" aria-live="polite"></div>
   <p class="offline" id="offline" hidden></p>
   <main id="main"></main>
+  <!-- Home screen only: the Filters button and panel move down here with the other utilities. They are the pre-step-5
+       Filters, kept as they are until the step 5 filter sheet replaces them. -->
+  <div class="homeutil" id="homeutil" hidden></div>
   <footer id="foot" hidden>
     <details class="fresh" id="fresh">
       <summary id="fsum"></summary>
