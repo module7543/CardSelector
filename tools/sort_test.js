@@ -2282,7 +2282,7 @@ function listRows(sel) {
     cbIs("signed in", C, DISC, { state: "⚠ Not activated, activate by Dec 31 5% starts the day you activate. Mark activated", buttons: ["Mark activated"] });
     cbIs("signed in", C, FREE, { state: "⚠ Not activated", buttons: [] });
     const labels = await page.$$eval("#cb button", bs => bs.map(b => b.getAttribute("aria-label")));
-    ok(J(labels) === J(["Mark Freedom Flex activated", "Mark Discover it activated"]), "cb signed in: each Mark activated names its card for screen readers (" + J(labels) + ")");
+    ok(J(labels) === J(["Mark activated: Freedom Flex", "Mark activated: Discover it"]), "cb signed in: each Mark activated names its card for screen readers (" + J(labels) + ")");
     ok(J(C.controls) === J(["BUTTON:Mark activated", "BUTTON:Mark activated"]) && C.pend === "⚠ 3 activations pending",
       "cb signed in: the only controls are the two Mark activated buttons (a pending entry with no deadline has none) (" + J(C.controls) + ")");
     C = await cbOpen({}, true);

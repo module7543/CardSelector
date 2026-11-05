@@ -380,12 +380,12 @@ class Hub {
   await waitBar(/Deploying/);
   const use1 = await page.$eval("#use", e => e.innerText);
   ok(choice0 !== "gas & EV charging stations" && /Customized Cash/.test(use1) && use1 !== use0 && await choiceRow() === "Choice: gas & EV charging stations",
-    "after the save the headline and Card bonuses use the new choice: " + JSON.stringify(use1.split("\n")[0]));
+    "after the save the headline and Card bonuses use the new choice: " + JSON.stringify(use1.split("\n").find(l => /Customized Cash/.test(l))));
   ok((await remembered())["bonus:" + CC], "choice save remembered");
   await open(true);
   await search(q5);
   const use2 = await page.$eval("#use", e => e.innerText);
-  ok(use2 === use1 && await choiceRow() === "Choice: gas & EV charging stations", "reload during the deploy: the choice and the headline stay (" + JSON.stringify(use2.split("\n")[0]) + ")");
+  ok(use2 === use1 && await choiceRow() === "Choice: gas & EV charging stations", "reload during the deploy: the choice and the headline stay (" + JSON.stringify(use2.split("\n").find(l => /Customized Cash/.test(l))) + ")");
   hub.deploy();
   await check();
   ok(!(await remembered())["bonus:" + CC] && (await page.$eval("#use", e => e.innerText)) === use1, "once deployed: entry dropped, the headline unchanged");

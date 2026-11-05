@@ -2583,7 +2583,7 @@
       if (e.activation_note) st.append(" ", el("span", "cbinfo", cap(e.activation_note) + "."));
       if (ed && e.activate_by) {
         var b = editBtn("Mark activated", { type: "bonus.activation", id: e.id, from: "not_confirmed", to: "activated" }, "edfill");
-        b.setAttribute("aria-label", "Mark " + e.card + " activated");
+        b.setAttribute("aria-label", "Mark activated: " + e.card); // the visible words first, then the card
         st.append(" ", b);
       }
     } else if (e.eligible && e.planned) st.appendChild(el("span", "cbinfo", "CardSelector focus: " + e.planned));
