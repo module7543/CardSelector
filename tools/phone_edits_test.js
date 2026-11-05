@@ -720,7 +720,7 @@ async function cardBonusChecks(br, base) {
       bare(li.querySelector(".qpm:not(.qpd)")), bare(li.querySelector(".qpa"))]; };
     return { pend: plain(document.querySelector("#cb .cbpend")),
       rows: Object.fromEntries([...document.querySelectorAll("#cb li[data-eid]")].map(l => [l.dataset.eid, plain(l.querySelector(".cbst"))])),
-      buttons: [...document.querySelectorAll("#cb button")].map(x => x.closest("li").dataset.eid + ":" + x.textContent + (x.disabled ? " (disabled)" : "")),
+      buttons: [...document.querySelectorAll("#cb button:not(.cbgo)")].map(x => x.closest("li").dataset.eid + ":" + x.textContent + (x.disabled ? " (disabled)" : "")),
       grocery: tile("Grocery stores"), dining: tile("Dining"),
       bar: b.hidden ? null : (btns => document.getElementById("savemsg").firstChild.textContent + (btns.length ? " · " + btns.join(" ") : ""))([...document.querySelectorAll("#savebtns button")].map(x => x.textContent)),
       live: b.classList.contains("live") };
@@ -772,15 +772,180 @@ async function cardBonusChecks(br, base) {
     "cb Undo: the row, the header (" + v.pend + "), Mark activated and the Quick picks are back as before (" + J(v.grocery) + ")");
   // 3. An activation that doesn't change a Quick pick winner: Flex first, then Freedom (Flex 5% still leads).
   await page.locator("#cb li[data-eid='" + FLEX + "'] button", { hasText: /^Mark activated$/ }).click();
-  await page.waitForFunction(() => document.querySelectorAll("#cb button").length === 1 && /Deploying/.test(document.getElementById("savemsg").textContent));
+  await page.waitForFunction(() => document.querySelectorAll("#cb button:not(.cbgo)").length === 1 && /Deploying/.test(document.getElementById("savemsg").textContent));
   const v1 = await view();
   await page.locator("#cb li[data-eid='" + FREE + "'] button", { hasText: /^Mark activated$/ }).click();
-  await page.waitForFunction(() => document.querySelectorAll("#cb button").length === 0);
+  await page.waitForFunction(() => document.querySelectorAll("#cb button:not(.cbgo)").length === 0);
   v = await view();
   ok(v1.grocery[1] === "Freedom Flex" && v.grocery[1] === "Freedom Flex" && v.grocery[0] === v1.grocery[0] && v.rows[FREE] === "✓ Activated · ends Dec 31" &&
     v.pend === "No activations pending" && !v.buttons.length && fileAct(FREE) === "activated",
     "cb second activation, Quick pick winner unchanged (" + J([v1.grocery, v.grocery]) + "): the row and the header still follow (" + v.pend + ")");
   ok(!errs.length, "cb Mark activated: no page errors (" + errs.join("; ") + ")");
+  await ctx.close();
+}
+
+// Card Bonus detail pages (redesign step 4C), the real store.js saving to the in-memory GitHub (the Hub above, routed in
+// the browser), at phone width: Mark not activated (the reversal lives only here) and Mark activated, the CardSelector
+// focus picker and the Customized Cash Choice picker. Each save is one commit to bonus-categories.json only, the file
+// the old one with that one field changed (standard layout); the detail, Card bonuses and Quick picks follow at once;
+// the save bar's Undo puts the file back byte for byte and the page as it was. A picker's Save shows only once its value
+// differs from the stored one. Signed out: the same pages with no control.
+async function detailChecks(br, base) {
+  console.log("-- Card Bonus details: reversal, Focus, Choice (real store.js, mock GitHub)");
+  const FLEX = "test/flex-q4", FREE = "test/freedom-q4";
+  const text = bonusText([[FLEX, "Freedom Flex", "Flex", "activated"], [FREE, "Freedom", null, "activated"]]);
+  const entries0 = JSON.parse(text).entries, CC = entries0.find(e => e.kind === "top_category"), BOA = entries0.find(e => e.kind === "chosen");
+  const hub = new Hub({ [OFFERS]: offersText, [BONUS]: text, [EDITS]: "{}\n" });
+  const start = hub.head;
+  let deployed = false;
+  const ctx = await br.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: "block" });
+  const page = await ctx.newPage();
+  const errs = [];
+  page.on("pageerror", e => errs.push(e.message));
+  await page.clock.install({ time: new Date(2026, 10, 4, 12, 0, 0) });
+  await page.route("**/data/bonus-categories.json", r => r.fulfill({ status: 200, contentType: "application/json", body: text }));
+  await page.route("**/data/phone-edits.json", r => r.fulfill({ status: 200, contentType: "application/json", body: "{}\n" }));
+  await page.route("https://api.github.com/**", r => {
+    const req = r.request(), u = new URL(req.url()), p = u.pathname.replace("/repos/module7543/CardSelector", "");
+    if (/\/actions\/workflows\//.test(p)) return r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ workflow_runs: deployed ?
+      [{ status: "completed", conclusion: "success", head_sha: hub.head, html_url: "https://example.com/run", created_at: "2026-11-04T20:00:00Z" }] : [] }) });
+    const res = hub.route(req.method(), p, u.searchParams.get("ref"), req.postData() ? JSON.parse(req.postData()) : null, { Accept: req.headers().accept || "" });
+    return r.fulfill({ status: res.status || 200, contentType: "application/json", body: res.text !== undefined ? res.text : JSON.stringify(res.json) });
+  });
+  const load = async signedIn => {
+    await page.goto(base);
+    await page.evaluate(t => { try { localStorage.clear(); if (t) localStorage.setItem("cardselector.token", "test"); } catch (e) {} }, signedIn);
+    await page.goto(base);
+    await page.waitForFunction(() => window.__cardsReady && window.__bonusReady && !document.getElementById("cb").hidden && !document.getElementById("qp").hidden);
+  };
+  const J = x => JSON.stringify(x);
+  const fileOf = id => JSON.parse(hub.file(BONUS)).entries.find(e => e.id === id);
+  const view = () => page.evaluate(() => {
+    const plain = e => e ? e.innerText.replace(/\s+/g, " ").trim() : null, b = document.getElementById("savebar"), dt = document.getElementById("dtbody");
+    const bare = e => { if (!e) return null; const c = e.cloneNode(true); c.querySelectorAll(".likely, .sr, .sr-only").forEach(x => x.remove()); return c.textContent.replace(/\s+/g, " ").trim(); };
+    const tile = t => { const li = document.querySelector("#qp li.qpt[data-topic='" + t + "']"); return [bare(li.querySelector(".qpr")), bare(li.querySelector(".qpc")), bare(li.querySelector(".qpcond"))]; };
+    const sec = h => { const s = [...dt.querySelectorAll("section.dtsec")].find(x => x.querySelector("h3") && x.querySelector("h3").textContent === h); return s ? plain(s) : null; };
+    const sel = dt.querySelector(".bfocus select"), save = dt.querySelector(".bfocus button");
+    return { detail: window.__detail(), status: sec("Status"), rates: sec("Rates"), focus: sec("CardSelector focus"), choice: sec("Choice"),
+      tags: [...dt.querySelectorAll(".dttag")].map(t => t.parentNode.querySelector(".dtoname").textContent + ":" + t.textContent),
+      controls: [...dt.querySelectorAll("button, select, input, a[href]:not([target])")].filter(x => !x.closest("details.dtmore")).map(x => x.tagName + ":" + (x.tagName === "SELECT" ? x.value : x.textContent) + (x.hidden ? " (hidden)" : "") + (x.disabled ? " (disabled)" : "")),
+      sel: sel ? sel.value : null, save: save ? (save.hidden ? "hidden" : save.disabled ? "disabled" : "shown") : null, focused: document.activeElement && document.activeElement.getAttribute("data-f"),
+      pend: plain(document.querySelector("#cb .cbpend")), rows: Object.fromEntries([...document.querySelectorAll("#cb li[data-eid]")].map(l => [l.dataset.eid, plain(l.querySelector(".cbst"))])),
+      homeButtons: [...document.querySelectorAll("#cb button:not(.cbgo), #cb select, #qp select")].map(x => x.textContent),
+      grocery: tile("Grocery stores"), dining: tile("Dining"), online: tile("Online shopping"), hist: navigation.currentEntry.index + "/" + navigation.entries().length,
+      bar: b.hidden ? null : (btns => document.getElementById("savemsg").firstChild.textContent + (btns.length ? " · " + btns.join(" ") : ""))([...document.querySelectorAll("#savebtns button")].map(x => x.textContent)) };
+  });
+  const openCb = async id => { await page.click("#cb li[data-eid='" + id + "'] .cbgo"); await page.waitForFunction(i => window.__detail() && window.__detail().view === "cb:" + i, id); };
+  const back = async () => { await page.click("#dtback"); await page.waitForFunction(() => !window.__detail()); };
+  const deployedTick = async () => { deployed = true; await page.clock.runFor(6000); await page.waitForFunction(() => document.getElementById("savebar").classList.contains("live")); deployed = false; };
+
+  // Signed out: readable, no control.
+  await load(false);
+  for (const id of [FLEX, CC.id, BOA.id]) {
+    await openCb(id);
+    const v = await view();
+    ok(!v.controls.length && v.sel === null && !/Change it at Bank of America|Mark (not )?activated|Save/.test([v.status, v.focus, v.choice].join(" ")),
+      "detail signed out, " + id + ": the state shows, no control (" + J([v.status, v.controls]) + ")");
+    await back();
+  }
+
+  // Signed in: the activated Freedom Flex has Mark not activated in its detail (never on the home screen).
+  await load(true);
+  let v0 = await view();
+  ok(!v0.homeButtons.length && v0.pend === "No activations pending", "home signed in, all activated: no Mark not activated, picker or Save on the home screen (" + J(v0.homeButtons) + ")");
+  await openCb(FLEX);
+  let v = await view();
+  const h0 = v.hist;
+  ok(/^Status ✓ Activated Mark not activated/.test(v.status) && J(v.controls) === J(["BUTTON:Mark not activated"]), "detail Freedom Flex signed in: ✓ Activated with Mark not activated (" + J([v.status, v.controls]) + ")");
+  await page.locator("#dtbody button", { hasText: /^Mark not activated$/ }).click();
+  await page.waitForFunction(() => /Deploying/.test(document.getElementById("savemsg").textContent));
+  v = await view();
+  const want1 = JSON.parse(text);
+  want1.entries.find(e => e.id === FLEX).activation = "not_confirmed";
+  ok(hub.since(start).length === 1 && J(hub.changed(hub.head)) === J([BONUS]) && hub.file(BONUS) === JSON.stringify(want1, null, 2) + "\n" && fileOf(FREE).activation === "activated",
+    "detail Mark not activated: one commit, bonus-categories.json only, that one field changed, standard layout (" + hub.commits[hub.head].message + ")");
+  ok(/⚠ Not activated, activate by Dec 14 Mark activated/.test(v.status) && J(v.controls) === J(["BUTTON:Mark activated"]) && v.focused === "act" && v.bar === "Saved · Deploying · Undo ×" && v.hist === h0,
+    "detail Mark not activated: the detail shows Not activated with Mark activated (focused), the save bar, no history entry (" + J([v.status, v.focused, v.bar, v.hist, h0]) + ")");
+  ok(v.pend === "⚠ 1 activation pending" && /^⚠ Not activated, activate by Dec 14 Mark activated$/.test(v.rows[FLEX]) && J(v.grocery.slice(0, 2)) === J(["5%", "Freedom"]),
+    "detail Mark not activated: Card bonuses (count, row, its Mark activated) and Quick picks follow at once (" + J([v.pend, v.rows[FLEX], v.grocery]) + ")");
+  await deployedTick();
+  await page.locator("#savebtns button", { hasText: /^Undo$/ }).click();
+  await page.waitForFunction(() => /Deploying/.test(document.getElementById("savemsg").textContent));
+  v = await view();
+  ok(hub.file(BONUS) === text && hub.since(start).length === 2 && /^Status ✓ Activated Mark not activated/.test(v.status) && v.pend === "No activations pending" &&
+    J(v.grocery) === J(v0.grocery) && v.rows[FLEX] === v0.rows[FLEX] && v.detail.depth === 1,
+    "detail Undo: the file back byte for byte, the detail, Card bonuses and Quick picks as before, still in the detail (" + J([v.status, v.pend, v.grocery]) + ")");
+  // Mark activated from the detail, then its Undo.
+  await page.locator("#dtbody button", { hasText: /^Mark not activated$/ }).click();
+  await page.waitForFunction(() => /Deploying/.test(document.getElementById("savemsg").textContent));
+  await page.locator("#dtbody button", { hasText: /^Mark activated$/ }).click();
+  await page.waitForFunction(() => /Deploying/.test(document.getElementById("savemsg").textContent) && /✓ Activated/.test(document.getElementById("dtbody").innerText));
+  v = await view();
+  ok(fileOf(FLEX).activation === "activated" && hub.file(BONUS) === text && v.pend === "No activations pending", "detail Mark activated: saved, file as at the start, nothing pending");
+  await back();
+  v = await view();
+  ok(!v.homeButtons.length && v.rows[FLEX] === "✓ Activated · ends Dec 31", "home after the detail saves: the activated row has no Mark not activated (" + J(v.homeButtons) + ")");
+
+  // The CardSelector focus picker: no Save until the value changes, none once changed back; saved, then Undo.
+  await openCb(CC.id);
+  v = await view();
+  ok(v.sel === CC.planned && v.save === "hidden" && J(v.tags) === J([CC.planned + ":CardSelector focus"]) && /changes nothing at Citi/.test(v.focus) && !/set your Citi category|earns? 5%/i.test(v.focus),
+    "detail focus: the stored focus picked and tagged, no Save, copy never claims a Citi election (" + J([v.sel, v.save, v.tags]) + ")");
+  await page.selectOption("#dtbody .bfocus select", "grocery stores");
+  const sv1 = (await view()).save;
+  await page.selectOption("#dtbody .bfocus select", CC.planned);
+  const sv2 = (await view()).save;
+  ok(sv1 === "shown" && sv2 === "hidden" && hub.since(start).length === 4, "detail focus: Save shows once changed, hides when changed back, nothing saved (" + J([sv1, sv2]) + ")");
+  await page.selectOption("#dtbody .bfocus select", "grocery stores");
+  await page.click("#dtbody .bfocus button");
+  await page.waitForFunction(() => /Deploying/.test(document.getElementById("savemsg").textContent));
+  v = await view();
+  const want2 = JSON.parse(text);
+  want2.entries.find(e => e.id === CC.id).planned = "grocery stores";
+  ok(hub.file(BONUS) === JSON.stringify(want2, null, 2) + "\n" && J(hub.changed(hub.head)) === J([BONUS]) && hub.since(start).length === 5,
+    "detail focus save: one commit, planned changed only (" + hub.commits[hub.head].message + ")");
+  ok(v.sel === "grocery stores" && v.save === "hidden" && J(v.tags) === J(["grocery stores:CardSelector focus"]) && /^Status No activation needed CardSelector focus: grocery stores$/.test(v.status) &&
+    v.rows[CC.id] === "CardSelector focus: grocery stores" && v.grocery[2] === "Citi Custom Cash 5% · conditional" && v.dining[2] === null && v.focused === "pick-planned",
+    "detail focus save: the detail, Card bonuses and Quick picks (Grocery stores gets the Custom Cash line, Dining loses it) follow at once; focus on the picker (" + J([v.status, v.rows[CC.id], v.grocery, v.dining, v.focused]) + ")");
+  await page.locator("#savebtns button", { hasText: /^Undo$/ }).click();
+  await page.waitForFunction(() => /Deploying/.test(document.getElementById("savemsg").textContent) && /CardSelector focus: restaurants/.test(document.getElementById("dtbody").innerText));
+  v = await view();
+  ok(hub.file(BONUS) === text && v.sel === CC.planned && v.save === "hidden" && v.rows[CC.id] === "CardSelector focus: " + CC.planned && J(v.grocery) === J(v0.grocery) && J(v.dining) === J(v0.dining),
+    "detail focus Undo: the file back byte for byte, the picker, Card bonuses and Quick picks as before (" + J([v.sel, v.rows[CC.id], v.dining]) + ")");
+  await back();
+
+  // The Customized Cash Choice picker, the same way.
+  await openCb(BOA.id);
+  v = await view();
+  ok(v.sel === BOA.choice && v.save === "hidden" && J(v.tags) === J([BOA.choice + ":Your Choice"]) && /Change it at Bank of America first, then here\./.test(v.choice),
+    "detail choice: the stored choice picked and tagged, no Save, \"Change it at Bank of America first, then here.\" (" + J([v.sel, v.tags]) + ")");
+  await page.selectOption("#dtbody .bfocus select", "dining");
+  const sc1 = (await view()).save;
+  await page.selectOption("#dtbody .bfocus select", BOA.choice);
+  const sc2 = (await view()).save;
+  ok(sc1 === "shown" && sc2 === "hidden", "detail choice: Save shows once changed, hides when changed back (" + J([sc1, sc2]) + ")");
+  await page.selectOption("#dtbody .bfocus select", "dining");
+  await page.click("#dtbody .bfocus button");
+  await page.waitForFunction(() => /Deploying/.test(document.getElementById("savemsg").textContent));
+  v = await view();
+  const want3 = JSON.parse(text);
+  want3.entries.find(e => e.id === BOA.id).choice = "dining";
+  ok(hub.file(BONUS) === JSON.stringify(want3, null, 2) + "\n" && J(hub.changed(hub.head)) === J([BONUS]), "detail choice save: one commit, choice changed only (" + hub.commits[hub.head].message + ")");
+  ok(v.sel === "dining" && v.save === "hidden" && /5\.25% dining \(your Choice\)/.test(v.rates) && /Choice: dining$/.test(v.status) && v.rows[BOA.id] === "Choice: dining" &&
+    J(v.online.slice(0, 2)) !== J(v0.online.slice(0, 2)) && v0.online[1] === "Customized Cash",
+    "detail choice save: the rates, the detail, Card bonuses and the Online shopping Quick pick follow (" + J([v.rates, v.rows[BOA.id], v0.online, v.online]) + ")");
+  await page.locator("#savebtns button", { hasText: /^Undo$/ }).click();
+  await page.waitForFunction(b => /Deploying/.test(document.getElementById("savemsg").textContent) && new RegExp("Choice: " + b).test(document.getElementById("dtbody").innerText), BOA.choice);
+  v = await view();
+  ok(hub.file(BONUS) === text && v.sel === BOA.choice && v.rows[BOA.id] === "Choice: " + BOA.choice && J(v.online) === J(v0.online),
+    "detail choice Undo: the file back byte for byte, the picker, Card bonuses and Quick picks as before (" + J([v.sel, v.online]) + ")");
+  // Signing out with the detail open: the same page, read only.
+  await page.click("#editmode summary");
+  await page.locator("#editbody button", { hasText: /^Sign out$/ }).click();
+  v = await view();
+  ok(v.detail && v.detail.view === "cb:" + BOA.id && !v.controls.length && /Choice: /.test(v.status) && !/Change it at Bank of America/.test(v.choice || ""),
+    "signing out with the detail open: the same detail, read only (" + J([v.detail, v.controls]) + ")");
+  ok(!errs.length, "detail saves: no page errors (" + errs.join("; ") + ")");
   await ctx.close();
 }
 
@@ -869,7 +1034,7 @@ async function dayChecks(br, base) {
   // 2. Card bonuses' Mark activated focused across midnight (home screen): no redraw while it has focus, one once it
   // loses it (the entry that ended Oct 21 leaves), nothing saved.
   ({ ctx, page } = await open(true));
-  const mbtn = "#cb li[data-eid='test/flex-q4'] button";
+  const mbtn = "#cb li[data-eid='test/flex-q4'] button:not(.cbgo)";
   await page.focus(mbtn);
   const f0 = await st(page);
   await page.clock.runFor(15000);
@@ -909,7 +1074,7 @@ async function dayChecks(br, base) {
   await page.focus(mbtn);
   await page.clock.runFor(15000);
   await page.evaluate(() => document.addEventListener("mousedown", function (e) {
-    if (e.target.closest("#cb button")) { e.preventDefault(); document.activeElement.blur(); }
+    if (e.target.closest("#cb button:not(.cbgo)")) { e.preventDefault(); document.activeElement.blur(); }
   }, true));
   const box = await page.locator(mbtn).boundingBox();
   const r4 = (await st(page)).renders;
@@ -1052,6 +1217,7 @@ async function browser() {
   await dayChecks(br, base);
   await containerEditChecks(br, base);
   await cardBonusChecks(br, base);
+  await detailChecks(br, base);
 
   await br.close();
   server.close();

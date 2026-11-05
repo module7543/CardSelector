@@ -468,6 +468,136 @@
   .cbst .bwarn { display: inline; padding: 1px 6px; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
   /* A slim button after the warning (it wraps under it when the line is full). */
   .cbst .edfill { margin: 2px 0 0 2px; padding: 0 8px; font-size: 13px; vertical-align: middle; }
+
+  /* Quick pick tiles and Card bonuses rows open their detail pages: the tile is one button; a row's button (card and
+     summary) stretches over the whole row, with a right chevron. A row's inline Mark activated sits above it: it
+     saves and never opens the row. */
+  .qpt.go { position: relative; padding: 0; }
+  .qpgo {
+    display: flex; flex-direction: column; justify-content: flex-start; align-items: stretch; width: 100%; height: 100%; margin: 0; padding: 8px 10px 9px; font: inherit; color: inherit; text-align: left;
+    background: none; border: 0; border-radius: 10px; cursor: pointer; -webkit-tap-highlight-color: transparent;
+  }
+  .qpgo > span { display: block; }
+  .qpgo > .qpw { display: flex; }
+  .qpgo .qpn { padding-right: 14px; }
+  .qpgo:active { background: var(--neutral-bg); }
+  .qpgo:focus-visible { outline: 3px solid var(--accent); outline-offset: -3px; }
+  .gochev {
+    position: absolute; width: 7px; height: 7px;
+    border-right: 1.5px solid var(--muted); border-bottom: 1.5px solid var(--muted); transform: rotate(-45deg);
+  }
+  .qpgo .gochev { top: 14px; right: 11px; }
+  /* The rows reach the list's edges (the list's side padding moves into each row), so the whole row is the tap target. */
+  .cblist { overflow: hidden; padding: 0; }
+  .cbrow { position: relative; padding-left: 12px; padding-right: 28px; }
+  .cbrow + .cbrow { border-top: 0; }
+  .cbrow + .cbrow::before { content: ""; position: absolute; top: 0; left: 12px; right: 12px; border-top: 1px solid var(--line); }
+  .cbgo {
+    display: block; width: 100%; margin: 0; padding: 0; font: inherit; color: inherit; text-align: left;
+    background: none; border: 0; cursor: pointer; -webkit-tap-highlight-color: transparent;
+  }
+  .cbgo .cbl1 { display: block; }
+  .cbgo::after { content: ""; position: absolute; top: 0; bottom: 0; left: 0; right: 0; }
+  .cbgo:active::after { background: rgba(127, 127, 127, .12); }
+  .cbgo:focus-visible { outline: none; }
+  .cbgo:focus-visible::after { outline: 3px solid var(--accent); outline-offset: -3px; border-radius: 10px; }
+  .cbgo .gochev { right: 13px; top: 50%; margin-top: -4px; }
+  .cbst .edfill { position: relative; z-index: 1; }
+
+  /* Quick Pick and Card Bonus details (a mode of the page): a sticky back arrow and title, then quiet sections.
+     Everything else on the page hides while it is on (the footer keeps Edit mode). */
+  .wrap.dton > :not(#dt):not(footer):not(.offline) { display: none !important; }
+  .wrap.dton #fresh { display: none; }
+  .dtpanel[hidden] { display: none; }
+  .dttop {
+    position: sticky; top: 0; z-index: 5; display: flex; align-items: center; gap: 2px;
+    margin: 0 -16px; padding: 8px 16px 6px 12px; background: var(--bg); transition: box-shadow 150ms;
+  }
+  .dttop.scrolled { box-shadow: 0 1px 0 var(--line), 0 6px 12px -8px rgba(16, 24, 40, .25); }
+  .dth { margin: 0; font-size: 18px; font-weight: 750; line-height: 1.25; overflow-wrap: anywhere; }
+  .dth .idot { vertical-align: 2px; }
+  .dtpanel .brate { font-weight: 700; color: var(--bonus); }
+  .dtbody { font-size: 14px; line-height: 1.4; overflow-wrap: anywhere; }
+  .dtsec { margin-top: 10px; padding: 10px 14px 12px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; }
+  .dtsec > h3 { margin: 0 0 6px; font-size: 12px; font-weight: 700; letter-spacing: .03em; color: var(--muted); }
+  .dtsec.dtcat { background: var(--neutral-bg); border-color: transparent; }
+  .dtsec.dtcat > h3 { color: var(--neutral-text); }
+  .dtcath { font-weight: 700; }
+  .dtans { margin-top: 2px; padding: 0; background: none; border: 0; font-size: 14px; }
+  .dtans > span { display: block; }
+  .dtans > .qpw { display: flex; }
+  .dtlist { margin: 0; padding-left: 18px; }
+  .dtlist li + li { margin-top: 3px; }
+  .dtp { margin: 0; }
+  .dtp + .dtp { margin-top: 4px; }
+  .dtmuted { color: var(--muted); }
+  /* Ranked cards: the rate, then the card and its status; each row opens that card's bonus details. */
+  .dtrank { list-style: none; margin: 0 -6px; padding: 0; }
+  .dtrank li + li { border-top: 1px solid var(--line); }
+  .dtrow {
+    position: relative; display: grid; grid-template-columns: 4.1em minmax(0, 1fr); align-items: baseline; gap: 0 6px;
+    width: 100%; min-height: 44px; margin: 0; padding: 7px 24px 7px 6px; font: inherit; font-size: 14px; color: var(--text);
+    text-align: left; background: none; border: 0; border-radius: 8px; cursor: pointer; -webkit-tap-highlight-color: transparent;
+  }
+  div.dtrow { cursor: default; }
+  .dtrow:active { background: var(--neutral-bg); }
+  div.dtrow:active { background: none; }
+  .dtrow:focus-visible { outline: 3px solid var(--accent); outline-offset: -3px; }
+  .dtrow .gochev { right: 8px; top: 50%; margin-top: -4px; }
+  .dtrate { white-space: nowrap; font-size: 17px; font-weight: 750; color: var(--bonus); font-variant-numeric: tabular-nums; }
+  .dtcard { font-weight: 650; }
+  .dtwhy { display: block; grid-column: 2; font-size: 12.5px; color: var(--muted); }
+  .dtst { display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: 5px; font-size: 12px; font-weight: 650; line-height: 18px; white-space: nowrap; }
+  .dtst.st-act { background: var(--ok-bg); color: var(--ok-text); }
+  .dtst.st-on { background: var(--neutral-bg); color: var(--neutral-text); }
+  .dtst.st-cond, .dtst.st-below { background: transparent; color: var(--muted); border: 1px solid var(--line); line-height: 16px; }
+  .dtst.st-pend { background: var(--warn-bg); color: var(--warn-text); }
+  .dtrow.muted .dtrate, .dtrow.muted .dtcard { color: var(--muted); }
+  .dtrow.muted .idot { opacity: .5; }
+  /* Links to a related Card Bonus detail ("Change CardSelector focus", "Choice: online shopping"). */
+  .dtlinks { display: grid; gap: 6px; margin-top: 10px; }
+  .dtlink {
+    position: relative; display: block; width: 100%; min-height: 44px; margin: 0; padding: 10px 28px 10px 14px; font: inherit; font-size: 15px;
+    font-weight: 600; color: var(--accent); text-align: left; background: var(--surface); border: 1px solid var(--line); border-radius: 12px;
+    cursor: pointer; -webkit-tap-highlight-color: transparent;
+  }
+  .dtlink:active { background: var(--neutral-bg); }
+  .dtlink:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+  .dtlink .gochev { right: 14px; top: 50%; margin-top: -4px; border-color: var(--accent); }
+  /* Card Bonus details: status lines, rates, the eligible categories or choices. */
+  .dtline { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+  .dtline + .dtline { margin-top: 6px; }
+  .dtline .edfill, .dtline .edlink { margin-top: 0; margin-bottom: 0; }
+  .dtrates { list-style: none; margin: 0; padding: 0; }
+  .dtrates li + li { margin-top: 3px; }
+  .dtrates .brate { font-weight: 700; color: var(--bonus); }
+  .dtopts { list-style: none; margin: 6px 0 0; padding: 0; }
+  .dtopts li { padding: 6px 0; }
+  .dtopts li + li { border-top: 1px solid var(--line); }
+  .dtoname { font-weight: 650; }
+  .dttag {
+    display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: 5px; font-size: 12px; font-weight: 650; line-height: 18px;
+    color: var(--new-text); background: var(--new-bg); white-space: nowrap;
+  }
+  .dtalso { display: block; font-size: 12.5px; color: var(--muted); }
+  .dtsec .bfocus { margin-top: 8px; }
+  details.dtmore { margin-top: 10px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; }
+  details.dtmore > summary {
+    min-height: 44px; display: flex; align-items: center; padding: 0 14px; font-size: 15px; font-weight: 600; cursor: pointer;
+    list-style: none; -webkit-tap-highlight-color: transparent;
+  }
+  details.dtmore > summary::-webkit-details-marker { display: none; }
+  details.dtmore > summary::after {
+    content: ""; width: 7px; height: 7px; margin: -3px 4px 0 auto; flex: none;
+    border-right: 1.5px solid var(--muted); border-bottom: 1.5px solid var(--muted); transform: rotate(45deg);
+  }
+  details.dtmore[open] > summary::after { margin-top: 3px; transform: rotate(-135deg); }
+  details.dtmore > summary:focus-visible { outline: 3px solid var(--accent); outline-offset: -3px; border-radius: 12px; }
+  .dtmorebody { padding: 0 14px 12px; }
+  .dtmorebody h4 { margin: 10px 0 2px; font-size: 13px; font-weight: 700; }
+  .dtmorebody h4:first-child { margin-top: 0; }
+  .dtmorebody p { margin: 2px 0 0; color: var(--muted); }
+  .dtmorebody a { color: var(--accent); }
   .bwarn {
     display: inline-block; padding: 1px 8px; border-radius: 6px;
     background: var(--warn-bg); color: var(--warn-text); font-weight: 600;
@@ -687,6 +817,16 @@
       <div class="wctitle"><div class="wcname" id="wcname"></div><div class="wcsub" id="wcsub"></div></div>
     </div>
     <div class="wctabs" id="wctabs" role="group" aria-label="New or gone"></div>
+  </section>
+  <!-- Quick Pick and Card Bonus details (a mode of this page): opened from a Quick picks tile or a Card bonuses row. -->
+  <section class="dtpanel" id="dt" aria-labelledby="dt-h" hidden>
+    <div class="dttop">
+      <button class="wcback" id="dtback" type="button" aria-label="Back">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M19 12H5M11 6l-6 6 6 6"/></svg>
+      </button>
+      <div class="wctitle"><h2 class="dth" id="dt-h"></h2><div class="wcsub" id="dtsub"></div></div>
+    </div>
+    <div class="dtbody" id="dtbody"></div>
   </section>
   <!-- Quick picks: the card to use for a type of purchase with no offer (home screen only). -->
   <section class="qp" id="qp" aria-labelledby="qp-h" hidden></section>

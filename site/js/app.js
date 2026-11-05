@@ -2548,7 +2548,7 @@
   // Each row: the card (issuer dot), its one-line summary ("5% grocery, dining, Red Cross"; Smartly's "Everyday 4% ·
   // first $10,000 per billing cycle, some categories 2%"; "5% on top category") and exactly one state line. The
   // only edit here is "Mark activated" on a pending entry (signed in); reversal, the Focus and Choice pickers and
-  // the longer issuer wording (bonusDetails) belong to the Card Bonus detail pages (step 4C). Rows don't open yet.
+  // the longer issuer wording belong to the Card Bonus detail pages, which the rows open.
   var cbEl = document.getElementById("cb"), cbHome = false;
   // The summary line's parts, appended to node: the rates in green, the rest plain.
   function bonusSummary(e, node) {
@@ -2595,7 +2595,7 @@
     return st;
   }
   // The issuer wording, dates, caps, eligible list with "(also …)" notes and other notes the old Bonus categories strip kept behind
-  // "More details", as lines of text: kept for the Card Bonus detail pages (step 4C); not drawn on the home screen.
+  // "More details", as lines of text (the Card Bonus detail pages draw what they need from them); not drawn on the home screen.
   function bonusDetails(e, live) {
     var more = [], ev = live.filter(function (x) { return x.everyday; })[0];
     if (e.everyday) more.push(cap(e.categories_text));
@@ -2628,7 +2628,7 @@
     if (e.activation === "not_needed") more.push("No activation needed.");
     return more;
   }
-  window.__bonusDetails = function (id) { // for the tests (4C will draw these)
+  window.__bonusDetails = function (id) { // for the tests
     var t = todayISO(), live = bonus ? bonus.entries.filter(function (e) { return bonusLive(e, t); }) : [];
     var e = live.filter(function (x) { return x.id === id; })[0];
     return e ? bonusDetails(e, live) : null;
@@ -2657,12 +2657,22 @@
       live.forEach(function (e) {
         var li = el("li", "cbrow");
         li.setAttribute("data-eid", e.id); // the day redraw finds the entry again by it (focus)
-        var l1 = el("div", "cbl1");
+        // The row opens the entry's Card Bonus detail: one button (the card and summary) stretched over the row. The
+        // state line follows it, outside it, so its Mark activated is a separate button that only saves.
+        var go = el("button", "cbgo"), l1 = el("span", "cbl1");
+        go.type = "button";
         l1.appendChild(withDot(el("span", "cbcard", e.card), e.card));
         l1.appendChild(document.createTextNode(" "));
         l1.appendChild(bonusSummary(e, el("span", "cbsumm")));
-        li.appendChild(l1);
-        li.appendChild(bonusState(e, ed));
+        go.appendChild(l1);
+        go.appendChild(goChev());
+        go.appendChild(el("span", "sr-only", ", details"));
+        go.addEventListener("click", function () { openDetail({ kind: "cb", id: e.id }, { cb: e.id }); });
+        var st = bonusState(e, ed);
+        st.id = "cbst-" + compact(e.id);
+        go.setAttribute("aria-describedby", st.id);
+        li.appendChild(go);
+        li.appendChild(st);
         ul.appendChild(li);
       });
       cbEl.appendChild(ul);
@@ -2732,14 +2742,52 @@
       cond: L.cond || null, note: quickNote(p)
     };
   }
+  // A tile's answer, appended to node (also the answer box at the top of its Quick Pick detail): the rate and card,
+  // then "+N more ready", the dated label, the activation line, Citi Custom Cash's line and the note.
+  function qpBody(p, node) {
+    var w = el("span", "qpw");
+    w.appendChild(el("span", "qpr", pct(p.rate) + "%"));
+    w.appendChild(withDot(el("span", "qpc", p.card), p.card));
+    // "Likely" on a tile whose winning rate is a category rate (merchant coding decides it); none for Smartly's.
+    if (p.cat) w.appendChild(likelyTag());
+    node.appendChild(w);
+    if (p.more) node.appendChild(el("span", "qpm", "+" + p.more + " more ready"));
+    if (p.dated) node.appendChild(el("span", "qpm qpd", p.dated));
+    if (p.after) {
+      // "Activate Flex or Freedom: 5% · +1 pt" (every card tied at the better rate).
+      var n = p.after.names.map(function (x) { return x.replace(/ /g, "\u00a0"); }), who = n.length > 1 ? n.slice(0, -1).join(", ") + " or " + n[n.length - 1] : n[0];
+      var a = el("span", "qpx qpa", "Activate " + who + ": "), ag = el("span", "qpkeep", pct(p.after.rate) + "% · ");
+      a.setAttribute("data-cards", p.after.cards.join("|"));
+      ag.appendChild(el("span", "usegain", p.after.gain));
+      a.appendChild(ag);
+      // "Likely" when that better rate is a category rate (merchant coding decides it), as on Step 2's After activating.
+      if (p.after.cat) a.appendChild(likelyTag());
+      node.appendChild(a);
+    }
+    if (p.cond) {
+      // "Citi Custom Cash 5% · conditional · +1 pt" when it would beat the ready rate; else the short muted line.
+      // The muted "5% · conditional" stays on one line. The strong line is too long for a narrow tile, so it may
+      // break before "conditional" (and before the gain chip if it must); each "·" stays with the word before it.
+      var c = el("span", "qpx qpcond" + (p.cond.strong ? " strong" : ""), p.cond.e.card + " ");
+      if (p.cond.strong) {
+        c.appendChild(document.createTextNode(pct(p.cond.rate) + "%\u00a0· conditional\u00a0· "));
+        c.appendChild(el("span", "usegain", p.cond.gain));
+      } else c.appendChild(el("span", "qpkeep", pct(p.cond.rate) + "% · conditional"));
+      c.appendChild(el("span", "sr-only", ", " + condWhy(p.cond.e)));
+      node.appendChild(c);
+    }
+    if (p.note) node.appendChild(el("span", "qpnote", p.note));
+    return node;
+  }
   // The section under the search box on the home screen (no search, category or card picked; not What changed or
   // the Used list): a heading, the six tiles in a two-column grid, then the full-width Everyday default tile.
-  // Tiles are information only for now (no tap action).
+  // Each of the six tiles is one button that opens its Quick Pick detail (a right chevron); the Everyday default
+  // tile has no detail page and stays information only.
   function renderQuickPicks(show, today) {
     qpEl.textContent = "";
     qpEl.hidden = !(show && bonus && cardsCfg && payCards().length);
     if (qpEl.hidden) return;
-    var picks = QUICK_PICKS.map(function (q) { return { label: q[0], p: quickPick(q[1], today) }; });
+    var picks = QUICK_PICKS.map(function (q) { return { label: q[0], topic: q[1], p: quickPick(q[1], today) }; });
     var head = el("div", "qphead");
     head.appendChild(el("h2", "qph", "Quick picks · no offer needed")).id = "qp-h";
     qpEl.appendChild(head);
@@ -2747,40 +2795,16 @@
     picks.forEach(function (x) {
       var p = x.p, li = el("li", "qpt");
       li.setAttribute("data-topic", x.label);
-      li.appendChild(el("div", "qpn", x.label));
-      if (!p) { ul.appendChild(li); return; }
-      var w = el("div", "qpw");
-      w.appendChild(el("span", "qpr", pct(p.rate) + "%"));
-      w.appendChild(withDot(el("span", "qpc", p.card), p.card));
-      // "Likely" on a tile whose winning rate is a category rate (merchant coding decides it); none for Smartly's.
-      if (p.cat) w.appendChild(likelyTag());
-      li.appendChild(w);
-      if (p.more) li.appendChild(el("div", "qpm", "+" + p.more + " more ready"));
-      if (p.dated) li.appendChild(el("div", "qpm qpd", p.dated));
-      if (p.after) {
-        // "Activate Flex or Freedom: 5% · +1 pt" (every card tied at the better rate).
-        var n = p.after.names.map(function (x) { return x.replace(/ /g, "\u00a0"); }), who = n.length > 1 ? n.slice(0, -1).join(", ") + " or " + n[n.length - 1] : n[0];
-        var a = el("div", "qpx qpa", "Activate " + who + ": "), ag = el("span", "qpkeep", pct(p.after.rate) + "% · ");
-        a.setAttribute("data-cards", p.after.cards.join("|"));
-        ag.appendChild(el("span", "usegain", p.after.gain));
-        a.appendChild(ag);
-        // "Likely" when that better rate is a category rate (merchant coding decides it), as on Step 2's After activating.
-        if (p.after.cat) a.appendChild(likelyTag());
-        li.appendChild(a);
-      }
-      if (p.cond) {
-        // "Citi Custom Cash 5% · conditional · +1 pt" when it would beat the ready rate; else the short muted line.
-        // The muted "5% · conditional" stays on one line. The strong line is too long for a narrow tile, so it may
-        // break before "conditional" (and before the gain chip if it must); each "·" stays with the word before it.
-        var c = el("div", "qpx qpcond" + (p.cond.strong ? " strong" : ""), p.cond.e.card + " ");
-        if (p.cond.strong) {
-          c.appendChild(document.createTextNode(pct(p.cond.rate) + "%\u00a0· conditional\u00a0· "));
-          c.appendChild(el("span", "usegain", p.cond.gain));
-        } else c.appendChild(el("span", "qpkeep", pct(p.cond.rate) + "% · conditional"));
-        c.appendChild(el("span", "sr-only", ", " + condWhy(p.cond.e)));
-        li.appendChild(c);
-      }
-      if (p.note) li.appendChild(el("div", "qpnote", p.note));
+      if (!p) { li.appendChild(el("div", "qpn", x.label)); ul.appendChild(li); return; }
+      li.className = "qpt go";
+      var b = el("button", "qpgo");
+      b.type = "button";
+      b.appendChild(el("span", "qpn", x.label));
+      qpBody(p, b);
+      b.appendChild(goChev());
+      b.appendChild(el("span", "sr-only", ", details"));
+      b.addEventListener("click", function () { openDetail({ kind: "qp", topic: x.topic, label: x.label }, { qp: x.label }); });
+      li.appendChild(b);
       ul.appendChild(li);
     });
     qpEl.appendChild(ul);
@@ -2998,6 +3022,526 @@
   // nothing loads again), so the phone's back button needs one press, not two, to leave.
   try { if (history.state && history.state.cardselectorWc) history.back(); } catch (e) {}
 
+  // ---- Quick Pick and Card Bonus details (modes of the main page, like What changed) ----
+  // A Quick picks tile opens its topic's detail; a Card bonuses row opens that entry's. Entering pushes one history
+  // entry; a link from a Quick Pick detail to a Card Bonus detail pushes one more, so each Back (the arrow or the
+  // phone's) steps back one page, and the page under it comes back with its scroll and focus. A detail never
+  // changes the search, filters or sort; nothing goes to localStorage, and a reload starts outside. Every redraw
+  // (a save, sign-in or out, new data, the day redraw) draws the open detail again from the same rules as Quick
+  // picks and Card bonuses, with no history entry; an unsaved Focus or Choice pick is kept (dt.draft).
+  var dtEl = document.getElementById("dt"), dtBody = document.getElementById("dtbody"), dtH = document.getElementById("dt-h");
+  var dtSub = document.getElementById("dtsub"), dtBack = document.getElementById("dtback"), dtTop = dtEl.querySelector(".dttop");
+  // dt: { token, y (home scroll), stack: [view], ahead: [views left with Back, for Forward], draft: { "<id>|<field>": value },
+  // focus: the data-f of the control to focus again after a redraw }. A view: { kind: "qp", topic, label } or
+  // { kind: "cb", id }, plus from (what opened it) and y (its scroll when it opened the next one). dtHist: the depth of
+  // the history entry the page is on (0: not one of ours).
+  var dt = null, dtHist = 0;
+  function dtView() { return dt ? dt.stack[dt.stack.length - 1] : null; }
+  function goChev() { var c = el("span", "gochev"); c.setAttribute("aria-hidden", "true"); return c; }
+  function openDetail(view, from) {
+    if (wc) return;
+    if (!dt) {
+      dt = { token: String(Date.now()) + Math.random(), y: window.scrollY, stack: [], ahead: [], draft: {}, focus: null };
+      // On an entry of an earlier visit (reached with Forward), make it a plain page entry first, so Back and a reload
+      // never land on a detail entry again.
+      try { if (history.state && history.state.cardselectorDt) history.replaceState(null, ""); } catch (e) {}
+    } else dtView().y = window.scrollY;
+    view.from = from;
+    dt.stack.push(view);
+    dt.ahead = [];
+    dt.focus = null;
+    try { history.pushState({ cardselectorDt: dt.token, depth: dt.stack.length }, ""); dtHist = dt.stack.length; } catch (e) {}
+    renderDetail();
+    window.scrollTo(0, 0);
+    syncShadow();
+    dtBack.focus({ preventScroll: true });
+  }
+  // Back to depth n (0: out of the details): that page comes back as it was, with its scroll, and focus on what opened
+  // the page left (the tile, the row or the link).
+  function dtTo(n) {
+    var left = null;
+    while (dt.stack.length > n) { left = dt.stack.pop(); dt.ahead.unshift(left); }
+    dt.focus = null;
+    var y = n ? dtView().y || 0 : dt.y;
+    if (!n) dt = null;
+    renderDetail();
+    window.scrollTo(0, y);
+    syncShadow();
+    var from = left && left.from, f = !from ? null :
+      from.qp ? qpEl.querySelector("li.qpt[data-topic=\"" + CSS.escape(from.qp) + "\"] .qpgo") :
+      from.cb ? cbEl.querySelector("li[data-eid=\"" + CSS.escape(from.cb) + "\"] .cbgo") :
+      from.link ? dtBody.querySelector("[data-f=\"" + CSS.escape(from.link) + "\"]") : null;
+    if (f) {
+      f.focus({ preventScroll: true });
+      var r = f.getBoundingClientRect();
+      if (r.bottom < 0 || r.top > window.innerHeight) f.scrollIntoView({ block: "center" });
+    }
+  }
+  // The back arrow steps back at once, then over the history entry it left (so a quick double tap steps back twice
+  // at most and never leaves the site).
+  dtBack.addEventListener("click", function () {
+    if (!dt) return;
+    var n = dt.stack.length - 1, steps = dtHist - n;
+    dtTo(n);
+    if (steps > 0) { dtHist = n; try { history.go(-steps); } catch (e) {} }
+  });
+  // The phone's back (and forward) buttons: an entry of this visit at depth d shows that page; any other entry leaves.
+  window.addEventListener("popstate", function (ev) {
+    var st = ev.state, d = dt && st && st.cardselectorDt === dt.token ? st.depth : 0;
+    dtHist = d;
+    if (!dt) return;
+    if (d < dt.stack.length) dtTo(d);
+    else if (d > dt.stack.length && dt.ahead.length >= d - dt.stack.length) {
+      // Forward again into a detail left with Back: shown again as it was.
+      while (dt.stack.length < d) dt.stack.push(dt.ahead.shift());
+      dt.focus = null;
+      renderDetail();
+      window.scrollTo(0, 0);
+      dtBack.focus({ preventScroll: true });
+    }
+  });
+  // A reload starts outside the details: reloaded on one of their entries, step back over them (the same page).
+  try { if (history.state && history.state.cardselectorDt) history.go(-(+history.state.depth || 1)); } catch (e) {}
+  // A tap that runs a save or opens a page: its control is focused again after the redraw (a tapped button doesn't
+  // always take focus, on iOS).
+  dtBody.addEventListener("click", function (ev) {
+    var t = ev.target.closest && ev.target.closest("[data-f]");
+    if (dt && t && dtBody.contains(t)) dt.focus = t.getAttribute("data-f");
+  }, true);
+
+  // The cards.json card behind a bonus entry, and the live bonus entry of a card (the one that pays the rate, else its first).
+  function cardOfEntry(e) { return cardsCfg ? cardsCfg.cards.filter(function (c) { return c.bonus_card === e.card; })[0] || null : null; }
+  function entryOfCard(C, today) {
+    return bonus && C.bonus_card ? bonus.entries.filter(function (e) { return e.card === C.bonus_card && bonusLive(e, today); })[0] || null : null;
+  }
+  // The keyword lists a rate group names ("list": one name or several).
+  function listsOf(g) {
+    return g.list == null || !bonus ? [] : [].concat(g.list).map(function (n) { return bonus.keyword_lists[n]; }).filter(Boolean);
+  }
+  function uniq(a) { return a.filter(function (x, i) { return x && a.indexOf(x) === i; }); }
+  function dtSec(title, cls) {
+    var s = el("section", "dtsec" + (cls ? " " + cls : ""));
+    if (title) s.appendChild(el("h3", null, title));
+    dtBody.appendChild(s);
+    return s;
+  }
+  // A button that opens a Card Bonus detail from a Quick Pick detail (one more history entry, so Back returns here).
+  function dtGo(node, e, key) {
+    node.setAttribute("data-f", key);
+    node.addEventListener("click", function () { openDetail({ kind: "cb", id: e.id }, { link: key }); });
+    return node;
+  }
+  function dtLink(text, e, key) {
+    var b = el("button", "dtlink", text);
+    b.type = "button";
+    b.appendChild(goChev());
+    b.appendChild(el("span", "sr-only", ", " + e.card + " details"));
+    return dtGo(b, e, key);
+  }
+  // The open detail, drawn again from today's data. Focus stays on the same control (by its data-f), or on the
+  // control a tap just used once the redraw after its save enables it again; the scroll stays.
+  function renderDetail() {
+    var on = !!dt;
+    dtEl.hidden = !on;
+    wrapEl.classList.toggle("dton", on);
+    syncShadow();
+    if (!on) { dtBody.textContent = ""; return; }
+    var v = dtView(), a = document.activeElement;
+    var fk = a && dtBody.contains(a) ? a.getAttribute("data-f") : null;
+    if (fk) dt.focus = fk;
+    var keep = fk || (!a || a === document.body ? dt.focus : null), y = window.scrollY, today = todayISO();
+    dtBody.textContent = "";
+    dtH.textContent = "";
+    dtSub.textContent = "";
+    if (!data || !bonus || !cardsCfg) dtBody.appendChild(el("p", "empty", "Loading…"));
+    else if (v.kind === "qp") qpDetail(v, today);
+    else cbDetail(v, today);
+    if (keep) {
+      var q = function (k) { return dtBody.querySelector("[data-f=\"" + CSS.escape(k) + "\"]"); };
+      var t = q(keep);
+      if ((!t || t.hidden) && /^save-/.test(keep)) t = q(keep.replace(/^save-/, "pick-"));
+      if (t && !t.hidden && !t.disabled) { t.focus({ preventScroll: true }); dt.focus = null; }
+    }
+    if (window.scrollY !== y) window.scrollTo(0, y);
+  }
+  window.__detail = function () { return dt ? { depth: dt.stack.length, view: dtView().kind === "qp" ? "qp:" + dtView().label : "cb:" + dtView().id, hist: dtHist } : null; };
+
+  // ---- Quick Pick detail: the topic's answer as its tile gives it, every card that pays on the topic best rate
+  // first, links to the related Card Bonus details, what counts, how the topic relates to the app's categories and
+  // (collapsed) the issuer wording. Everything comes from the Quick picks' own rates (quickPick, rateAt on the topic).
+  var LIKELY_TEXT = "Likely, not certain: how the merchant codes the purchase decides it.";
+  // The cards that pay on a Quick pick topic, best rate first (Smartly first on a tie it is in, then cards.json order,
+  // as the tile picks): each card's ready topic rate ("Activated": an activated rotating bonus; "Always on": a standing
+  // or fixed rate; "Below everyday" under the everyday card's rate), a bonus not activated yet that would beat it
+  // ("Not activated"), and Citi Custom Cash ("Conditional": on its CardSelector focus, and on each other eligible
+  // category of the topic). The everyday card is listed at its rank; a card with only its base rate here is left out.
+  function topicRanks(topic, today) {
+    var M = topicMerchant(topic), ev = everyday(today), rows = [], cards = payCards();
+    cards.forEach(function (C, ci) {
+      var r = rateAt(C, M, today, false, false, true), isEv = !!ev && C.bonus_card === ev.card;
+      var add = function (x) { x.C = C; x.ci = ci; x.e = x.base.e || (isEv ? ev : null); rows.push(x); };
+      if (r.ready.cat || isEv) {
+        var act = !!r.ready.e && r.ready.e.kind === "rotating" && r.ready.e.activation === "activated";
+        add({ rate: r.ready.rate, base: r.ready, kind: ev && !isEv && r.ready.rate < ev.rate ? "below" : act ? "act" : "on", everyday: isEv && !r.ready.cat });
+      }
+      if (r.after) add({ rate: r.after.rate, base: r.after, kind: "pend" });
+      if (r.cond) add({ rate: r.cond.rate, base: r.cond, kind: "cond" });
+    });
+    // Citi Custom Cash's other eligible categories on this topic: only if that one is the actual top category.
+    bonus.entries.forEach(function (e) {
+      if (!e.eligible || !bonusLive(e, today)) return;
+      var C = cardOfEntry(e), ci = cards.indexOf(C);
+      if (ci === -1) return;
+      e.eligible.forEach(function (it) {
+        if ((it.topic || it.name) !== topic || it.name === e.planned) return;
+        rows.push({ C: C, ci: ci, e: e, rate: boosted(typeof it.rate === "number" ? it.rate : e.rate, boostCard(e)), base: { g: it, cat: true }, kind: "cond", item: it });
+      });
+    });
+    var rank = { act: 0, on: 0, below: 0, pend: 1, cond: 2 };
+    return rows.sort(function (a, b) {
+      return b.rate - a.rate || rank[a.kind] - rank[b.kind] || ((b.C.name === "Smartly") - (a.C.name === "Smartly")) || a.ci - b.ci || (a.item ? 1 : 0) - (b.item ? 1 : 0);
+    });
+  }
+  var STATUS = { act: ["Activated", "st-act"], on: ["Always on", "st-on"], below: ["Below everyday", "st-below"], pend: ["Not activated", "st-pend"], cond: ["Conditional", "st-cond"] };
+  // One ranked row's small print: the dates of an activated bonus, the everyday caveat, a rate note, the Preferred
+  // Rewards boost, the activation deadline, or why a conditional rate is conditional.
+  function rankWhy(x) {
+    var g = x.base.g, e = x.e, out = [];
+    if (x.kind === "cond") {
+      out.push(x.item ? "only if " + x.item.name + " is your actual top eligible category this cycle (not your CardSelector focus)" : condWhy(e));
+      return out.join(" · ");
+    }
+    if (x.kind === "pend") out.push(e.activate_by ? "activate by " + fmtDate(e.activate_by) : "not activated");
+    if (x.kind === "act" || x.kind === "pend") { var d = datedLabel(e); if (d) out.push(d.replace(/ /g, " ")); }
+    if (x.everyday) out.push("everyday rate" + (e.strip_note ? ", " + e.strip_note : ""));
+    if (x.kind === "below") out.push("below " + everyday(todayISO()).card + "'s everyday " + pct(everyday(todayISO()).rate) + "%");
+    if (g && g.rate_note) out.push(g.rate_note);
+    if (e && e._boost && x.kind !== "cond") out.push("incl. " + e._boost + "% Preferred Rewards");
+    else if (!e || !e._boost) { var b = boostPct(x.C.name); if (b && x.base.cat) out.push("incl. " + b + "% Preferred Rewards"); }
+    return out.join(" · ");
+  }
+  // Every rate group that names the topic: the live entries' groups (Custom Cash's eligible categories and every
+  // Customized Cash choice too) and the cards' standing groups. For how the topic maps to the app's categories.
+  function topicGroups(topic, today) {
+    var gs = [];
+    bonus.entries.forEach(function (e) {
+      if (!bonusLive(e, today)) return;
+      (e.eligible || []).concat(e.choices || [], e.choices ? e._fixed || [] : e.eligible ? [] : e.match).forEach(function (g) {
+        if ((g.topic || g.name) === topic) gs.push(g);
+      });
+    });
+    cardsCfg.cards.forEach(function (c) { (c.standing || []).forEach(function (g) { if (g.name === topic) gs.push(g); }); });
+    return gs;
+  }
+  function qpDetail(v, today) {
+    var topic = v.topic, p = quickPick(topic, today), ed = editing();
+    dtH.textContent = v.label;
+    dtSub.textContent = "Quick pick · no offer needed";
+    if (p) {
+      var a = dtSec("Quick pick");
+      a.appendChild(qpBody(p, el("div", "qpt dtans")));
+    }
+    // The cards, best rate first; each opens its Card Bonus detail.
+    var rows = topicRanks(topic, today), s = dtSec("Cards for " + topic + ", best rate first"), ul = el("ul", "dtrank"), keys = {};
+    rows.forEach(function (x) {
+      // The row's focus key: its card (and eligible category), so Back from its Card Bonus detail finds it again even
+      // when a save there changed its status; a card's second row gets "-2".
+      var key = "r-" + x.C.name + (x.item ? "-" + x.item.name : "");
+      keys[key] = (keys[key] || 0) + 1;
+      if (keys[key] > 1) key += "-" + keys[key];
+      var e = x.e || entryOfCard(x.C, today), st = STATUS[x.kind], why = rankWhy(x);
+      var b = el(e ? "button" : "div", "dtrow" + (x.kind === "act" || x.kind === "on" ? "" : " muted"));
+      if (e) b.type = "button";
+      b.appendChild(el("span", "dtrate", pct(x.rate) + "%"));
+      var nm = el("span", "dtname");
+      nm.appendChild(withDot(el("span", "dtcard", x.C.name), x.C.name));
+      nm.appendChild(el("span", "dtst " + st[1], st[0]));
+      b.appendChild(nm);
+      if (why) b.appendChild(el("span", "dtwhy", why));
+      if (e) {
+        b.appendChild(goChev());
+        b.appendChild(el("span", "sr-only", ", " + x.C.name + " details"));
+        dtGo(b, e, key);
+      }
+      var li = el("li");
+      li.appendChild(b);
+      ul.appendChild(li);
+    });
+    s.appendChild(ul);
+    // The related CardSelector focus and Customized Cash Choice, when one of their categories is this topic.
+    var links = el("div", "dtlinks");
+    bonus.entries.forEach(function (e) {
+      if (!bonusLive(e, today)) return;
+      var on = function (it) { return (it.topic || it.name) === topic; };
+      if (e.eligible && e.planned && e.eligible.some(on)) links.appendChild(dtLink(ed ? "Change CardSelector focus" : "CardSelector focus: " + e.planned, e, "focus-link"));
+      if (e.choices && e.choice && e.choices.some(on)) links.appendChild(dtLink("Choice: " + e.choice, e, "choice-link"));
+    });
+    if (links.children.length) dtBody.appendChild(links);
+    // What counts: Likely, then each paying group's caveats from the data (cuisine caveats, notes, the names its
+    // keyword lists exclude, and "may not count" names), each once.
+    var lines = [LIKELY_TEXT], exSeen = {};
+    rows.forEach(function (x) {
+      var g = x.base.g;
+      if (!g) return;
+      Object.keys(g.caveat_cuisines || {}).forEach(function (c) { lines.push(g.caveat_cuisines[c]); });
+      (g.notes || []).forEach(function (n) { lines.push(n); });
+      listsOf(g).forEach(function (l) {
+        var ex = (l.exclude || []).join(", ");
+        if (ex && !exSeen[ex]) { exSeen[ex] = 1; lines.push("Excluded: " + ex + "."); }
+        // "Speedway, Circle K and Wawa may not count: convenience-store chains may code as …" (names sharing a reason).
+        var by = {}, order = [];
+        Object.keys(l.may_not_count || {}).forEach(function (k) {
+          var why = l.may_not_count[k];
+          if (!by[why]) { by[why] = []; order.push(why); }
+          by[why].push(k);
+        });
+        order.forEach(function (why) {
+          var n = by[why];
+          lines.push((n.length > 1 ? n.slice(0, -1).join(", ") + " and " + n[n.length - 1] : n[0]) + " may not count: " + why + ".");
+        });
+      });
+    });
+    var wc2 = dtSec("What counts"), wl = el("ul", "dtlist");
+    uniq(lines).forEach(function (t) { wl.appendChild(el("li", null, t)); });
+    wc2.appendChild(wl);
+    catBox(topic, topicGroups(topic, today), today);
+    // The issuer wording behind the rates shown, collapsed.
+    var es = uniq(rows.map(function (x) { return x.e || entryOfCard(x.C, today); }));
+    var more = issuerMore(es, v);
+    if (more) dtBody.appendChild(more);
+  }
+  // How the topic relates to the app's categories, from the groups' own mapping: a category the groups match
+  // (Dining, less any excluded cuisine), a category button that shows the topic but isn't it ("Not the same as
+  // Groceries & Food Delivery": the groups match by store name), or none (online shopping: the Online filter).
+  function catBox(topic, groups, today) {
+    var s = dtSec("App category", "dtcat");
+    var flat = function (f) { return uniq([].concat.apply([], groups.map(f))); };
+    var cats = flat(function (g) { return g.app_categories || []; });
+    var btns = flat(function (g) { return g.button_categories || []; }).filter(function (c) { return cats.indexOf(c) === -1; });
+    var live = data.offers.filter(function (o) { return isLive(o, today); });
+    var top = function (c) {
+      var tp = topOffer(live.filter(function (o) { return o.category === c; }), today);
+      if (!tp) return null;
+      return "Top offer in " + c + ": " + tp.M.name + " " + pct(tp.total) + "% with " + tp.C.name + (tp.online ? ", online" : "") +
+        (tp.ready ? "" : tp.add ? ", add to " + tp.C.name : ", after activating") + (tp.cond ? ", conditional: " + condWhy(tp.cond) : "") + ".";
+    };
+    var para = function (t, cls) { s.appendChild(el("p", "dtp" + (cls ? " " + cls : ""), t)); };
+    cats.forEach(function (c) {
+      var ex = flat(function (g) { return (g.app_categories || []).indexOf(c) !== -1 ? g.exclude_cuisines || [] : []; });
+      s.appendChild(el("p", "dtp dtcath", c));
+      para("Matches this Quick pick" + (ex.length ? ", except the " + ex.join(" and ") + " cuisine" + (ex.length > 1 ? "s" : "") + ", which doesn't count as " + topic : "") + ".");
+      var t = top(c);
+      if (t) para(t, "dtmuted");
+    });
+    btns.forEach(function (c) {
+      var gs = groups.filter(function (g) { return (g.button_categories || []).indexOf(c) !== -1; });
+      var names = uniq([].concat.apply([], gs.map(function (g) { return [].concat.apply([], listsOf(g).map(function (l) { return l.keywords || []; })); })));
+      s.appendChild(el("p", "dtp dtcath", "Not the same as " + c));
+      para("This Quick pick counts " + topic + " by store name (" + names.length + " names), not every merchant in " + c + ".");
+      uniq(gs.map(function (g) { return g.button_note; })).forEach(function (n) { para(n); });
+      var t = top(c);
+      if (t) para(t, "dtmuted");
+    });
+    if (cats.length || btns.length) return;
+    if (groups.some(function (g) { return g.channel === "online"; })) {
+      // Online shopping: no app category. Known online = channel "online"; "channel not shown" never counts as online.
+      var known = live.filter(knownOnline).length, none = live.filter(function (o) { return (o.channel || "none_shown") === "none_shown"; }).length;
+      s.appendChild(el("p", "dtp dtcath", "No app category for " + topic));
+      para("Use the Online filter (Filters, In store or online) to list offers you can use online.");
+      para(known + " offer" + (known === 1 ? " is" : "s are") + " online only (known online).");
+      para(none + " offer" + (none === 1 ? " doesn't" : "s don't") + " show a channel. The Online filter keeps them, but they never count as known online.");
+      para("Online shopping counts only for an online purchase: a known online store by name, or offers that are all online only.", "dtmuted");
+    } else para("No app category matches " + topic + ".");
+  }
+  // "More details" (collapsed, kept open across redraws): each entry's issuer wording, dates, cap and source notes.
+  function issuerMore(es, v) {
+    if (!es.length) return null;
+    var d = el("details", "dtmore"), sum = el("summary", null, "More details"), body = el("div", "dtmorebody");
+    sum.setAttribute("data-f", "more");
+    d.appendChild(sum);
+    es.forEach(function (e) {
+      body.appendChild(el("h4", null, e.card));
+      var p = function (t) { body.appendChild(el("p", null, t)); };
+      p(e.everyday || e.rate === null ? cap(e.categories_text) + (/[.]$/.test(e.categories_text) ? "" : ".") :
+        pct(e.rate) + "% " + e.categories_text + (e.choices ? ", before any Preferred Rewards boost." : "."));
+      if (e.eligible_text) p("Eligible: " + e.eligible_text + ".");
+      if (e.choices_text) p("Choices: " + e.choices_text);
+      if (e.start && e.end) p(rangeText(e.start, e.end) + ".");
+      if (e.cap_text && !e.everyday) p("Cap: " + e.cap_text + ".");
+      if (e.unconfirmed) p("Not confirmed on the issuer page: " + e.unconfirmed);
+      if (e.source_url) {
+        var s = el("p", null, "Source: "), a = el("a", null, e.source_url.replace(/^https:\/\/(www\.)?/, "").replace(/[?#].*$/, ""));
+        a.href = e.source_url; a.target = "_blank"; a.rel = "noopener noreferrer";
+        s.appendChild(a);
+        if (e.checked) s.appendChild(document.createTextNode(" · checked " + fmtDate(e.checked)));
+        body.appendChild(s);
+      }
+    });
+    d.appendChild(body);
+    d.open = !!v.moreOpen;
+    d.addEventListener("toggle", function () { v.moreOpen = d.open; });
+    return d;
+  }
+
+  // ---- Card Bonus detail: the card, its status (activation, and Custom Cash's focus or Customized Cash's Choice:
+  // both, never one in place of the other), its rates, the focus or Choice with every category it could be, where
+  // it stands in Quick picks now, the card's always-on rates and (collapsed) the issuer wording. Signed in: Mark
+  // activated / Mark not activated (an entry with a deadline), the Focus and Choice pickers. Signed out: read only.
+  function cbDetail(v, today) {
+    var live = bonus.entries.filter(function (x) { return bonusLive(x, today); });
+    var e = live.filter(function (x) { return x.id === v.id; })[0];
+    if (!e) {
+      // Ended (a new day) or gone with new data: the page says so.
+      var old = bonus.entries.filter(function (x) { return x.id === v.id; })[0];
+      dtH.textContent = old ? old.card : "Card bonus";
+      dtBody.appendChild(el("p", "empty", "This card bonus isn't live today."));
+      return;
+    }
+    var ed = editing(), C = cardOfEntry(e), ev = everyday(today);
+    dtH.appendChild(withDot(el("span", null, e.card), e.card));
+    bonusSummary(e, dtSub);
+    // Status.
+    var s = dtSec("Status"), line = function () { var l = el("div", "dtline"); s.appendChild(l); return l; };
+    var l1 = line();
+    if (e.activation === "not_confirmed") {
+      l1.appendChild(el("span", "bwarn", "⚠ Not activated" + (e.activate_by ? ", activate by " + fmtDate(e.activate_by) : "")));
+      if (e.activation_note) l1.appendChild(el("span", "cbinfo", cap(e.activation_note) + "."));
+      if (ed && e.activate_by) {
+        var b1 = editBtn("Mark activated", { type: "bonus.activation", id: e.id, from: "not_confirmed", to: "activated" }, "edfill");
+        b1.setAttribute("aria-label", "Mark activated: " + e.card);
+        b1.setAttribute("data-f", "act");
+        l1.appendChild(b1);
+      }
+    } else if (e.activation === "activated") {
+      l1.appendChild(el("span", "bok", "✓ Activated"));
+      if (ed && e.activate_by) {
+        var b2 = editBtn("Mark not activated", { type: "bonus.activation", id: e.id, from: "activated", to: "not_confirmed" }, "edlink");
+        b2.setAttribute("aria-label", "Mark not activated: " + e.card);
+        b2.setAttribute("data-f", "act");
+        l1.appendChild(b2);
+      }
+    } else l1.appendChild(el("span", "cbinfo", "No activation needed"));
+    if (e.start && e.end) line().appendChild(el("span", "cbinfo", rangeText(e.start, e.end)));
+    if (e.eligible && e.planned) line().appendChild(el("span", null, "CardSelector focus: " + e.planned));
+    if (e.choices && e.choice) line().appendChild(el("span", null, "Choice: " + e.choice));
+    // Rates, as they are today (Preferred Rewards included).
+    var r = dtSec("Rates"), rl = el("ul", "dtrates");
+    var rate = function (x, text) { var li = el("li"); li.appendChild(el("span", "brate", pct(x) + "%")); li.appendChild(document.createTextNode(" " + text)); rl.appendChild(li); };
+    if (e.everyday) rate(e.rate, "everyday" + (e.headline_note ? " · " + e.headline_note : ""));
+    else if (e.eligible) rate(e.rate, e.categories_text);
+    else e.match.forEach(function (g) { rate(g._rate, g.name + (e.choices && g.name === ((e.choices.filter(function (c) { return c.name === e.choice; })[0] || {}).topic || e.choice) ? " (your Choice)" : "") + (g.rate_note ? " · " + g.rate_note : "")); });
+    r.appendChild(rl);
+    if (e.cap_text && !e.everyday) r.appendChild(el("p", "dtp dtmuted", "Cap: " + e.cap_text + "."));
+    if (e.strip_note && !e.everyday) r.appendChild(el("p", "dtp dtmuted", cap(e.strip_note) + "."));
+    var bn = e._boost ? boostNote(boostCard(e)) : null;
+    if (bn) r.appendChild(el("p", "dtp dtmuted", bn));
+    // Every other live entry paying on a topic, highest rate first, a lower rate shown (as the "also" notes do).
+    var also = function (topic, mine) {
+      var a = [];
+      live.forEach(function (o) {
+        if (o === e) return;
+        var g = o.match.filter(function (g) { return g.name === topic; })[0];
+        if (g) a.push({ name: o.short || o.card, rate: g._rate });
+      });
+      return byRateDesc(a, function (x) { return x.rate; }).map(function (x) { return x.name + (x.rate < mine ? " " + pct(x.rate) + "%" : ""); });
+    };
+    var qpLabel = function (topic) { var q = QUICK_PICKS.filter(function (x) { return x[1] === topic; })[0]; return q ? "Quick pick: " + q[0] : "Counts as " + topic; };
+    if (e.eligible) {
+      // CardSelector focus: CardSelector's assumption only; it changes nothing at Citi.
+      var f = dtSec("CardSelector focus");
+      f.appendChild(el("p", "dtp", "Citi pays " + pct(e.rate) + "% " + e.categories_text + "."));
+      f.appendChild(el("p", "dtp", "CardSelector's answers assume your CardSelector focus is that category. It's CardSelector's assumption only and changes nothing at Citi."));
+      if (ed) f.appendChild(focusPicker(e, "planned", dt.draft));
+      var fl = el("ul", "dtopts");
+      e.eligible.forEach(function (it) {
+        var li = el("li"), t = it.topic || it.name, aw = also(t, boosted(typeof it.rate === "number" ? it.rate : e.rate, boostCard(e)));
+        li.appendChild(el("span", "dtoname", it.name));
+        if (it.name === e.planned) li.appendChild(el("span", "dttag", "CardSelector focus"));
+        li.appendChild(el("span", "dtalso", qpLabel(t) + (aw.length ? " · also " + aw.join(", ") : "")));
+        fl.appendChild(li);
+      });
+      f.appendChild(fl);
+      if (ev && ev.rate < e.rate) f.appendChild(el("p", "dtp dtmuted", ev.card + "'s usual everyday rate is " + pct(ev.rate) + "%, so only a " + pct(e.rate) + "% " + e.card + " result normally beats it."));
+    }
+    if (e.choices) {
+      // The Customized Cash Choice: set at Bank of America; the stored copy here only follows it.
+      var c = dtSec("Choice"), bc = boostCard(e);
+      if (ed) {
+        c.appendChild(el("p", "dtp", "Change it at Bank of America first, then here."));
+        c.appendChild(focusPicker(e, "choice", dt.draft));
+      }
+      var cl = el("ul", "dtopts");
+      e.choices.forEach(function (it) {
+        var li = el("li"), t = it.topic || it.name, r0 = boosted(typeof it.rate === "number" ? it.rate : e.rate, bc), aw = also(t, r0);
+        li.appendChild(el("span", "brate", pct(r0) + "% "));
+        li.appendChild(el("span", "dtoname", it.name));
+        if (it.name === e.choice) li.appendChild(el("span", "dttag", "Your Choice"));
+        li.appendChild(el("span", "dtalso", qpLabel(t) + (aw.length ? " · also " + aw.join(", ") : "")));
+        cl.appendChild(li);
+      });
+      c.appendChild(cl);
+    }
+    // Where it stands now, from the Quick picks' own answers.
+    var w = dtSec("Where it stands now"), wl = el("ul", "dtlist");
+    standsNow(e, C, today).forEach(function (x) {
+      var li = el("li");
+      li.appendChild(el("strong", null, x[0] + ": "));
+      li.appendChild(document.createTextNode(x[1]));
+      wl.appendChild(li);
+    });
+    if (wl.children.length) w.appendChild(wl);
+    else w.appendChild(el("p", "dtp", "Not on any Quick pick topic."));
+    // The card's always-on rates (cards.json, Preferred Rewards included).
+    if (C && !e.everyday) {
+      var o = dtSec("Always on"), ol = el("ul", "dtrates");
+      var orate = function (x, text) { var li = el("li"); li.appendChild(el("span", "brate", pct(x) + "%")); li.appendChild(document.createTextNode(" " + text)); ol.appendChild(li); };
+      (C.standing || []).forEach(function (g) { orate(g._rate, g.name); });
+      orate(boosted(C.base_rate, C.name), "base rate, everything else");
+      o.appendChild(ol);
+      var cn = boostNote(C.name);
+      if (cn && !bn) o.appendChild(el("p", "dtp dtmuted", cn));
+    }
+    var more = issuerMore([e], v);
+    if (more) dtBody.appendChild(more);
+  }
+  // [Quick pick label, how this entry stands there] for each topic it pays on, from the same answers the tiles
+  // give (merchantLines on the topic): leads (and with whom it ties), tied but Smartly or an earlier card is named,
+  // not activated (so it doesn't lead), conditional (never counted as ready), below the everyday rate, or another
+  // card leads. The everyday entry is on every topic.
+  function standsNow(e, C, today) {
+    var out = [], ev = everyday(today);
+    if (!C) return out;
+    QUICK_PICKS.forEach(function (q) {
+      var topic = q[1], label = q[0], L = merchantLines(topicMerchant(topic), today);
+      if (!L) return;
+      var wins = L.ready.wins, i = wins.map(function (w) { return w.C; }).indexOf(C), lead = wins[0];
+      var leadTxt = lead.C.name + " " + pct(L.ready.total) + "%", tie = wins.length > 1;
+      var g = e.everyday ? null : e.match.filter(function (x) { return x.name === topic; })[0];
+      var other = e.eligible ? e.eligible.filter(function (it) { return (it.topic || it.name) === topic && it.name !== e.planned; })[0] : null;
+      if (!e.everyday && !g && !other) return;
+      if (isConditional(e)) {
+        if (other && !g) return out.push([label, "only if " + other.name + " is your actual top eligible category this cycle (not your CardSelector focus). " + leadTxt + " leads."]);
+        var cs = L.cond && L.cond.e === e ? L.cond : null;
+        return out.push([label, "conditional, so it doesn't count as ready: " + pct(g._rate) + "% " + condWhy(e) + "." +
+          (cs && cs.strong ? " It would beat " + leadTxt + " (" + cs.gain + ")." : " " + leadTxt + " leads.")]);
+      }
+      if (e.activation === "not_confirmed") {
+        var aw = L.after && L.after.wins.some(function (w) { return w.C === C; });
+        return out.push([label, "not activated, so it doesn't lead" + (aw ? ": " + pct(L.after.total) + "% once activated, " + gainText(L.after.total - L.ready.total) + " over " + leadTxt + "." : ". " + leadTxt + " leads.")]);
+      }
+      var mine = i !== -1 && (e.everyday ? !wins[i].base.cat : wins[i].base.e === e);
+      if (mine && i === 0) {
+        var with_ = wins.slice(1).map(function (w) { return w.C.name; });
+        return out.push([label, "leads at " + pct(L.ready.total) + "%" + (tie ? ", tied with " + with_.join(", ") : "") + "."]);
+      }
+      if (mine) return out.push([label, "tied at " + pct(L.ready.total) + "%; " + (lead.C.name === "Smartly" ? "Smartly wins the tie" : lead.C.name + " is named first, by card order") + "."]);
+      var rr = e.everyday ? e.rate : g._rate;
+      if (ev && !e.everyday && rr < ev.rate) return out.push([label, pct(rr) + "%, below " + ev.card + "'s everyday " + pct(ev.rate) + "%."]);
+      out.push([label, pct(rr) + "%; " + leadTxt + " leads."]);
+    });
+    return out;
+  }
+
   function render() {
     // Best offer totals stay cached until something behind a card rate changes (date, activation, focus, choice).
     var sig = todayISO() + (cardsCfg ? 1 : 0) + JSON.stringify(bonus ? bonus.entries.map(function (e) {
@@ -3051,6 +3595,7 @@
       Array.prototype.forEach.call(g.querySelectorAll("button"), function (b) { b.disabled = usedOn; });
     });
     renderWcPanel();
+    renderDetail(); // an open Quick Pick or Card Bonus detail follows every redraw
     renderFreshness(); // its New and Gone counts follow saves and new data
     // Quick picks and Card bonuses: the home screen only (a search, category or card answers in the answer card instead).
     var home = !wc && !usedOn && !hasQuery && category === null && card === null;
@@ -3305,7 +3850,7 @@
   function dayBlocked() {
     if (saving || tapping) return true;
     var f = document.activeElement;
-    return !!f && (main.contains(f) || cbEl.contains(f)) && f.matches("select, .edsm, .edfill, .edlink");
+    return !!f && (main.contains(f) || cbEl.contains(f) || dtBody.contains(f)) && f.matches("select, .edsm, .edfill, .edlink");
   }
   // Is t a day the results or Card bonuses weren't drawn for yet? (Card bonuses not drawn yet, e.g. its file didn't load: only
   // the results count.)
@@ -3394,7 +3939,7 @@
 
   // The sticky search box casts a shadow once the page is scrolled (one check per frame).
   var searchBar = document.querySelector(".searchbar"), shadowQueued = false;
-  function syncShadow() { shadowQueued = false; searchBar.classList.toggle("scrolled", window.scrollY > 0); }
+  function syncShadow() { shadowQueued = false; searchBar.classList.toggle("scrolled", window.scrollY > 0); dtTop.classList.toggle("scrolled", window.scrollY > 0); }
   window.addEventListener("scroll", function () {
     if (!shadowQueued) { shadowQueued = true; requestAnimationFrame(syncShadow); }
   }, { passive: true });
@@ -3641,24 +4186,34 @@
 
   // Custom Cash, "CardSelector focus: [restaurants ▾]" (field "planned": CardSelector's assumption only, nothing
   // changes at Citi), and Customized Cash choice, "Choice: [online shopping ▾]" (field "choice": a real Bank of
-  // America setting, changed there first); a small Save appears only once the value changes.
-  // Not drawn on the home screen since Card bonuses replaced the strip; kept for the Card Bonus detail pages (4C).
-  function focusPicker(e, field) {
+  // America setting, changed there first); a small Save appears only once the value changes. Drawn on the Card Bonus
+  // detail pages only (signed in), never on the home screen.
+  // keep (the Card Bonus detail's dt.draft): an unsaved pick by "<entry id>|<field>", so a redraw (a save, new data,
+  // the day redraw) draws the picker again as the owner left it, its Save showing; a pick back to the stored value
+  // (or one the stored value has caught up with) is no longer a draft.
+  function focusPicker(e, field, keep) {
     var row = el("div", "bfocus");
-    var id = field + "-" + compact(e.id), now = e[field];
+    var id = field + "-" + compact(e.id), now = e[field], opts = field === "planned" ? e.eligible : e.choices, dk = e.id + "|" + field;
+    var val = keep && keep[dk] !== undefined && keep[dk] !== now && opts.some(function (it) { return it.name === keep[dk]; }) ? keep[dk] : now;
+    if (keep && val === now) delete keep[dk];
     var lab = el("label", "bmeta", field === "planned" ? "CardSelector focus:" : "Choice:");
     lab.htmlFor = id;
     row.appendChild(lab);
     var sel = el("select");
     sel.id = id;
     sel.disabled = saving;
-    (field === "planned" ? e.eligible : e.choices).forEach(function (it) { sel.appendChild(new Option(it.name, it.name, false, it.name === now)); });
+    sel.setAttribute("data-f", "pick-" + field);
+    opts.forEach(function (it) { sel.appendChild(new Option(it.name, it.name, false, it.name === val)); });
     row.appendChild(sel);
     var b = el("button", "edsm", "Save");
     b.type = "button";
-    b.hidden = true;
+    b.hidden = val === now;
     b.disabled = saving;
-    sel.addEventListener("change", function () { b.hidden = sel.value === now; });
+    b.setAttribute("data-f", "save-" + field);
+    sel.addEventListener("change", function () {
+      b.hidden = sel.value === now;
+      if (keep) { if (sel.value === now) delete keep[dk]; else keep[dk] = sel.value; }
+    });
     b.addEventListener("click", function () {
       if (sel.value !== now) runSave({ type: field === "planned" ? "bonus.planned" : "bonus.choice", id: e.id, from: now, to: sel.value });
     });
@@ -3735,7 +4290,7 @@
     return c;
   }
 
-  // For the tests: the Focus and Choice saves have no control on the home screen until the 4C detail pages.
+  // For the tests (the Focus and Choice pickers are on the Card Bonus detail pages only).
   window.__runSave = function (change) { runSave(change); };
   function runSave(change, retried) {
     if (saving) return;
@@ -3831,7 +4386,7 @@
       editBody.appendChild(signinForm);
       return;
     }
-    editBody.appendChild(el("p", "fnote", "Editing is on in this browser. Edit buttons are in each offer’s details and in the bonus categories list. Used offers show under the Used filter, where they can be restored."));
+    editBody.appendChild(el("p", "fnote", "Editing is on in this browser. Edit buttons are in each offer’s details, on Card bonuses and in each card bonus’s details. Used offers show under the Used filter, where they can be restored."));
     depEl = el("p", "fnote", "Checking the last deploy…");
     editBody.appendChild(depEl);
     var out = el("button", "edbtn", "Sign out");
@@ -4005,11 +4560,11 @@
   }
   // Nothing the owner picked would be lost by a reload: an empty search box (any typed character counts, not
   // only letters and digits), no save running or save bar showing (the "Live" pill aside), not in What changed, no category, card,
-  // cuisine or Used filter, no open details, Filters panel or Edit mode panel, and no form field in
-  // use other than the empty search box.
+  // cuisine or Used filter, no open details, Filters panel or Edit mode panel, not in a Quick Pick or Card Bonus
+  // detail (an unsaved Focus or Choice pick lives there), and no form field in use other than the empty search box.
   function idle() {
     var f = document.activeElement;
-    return !saving && !wc && input.value.trim() === "" && category === null && card === null && cuisine === null && !usedMode &&
+    return !saving && !wc && !dt && input.value.trim() === "" && category === null && card === null && cuisine === null && !usedMode &&
       // a save bar still showing (Deploying with Undo, an error with Retry); the small "Live" pill doesn't block
       (savebar.hidden || savebar.classList.contains("live")) &&
       !main.querySelector("button.mchead[aria-expanded=true]") && !filtersEl.classList.contains("open") &&
