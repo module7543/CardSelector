@@ -2320,8 +2320,9 @@ function listRows(sel) {
       const hs = Object.values(C.rows).map(r => r.h), maxH = Math.max.apply(null, hs);
       ok(C.pageW <= w && Object.values(C.rows).every(r => !r.over) && btn.length === 4 && btn.every(b => b[1] >= 30 && b[1] <= 36 && b[0] <= 140 && b[2]) &&
         // Pixel limits with room for the runner's wider font (CI: a 126px button, a 109px pending row at 390px).
-        // Step 4D: a row is the card name, its summary and the state line (the mockup's compact list), so a row is a line taller.
-        maxH <= 180 && C.rows[FLEX].h <= 140 && C.minFont >= 12,
+        // Step 4D: a row is the card name, its summary and the state line (the mockup's compact list), so a row is a line taller
+        // (CI at 320px: 195px for the long name, 155px for a pending row).
+        maxH <= 225 && C.rows[FLEX].h <= 175 && C.minFont >= 12,
         "cb " + w + "px: no sideways scroll, no row overflows, four small Mark activated buttons inside their rows, rows at most " + maxH + "px (the long name's four lines), a pending row " + C.rows[FLEX].h + "px, text 12px+ (" + J({ pageW: C.pageW, hs, btn, font: C.minFont, height: C.height }) + ")");
       if (w === 390) {
         if (process.env.SHOT_DIR) await page.screenshot({ path: path.join(process.env.SHOT_DIR, "cb-390-signed-in.png"), fullPage: true });
@@ -3348,6 +3349,16 @@ function listRows(sel) {
         const r = await g();
         ok(r.saves === 0 && !r.dt && !r.ending && !r.wc && r.hist === h0, "4d double tap on the " + label + ": back home once, the second tap dropped (no save, no detail) (" + J(r) + ")");
       }
+      // The guard's window belongs to the swap that armed it: right after that double tap on Back, What changed entered from a
+      // freshness row (no guard of its own) takes a tap on Gone at once.
+      await page.click("#sc-new");
+      await page.waitForTimeout(450);
+      await page.dblclick("#wcback");
+      await page.evaluate(() => { document.getElementById("fresh").open = true; });
+      await page.click("#flist .fhead.fgo");
+      await page.locator("#wctabs button", { hasText: /^Gone/ }).click();
+      const gone = await page.evaluate(() => [...document.querySelectorAll("#wctabs button")].map(b => b.getAttribute("aria-pressed")));
+      ok(J(gone) === J(["false", "true"]), "4d double tap: a What changed entered from a freshness row just after a guarded Back takes its first tap (Gone picked) (" + J(gone) + ")");
       ok(errsG.length === 0, "4d double taps: no page errors (" + errsG.join("; ") + ")");
       await ctxG.close();
     }

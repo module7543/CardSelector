@@ -3027,7 +3027,10 @@
   // filter, so the buttons show the row's numbers. From the home screen's New shortcut: All cards, New (sc: "new",
   // focus goes back to it). One history entry, so the phone's back button leaves. An Ending soon scope is set aside
   // while it is on (What changed lists its own offers) and comes back on leaving.
-  function enterWc(c, tab, sc) {
+  function enterWc(c, tab, sc, ev) {
+    // This swap's own double-tap window: the New shortcut's tap arms it; a freshness row's ends any older one, so a tap on
+    // New / Gone just after entering is never dropped because of an earlier Back.
+    dtSwapped(ev);
     if (!wc) {
       wc = { saved: viewState(), token: String(Date.now()) + Math.random() };
       ending = null;
@@ -3093,7 +3096,7 @@
   }
   window.__shortcuts = function () { return scEl.hidden ? null : { new: scCounts.new, end: scCounts.end }; }; // for the tests
   // Each swaps the page under the finger: the double-tap guard drops a second tap there (dtSwapped).
-  scNew.addEventListener("click", function (ev) { if (!wc && !ending && !dt) { dtSwapped(ev); enterWc(null, "new", "new"); } });
+  scNew.addEventListener("click", function (ev) { if (!wc && !ending && !dt) enterWc(null, "new", "new", ev); });
   scEnd.addEventListener("click", function (ev) { if (!ending && !wc && !dt) { dtSwapped(ev); enterEnding(); } });
 
   // Ending soon: the view is saved (viewState) and one history entry pushed; then the search and every filter are
