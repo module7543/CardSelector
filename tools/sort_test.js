@@ -2262,6 +2262,10 @@ function listRows(sel) {
     await page.click("#cb li[data-eid='" + FLEX + "']");
     await page.click("#cb li[data-eid='" + CC + "']");
     ok(J(await page.evaluate(() => [window.__renders, location.href, history.length])) === J(r0), "cb: tapping a row opens nothing and draws nothing");
+    // A pending Custom Cash or Customized Cash entry (not in today's data) shows the pending line, as the header counts it.
+    C = await cbOpen({ set: { "Citi Custom Cash": "not_confirmed", "Customized Cash": "not_confirmed" } });
+    ok(C.pend === "⚠ 2 activations pending" && C.rows[CC].state === "⚠ Not activated" && C.rows[BOA].state === "⚠ Not activated",
+      "cb: a not_confirmed Custom Cash / Customized Cash entry shows as pending, matching the count (" + J([C.pend, C.rows[CC].state, C.rows[BOA].state]) + ")");
     // The focus and choice follow the data: Custom Cash on grocery stores, Customized Cash on dining.
     C = await cbOpen({ set: { "Citi Custom Cash": { planned: "grocery stores" } }, choice: "dining" });
     cbIs("focus/choice", C, CC, { summary: "5% on top category", state: "CardSelector focus: grocery stores", buttons: [] });
@@ -2277,6 +2281,8 @@ function listRows(sel) {
     cbIs("signed in", C, FLEX, { state: "⚠ Not activated, activate by Dec 14 Mark activated", buttons: ["Mark activated"] });
     cbIs("signed in", C, DISC, { state: "⚠ Not activated, activate by Dec 31 5% starts the day you activate. Mark activated", buttons: ["Mark activated"] });
     cbIs("signed in", C, FREE, { state: "⚠ Not activated", buttons: [] });
+    const labels = await page.$$eval("#cb button", bs => bs.map(b => b.getAttribute("aria-label")));
+    ok(J(labels) === J(["Mark Freedom Flex activated", "Mark Discover it activated"]), "cb signed in: each Mark activated names its card for screen readers (" + J(labels) + ")");
     ok(J(C.controls) === J(["BUTTON:Mark activated", "BUTTON:Mark activated"]) && C.pend === "⚠ 3 activations pending",
       "cb signed in: the only controls are the two Mark activated buttons (a pending entry with no deadline has none) (" + J(C.controls) + ")");
     C = await cbOpen({}, true);

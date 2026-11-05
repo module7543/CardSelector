@@ -188,6 +188,11 @@ async function offline() {
   ok(r.status === "saved" && r.files.join() === BONUS, "bonus focus save: only bonus-categories.json (" + other + ")");
   r = await save({ type: "bonus.planned", id: cc.id, from: cc.planned, to: other }, "bonus repeat");
   ok(r.status === "done", "bonus focus repeat -> done");
+  const ch = bonus.entries.find(e => e.choices), chTo = ch && ch.choices.map(c => c.name).find(n => n !== ch.choice);
+  r = await save({ type: "bonus.choice", id: ch.id, from: ch.choice, to: chTo }, "bonus choice");
+  ok(r.status === "saved" && r.files.join() === BONUS && JSON.parse(hub.file(BONUS)).entries.find(e => e.id === ch.id).choice === chTo, "bonus choice save: only bonus-categories.json (" + chTo + ")");
+  r = await save(r.undo, "bonus choice undo");
+  ok(r.status === "saved" && JSON.parse(hub.file(BONUS)).entries.find(e => e.id === ch.id).choice === ch.choice, "bonus choice undo: back to " + ch.choice);
 
   const touched = hub.since(start).map(s => hub.changed(s)).flat();
   ok(!touched.includes(OFFERS), "no save wrote offers.json (" + hub.since(start).length + " commits)");

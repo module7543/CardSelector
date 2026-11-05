@@ -2572,20 +2572,25 @@
   }
   // The one state line. Custom Cash: "CardSelector focus: restaurants" (CardSelector's assumption only; it elects
   // nothing at Citi). Customized Cash: "Choice: online shopping" (the stored choice; set at Bank of America).
-  // Otherwise the activation: "✓ Activated · ends Dec 31", "⚠ Not activated, activate by Dec 14" (plus its short
-  // activation_note from the data, and "Mark activated" when signed in and the entry has a deadline, as the save
-  // rules allow), or "No activation needed".
+  // Otherwise the activation: "✓ Activated · ends Dec 31" or "No activation needed". A pending entry of any kind
+  // shows "⚠ Not activated, activate by Dec 14" (plus its short activation_note from the data, and "Mark activated"
+  // when signed in and the entry has a deadline, as the save rules allow).
   function bonusState(e, ed) {
     var st = el("div", "cbst");
-    if (e.eligible && e.planned) st.appendChild(el("span", "cbinfo", "CardSelector focus: " + e.planned));
+    if (e.activation === "not_confirmed") {
+      // First, whatever the kind: every entry the header counts as pending shows as pending.
+      st.appendChild(el("span", "bwarn", "⚠ Not activated" + (e.activate_by ? ", activate by " + fmtDate(e.activate_by) : "")));
+      if (e.activation_note) st.append(" ", el("span", "cbinfo", cap(e.activation_note) + "."));
+      if (ed && e.activate_by) {
+        var b = editBtn("Mark activated", { type: "bonus.activation", id: e.id, from: "not_confirmed", to: "activated" }, "edfill");
+        b.setAttribute("aria-label", "Mark " + e.card + " activated");
+        st.append(" ", b);
+      }
+    } else if (e.eligible && e.planned) st.appendChild(el("span", "cbinfo", "CardSelector focus: " + e.planned));
     else if (e.choices && e.choice) st.appendChild(el("span", "cbinfo", "Choice: " + e.choice));
     else if (e.activation === "activated") {
       st.appendChild(el("span", "bok", "✓ Activated"));
       if (e.end) st.appendChild(el("span", "cbinfo", " · ends " + fmtDate(e.end)));
-    } else if (e.activation === "not_confirmed") {
-      st.appendChild(el("span", "bwarn", "⚠ Not activated" + (e.activate_by ? ", activate by " + fmtDate(e.activate_by) : "")));
-      if (e.activation_note) st.append(" ", el("span", "cbinfo", cap(e.activation_note) + "."));
-      if (ed && e.activate_by) st.append(" ", editBtn("Mark activated", { type: "bonus.activation", id: e.id, from: "not_confirmed", to: "activated" }, "edfill"));
     } else st.appendChild(el("span", "cbinfo", "No activation needed"));
     return st;
   }
@@ -3730,6 +3735,8 @@
     return c;
   }
 
+  // For the tests: the Focus and Choice saves have no control on the home screen until the 4C detail pages.
+  window.__runSave = function (change) { runSave(change); };
   function runSave(change, retried) {
     if (saving) return;
     saving = true;

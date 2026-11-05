@@ -367,6 +367,30 @@ class Hub {
   await check();
   ok(!(await remembered())["bonus:" + E5.id] && /^✓ Activated/.test(await st5()), "once deployed: entry dropped, the row unchanged");
 
+  // 5b. Customized Cash choice (the page's save path, runSave, which the 4C picker will call): survives a reload during
+  // the deploy, and the headline and Card bonuses use it.
+  console.log("-- 5b. Customized Cash choice");
+  await fresh({ token: "test-token-offline" });
+  const CC = "bank-of-america-customized-cash/standing", q5 = "chevron";
+  const choiceRow = () => page.$eval("#cb li[data-eid='" + CC + "'] .cbst", e => e.textContent);
+  await search(q5);
+  const use0 = await page.$eval("#use", e => e.innerText);
+  const choice0 = JSON.parse(hub.files["site/data/bonus-categories.json"]).entries.find(e => e.id === CC).choice;
+  await page.evaluate(([id, from]) => window.__runSave({ type: "bonus.choice", id, from, to: "gas & EV charging stations" }), [CC, choice0]);
+  await waitBar(/Deploying/);
+  const use1 = await page.$eval("#use", e => e.innerText);
+  ok(choice0 !== "gas & EV charging stations" && /Customized Cash/.test(use1) && use1 !== use0 && await choiceRow() === "Choice: gas & EV charging stations",
+    "after the save the headline and Card bonuses use the new choice: " + JSON.stringify(use1.split("\n")[0]));
+  ok((await remembered())["bonus:" + CC], "choice save remembered");
+  await open(true);
+  await search(q5);
+  const use2 = await page.$eval("#use", e => e.innerText);
+  ok(use2 === use1 && await choiceRow() === "Choice: gas & EV charging stations", "reload during the deploy: the choice and the headline stay (" + JSON.stringify(use2.split("\n")[0]) + ")");
+  hub.deploy();
+  await check();
+  ok(!(await remembered())["bonus:" + CC] && (await page.$eval("#use", e => e.innerText)) === use1, "once deployed: entry dropped, the headline unchanged");
+  await page.fill("#q", "");
+
   // 6. A save refused with "reload": an immediate check, then one retry.
   console.log("-- 6. refused save");
   await fresh({ token: "test-token-offline" });
