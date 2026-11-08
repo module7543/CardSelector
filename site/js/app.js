@@ -1240,14 +1240,11 @@
     usedEl.appendChild(b);
   }
 
-  // ---- Filters on phones (redesign step 5): the compact control row and the filter sheet ----
-  // Under 700px wide the filters panel (#filters: Sort, Where you're paying, Activation, Used, Card, Category, Cuisine)
-  // lives in a bottom sheet opened from the Filters button; wide screens keep it in the page as before. Every control
-  // in it is the one the wide panel uses, so a choice applies at once through the same state, remembered settings and
-  // redraw; "Show results" only closes the sheet. The row under the search box shows the Filters button, one removable
+  // ---- Filters (redesign step 5): the compact control row and the shared filter dialog ----
+  // The filters panel (#filters: Sort, Where you're paying, Activation, Used, Card, Category, Cuisine) lives in one
+  // dialog at every width: a bottom sheet on phones, centered on wide screens. Every control applies through the
+  // same state, remembered settings and redraw; "Show results" only closes the sheet. The row under the search box shows the Filters button, one removable
   // chip per active filter, the cuisine picker under Dining and the Sort button. Opening a sheet adds no history entry.
-  var phoneMQ = window.matchMedia("(max-width: 699px)");
-  function isPhone() { return phoneMQ.matches; }
   var fbar = document.getElementById("fbar"), fbn = document.getElementById("fbn"), fsortBtn = document.getElementById("fsortbtn");
   var fsheet = document.getElementById("fsheet"), fsBody = document.getElementById("fsbody");
   var psheet = document.getElementById("psheet"), plist = document.getElementById("plist"), psH = document.getElementById("ps-h");
@@ -1260,15 +1257,8 @@
   // a second tap anywhere on the page or the sheets for a moment (dtSwapped), so it can't land on a Mark activated.
   var FS_GUARD = ".wrap, #fsheet, #psheet, #savebar";
 
-  // Phones: the panel in the sheet. Wide screens: back in the page, above the count line (placeHome may move it down
-  // with the home screen's utilities), and no sheet open.
-  function placeFilters() {
-    if (isPhone()) { if (filtersEl.parentNode !== fsBody) fsBody.appendChild(filtersEl); }
-    else {
-      closeSheet(null, true);
-      if (filtersEl.parentNode === fsBody) countEl.parentNode.insertBefore(filtersEl, countEl);
-    }
-  }
+  // Move the real controls once. Width changes only restyle the dialog, so open filters, focus and state stay put.
+  fsBody.appendChild(filtersEl);
 
   // The sheet filters that are on, in the sheet's order (the Used list ignores Where you're paying and Activation).
   function activeFilters(usedOn) {
@@ -1280,12 +1270,12 @@
     if (category === "Dining" && cuisine !== null) on.push({ k: "cuis", label: cuisine });
     return on;
   }
-  // The row under the search box (phones). listShown: a list is on the page (the Sort button shows with it). quiet: the
+  // The row under the search box. listShown: a list is on the page (the Sort button shows with it). quiet: the
   // plain home screen (no list, so no filter is on): the Filters button is just an icon at the end of the search field and
   // the row isn't drawn, so Quick picks stay right under the search box.
   var searchBarEl = document.querySelector(".searchbar");
   function renderFbar(usedOn, listShown, quiet) {
-    var inSearch = quiet && isPhone();
+    var inSearch = quiet;
     if (inSearch && ftoggle.parentNode !== searchBarEl) searchBarEl.appendChild(ftoggle);
     else if (!inSearch && ftoggle.parentNode !== fbar) fbar.insertBefore(ftoggle, fbar.firstChild);
     searchBarEl.classList.toggle("withf", inSearch);
@@ -1366,13 +1356,13 @@
 
   // The sheet's counts, from the same scope as the list (facetCtx): each channel's count with the card and activation
   // choices applied, each card's count with the channel and activation choices applied (All cards: the list's own
-  // count), and how many show no channel. Drawn only while the filter sheet is open (wide screens show none).
+  // count), and how many show no channel. Drawn only while the filter dialog is open.
   function renderFacets() {
     chansNote.hidden = true;
     var x = facetCtx;
     usedNote.hidden = !(x && x.used);
     if (!sheetOpen || sheetOpen.el !== fsheet || !x || !data || x.used) {
-      // Outside the sheet the channel and card buttons carry no counts (as the wide-screen panel always was).
+      // Clear counts while the dialog is closed.
       Array.prototype.forEach.call(document.querySelectorAll("#chans .n, #cards .n"), function (n) { n.parentNode.removeChild(n); });
       return;
     }
@@ -1408,7 +1398,7 @@
   // and doesn't scroll; Escape, the dimmed page, "Show results" or Close shut it, and focus goes back to the control
   // that opened it.
   function openSheet(sheet, openerId, ev) {
-    if (sheetOpen || !isPhone() || !data) return;
+    if (sheetOpen || !data) return;
     dtSwapped(ev, FS_GUARD);
     sheetOpen = { el: sheet, opener: openerId, was: filterSig() };
     wrapEl.setAttribute("inert", "");
@@ -1451,6 +1441,16 @@
   document.getElementById("psclose").addEventListener("click", function (ev) { closeSheet(ev); });
   document.addEventListener("keydown", function (ev) {
     if (sheetOpen && (ev.key === "Escape" || ev.key === "Esc")) { ev.preventDefault(); closeSheet(null); }
+    else if (sheetOpen && ev.key === "Tab") {
+      var panel = sheetOpen.el.querySelector(".fspanel");
+      var stops = Array.prototype.filter.call(panel.querySelectorAll("button, select, [tabindex]"), function (b) {
+        return !b.disabled && b.tabIndex >= 0 && b.offsetParent;
+      });
+      var first = stops[0], last = stops[stops.length - 1], active = document.activeElement;
+      if (!first) { ev.preventDefault(); panel.focus(); }
+      else if (ev.shiftKey && (active === first || active === panel)) { ev.preventDefault(); last.focus(); }
+      else if (!ev.shiftKey && active === last) { ev.preventDefault(); first.focus(); }
+    }
   });
   // The phone's back button while a sheet is open: the sheet closes and the page goes back as it would have.
   window.addEventListener("popstate", function () { closeSheet(null, true); });
@@ -1528,9 +1528,6 @@
     openPicker("Cuisine", cuisineChoices().map(function (x) { return { v: x.c, label: x.c || "All cuisines", n: x.n }; }),
       cuisine, setCuisine, "fcuisbtn", ev);
   }
-  if (phoneMQ.addEventListener) phoneMQ.addEventListener("change", function () { placeFilters(); if (data) render(); });
-  else if (phoneMQ.addListener) phoneMQ.addListener(function () { placeFilters(); if (data) render(); });
-  placeFilters();
 
   // ---- Bonus categories (data/bonus-categories.json) ----
   // An entry is shown only between its start and end dates (standing ones have none).
@@ -3440,34 +3437,14 @@
   try { if (history.state && history.state.cardselectorEnd) history.back(); } catch (e) {}
   // ---- The home screen's order (finalised in step 4D): search, Quick picks, Card bonuses, the shortcuts, Offer
   // freshness, then the quieter utilities (Recently unavailable, Edit mode). Offer freshness moves up from the footer on
-  // the home screen only (elsewhere it is in the footer). Filters (step 5): on phones the Filters button is in the row
-  // under the search box and opens the filter sheet; on wide screens the panel moves down with the utilities on the
-  // home screen, and is under the answer card everywhere else.
-  var homeFresh = document.getElementById("homefresh"), homeUtil = document.getElementById("homeutil");
-  var freshEl = document.getElementById("fresh"), filterTapT = -1e9;
-  filtersEl.addEventListener("click", function () { filterTapT = Date.now(); }, true);
-  // filtersDown: the home screen shows no list (no channel or activation choice), so on wide screens the filters panel
-  // sits with the utilities; with a list (a remembered In store, say) it stays above the list, where it always was.
-  function placeHome(home, filtersDown) {
+  // the home screen only (elsewhere it is in the footer). Filters stay in their dialog at every width.
+  var homeFresh = document.getElementById("homefresh");
+  var freshEl = document.getElementById("fresh");
+  function placeHome(home) {
     wrapEl.classList.toggle("home", home);
     if (home && freshEl.parentNode !== homeFresh) homeFresh.appendChild(freshEl);
     if (!home && freshEl.parentNode !== foot) foot.insertBefore(freshEl, foot.firstChild);
     homeFresh.hidden = !home;
-    var wide = !isPhone();
-    if (wide && filtersDown && filtersEl.parentNode !== homeUtil) homeUtil.appendChild(filtersEl);
-    else if (wide && !filtersDown && filtersEl.parentNode === homeUtil) {
-      countEl.parentNode.insertBefore(filtersEl, countEl);
-      // A filter picked down there: a category or card opens the list at the top; a channel or activation choice keeps
-      // the home screen with a list under it, so the panel (now just above the list) is brought into view.
-      if (Date.now() - filterTapT < 1500) {
-        if (!home) window.scrollTo(0, 0);
-        else requestAnimationFrame(function () {
-          var top = filtersEl.getBoundingClientRect().top - document.querySelector(".searchbar").getBoundingClientRect().height - 8;
-          window.scrollTo(0, Math.max(0, window.scrollY + top));
-        });
-      }
-    }
-    homeUtil.hidden = !(wide && filtersDown);
   }
 
   window.__ending = function () { return ending ? { sort: sortMode } : null; }; // for the tests
@@ -4128,7 +4105,7 @@
     // Quick picks, Card bonuses and the New / Ending shortcuts: the home screen only (a search, category or card answers
     // in the answer card instead).
     var home = !wc && !ending && !usedOn && !hasQuery && category === null && card === null;
-    placeHome(home, home && !narrowed);
+    placeHome(home);
     renderQuickPicks(home, today);
     showBonuses(home);
     renderShortcuts(home, today);
@@ -4488,9 +4465,9 @@
     if (!q || q === settledQuery || document.activeElement !== input) return;
     settledQuery = q;
     var bar = document.querySelector(".searchbar");
-    // In What changed, its panel (New / Gone stay in view); on phones the filter control row (step 5) right under the
+    // In What changed, its panel (New / Gone stay in view); otherwise the filter control row (step 5) right under the
     // search box stays in view above the answer card.
-    var target = wc ? wcEl : isPhone() && !fbar.hidden ? fbar : useEl.hidden ? countEl : useEl;
+    var target = wc ? wcEl : !fbar.hidden ? fbar : useEl.hidden ? countEl : useEl;
     var y = window.scrollY + target.getBoundingClientRect().top - bar.getBoundingClientRect().height - 4;
     if (Math.abs(window.scrollY - y) > 2) window.scrollTo({ top: Math.max(0, y), behavior: "smooth" });
   }

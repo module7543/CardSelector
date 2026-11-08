@@ -570,6 +570,16 @@ async function usedChecks(page, load, search, testEdits) {
   ok(await page.$eval("#used button", b => b.getAttribute("aria-pressed")) === "true" && (await rows()).length === nUsed &&
      JSON.stringify(await page.evaluate(() => [localStorage.getItem("cardselector.channel"), localStorage.getItem("cardselector.activation")])) === JSON.stringify(["any", "any"]),
      "s5 Reset with the Used list on: Where you're paying and Activation back to Any (remembered), the Used list stays on with every used offer");
+  // Desktop shares the Used controls and state, including Reset's special handling.
+  await page.setViewportSize({ width: 1000, height: 844 });
+  await openFilters();
+  ok(await page.$eval("#used-note", e => !e.hidden) && await page.$$eval("#chans button, #acts button", bs => bs.every(b => b.disabled)) &&
+    await page.$eval("#filters", e => e.parentNode.id === "fsbody"), "desktop Used: same real dialog, explanatory note and disabled channel/activation controls");
+  await page.click("#fsreset"); await closeFilters();
+  ok((await rows()).length === nUsed && await page.$eval("#used button", b => b.getAttribute("aria-pressed")) === "true" &&
+    !(await page.isVisible("#fsortbtn")) && await page.$eval("#ftoggle", b => b === document.activeElement),
+    "desktop Used Reset: every Used row stays, Sort hidden, focus returned to Filters");
+  await page.setViewportSize({ width: 390, height: 844 });
   await clickUsed();
   ok(await page.$$eval("#chans button, #acts button", bs => bs.every(b => !b.disabled)), "Used off: those buttons work again");
   await inFilters(async () => {

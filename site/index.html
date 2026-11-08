@@ -211,19 +211,17 @@
   .ratesnc { margin-top: 8px; padding: 8px 14px; background: var(--neutral-bg); border-radius: 12px; font-size: 13px; }
   .ratesnch { font-weight: 700; color: var(--neutral-text); }
 
-  /* Filters: on wide screens the full panel sits in the page as it always has. On phones (under 700px) the same panel
-     lives in the filter sheet (below), opened from the compact control row under the search box. */
+  /* One filters panel in the shared dialog, opened from the compact controls at every width. */
   .filters { margin-top: 12px; }
-  /* Sheet-only text (the channel and activation notes, the Used note): never in the wide-screen panel. */
+  /* Dialog notes (channel, activation and Used). */
   .sheetonly { display: none; }
 
-  /* The compact control row (phones): the Filters button, one removable chip per active sheet filter, the cuisine
+  /* The compact control row: the Filters button, one removable chip per active filter, the cuisine
      picker under Dining, and the Sort button. It wraps onto more lines; it never scrolls sideways. */
   .fbar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 2px 0 8px; }
-  /* Phones: the panel belongs in the sheet; it never shows in the page (not even before app.js moves it there). */
-  @media (max-width: 699px) { .wrap > .filters { display: none; } }
+  /* Never flash the raw panel before app.js moves it into the dialog. */
+  .wrap > .filters { display: none; }
   .fbar[hidden] { display: none; }
-  @media (min-width: 700px) { .fbar { display: none !important; } }
   .fbtn {
     display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-width: 44px; min-height: 40px; margin: 0;
     padding: 0 12px; font: inherit; font-size: 14px; font-weight: 650; line-height: 1.2; color: var(--text);
@@ -245,7 +243,6 @@
   }
   .searchbar > #ftoggle svg { width: 20px; height: 20px; }
   .searchbar > #ftoggle .fbn:empty { display: none; }
-  @media (min-width: 700px) { .searchbar > #ftoggle { display: none; } .searchbar.withf #q { padding-right: 18px; } }
   .fbtn.fsort[hidden] { display: none; }
   /* A chip is one button: the filter's name and a ×; the whole chip removes that filter. */
   .flchip {
@@ -282,6 +279,20 @@
   .fsheet.rise .fspanel { transform: translateY(100%); transition: none; }
   @media (prefers-reduced-motion: reduce) { .fspanel { transition: none; } }
   .psheet .fspanel { height: auto; max-height: 80vh; max-height: 80dvh; }
+  /* Wide screens: the same dialogs centered within the app's 640px composition. CSS alone handles a resize,
+     including an open dialog: controls, focus, inert state and scroll locking remain intact. */
+  @media (min-width: 700px) {
+    .fspanel, .psheet .fspanel {
+      top: 50%; bottom: auto; width: calc(100% - 48px); max-width: 640px;
+      max-height: calc(100vh - 64px); max-height: calc(100dvh - 64px);
+      /* Keep centering separate from the phone entrance transform so a resize never animates through offscreen positions. */
+      border-radius: 18px; overflow: hidden; translate: 0 -50%; transform: translateY(0); transition: none;
+    }
+    .fspanel { height: 760px; }
+    .fsheet.rise .fspanel { transform: translateY(0); }
+    .fshandle { display: none; }
+    .fsheet .fshead { padding-top: 12px; }
+  }
   .fshandle { flex: none; width: 40px; height: 5px; margin: 8px auto 0; border-radius: 3px; background: var(--line); }
   .fshead { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 4px 8px 6px 20px; }
   .fshead h2 { margin: 0; font-size: 20px; font-weight: 750; letter-spacing: -0.01em; }
@@ -314,8 +325,9 @@
   .fsbody #chans .cat .n, .fsbody #acts .cat .n { display: block; margin-top: 1px; font-size: 12.5px; font-weight: 500; opacity: .75; font-variant-numeric: tabular-nums; }
   .fsbody #chans .cat[aria-pressed="true"], .fsbody #acts .cat[aria-pressed="true"] { color: var(--text); background: var(--seg-sel); box-shadow: var(--seg-shadow); }
   .fsbody .sorthelp { margin-top: 8px; font-size: 13px; line-height: 1.4; }
-  /* The sort's long description stays on wide screens; the sheet shows just the select (the approved sheet design). */
+  /* Phones show just the select; wide dialogs also show its description. */
   .fsbody #sort-help { display: none; }
+  @media (min-width: 700px) { .fsbody #sort-help { display: block; } }
   .fsbody #cards { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; margin: 0; }
   .fsbody .cat.cardbtn {
     display: flex; align-items: center; gap: 0; min-width: 0; min-height: 50px; padding: 6px 10px; font-size: 14.5px; font-weight: 650;
@@ -661,7 +673,7 @@
   .scsub { display: block; font-size: 13px; line-height: 1.3; color: var(--muted); }
   /* Offer freshness on the home screen (moved up from the footer), then the quieter utilities. */
   .homefresh { margin: 12px 0 0; color: var(--muted); font-size: 14px; }
-  .homefresh[hidden], .homeutil[hidden] { display: none; }
+  .homefresh[hidden] { display: none; }
   .wrap.home .count:empty { min-height: 0; margin: 0; }
   .wrap.home .hint.homehint { margin: 14px 4px 4px; font-size: 13px; line-height: 1.4; }
   /* Recently unavailable and Edit mode (closed): plain muted rows, each with its expand chevron. */
@@ -998,8 +1010,7 @@
   <div class="endbar" id="endbar" hidden>
     <button class="endchip" id="endchip" type="button">Ends within 7 days<span class="endx" aria-hidden="true">×</span><span class="sr-only">, remove filter</span></button>
   </div>
-  <!-- Phones: the compact filter controls (the Filters button opens the filter sheet; a chip per active filter removes
-       it; the cuisine picker under Dining; the Sort button opens the sort picker). Wide screens show the panel instead. -->
+  <!-- Compact filters at every width: shared dialog, removable chips, Dining cuisine and Sort pickers. -->
   <div class="fbar" id="fbar" hidden>
     <button class="fbtn" id="ftoggle" type="button" aria-haspopup="dialog" aria-expanded="false" aria-controls="fsdialog"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true" focusable="false"><path d="M3 5.5h14M5.5 10h9M8 14.5h4"/></svg><span class="fbn" id="fbn">Filters</span></button>
     <button class="fbtn fsort" id="fsortbtn" type="button" aria-haspopup="dialog" aria-expanded="false" aria-controls="psdialog" aria-label="Sort" hidden><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M6.5 16V4M3.5 7l3-3 3 3M13.5 4v12M10.5 13l3 3 3-3"/></svg></button>
@@ -1036,7 +1047,7 @@
   </section>
   <!-- Home screen only: Offer freshness moves up here from the footer (placeHome in app.js). -->
   <div class="homefresh" id="homefresh" hidden></div>
-  <!-- The filters: shown here on wide screens; on phones this same panel lives in the filter sheet (below). -->
+  <!-- The real filters: app.js moves this panel once into the shared dialog below. Hidden here even before JS. -->
   <div class="filters" id="filters">
   <div class="filter">
     <label class="flabel" for="sort" id="sort-label">Sort</label>
@@ -1075,8 +1086,6 @@
   <div class="count" id="count" aria-live="polite"></div>
   <p class="offline" id="offline" hidden></p>
   <main id="main"></main>
-  <!-- Wide screens, home screen only: the filters panel moves down here with the other utilities. -->
-  <div class="homeutil" id="homeutil" hidden></div>
   <footer id="foot" hidden>
     <details class="fresh" id="fresh">
       <summary id="fsum"></summary>
@@ -1102,7 +1111,7 @@
     </details>
   </footer>
 </div>
-<!-- Phones: the filter sheet (the filters panel moves into its body) and the picker sheet (Sort, Cuisine). -->
+<!-- Shared filter and picker dialogs: bottom sheets on phones, centered dialogs on wide screens. -->
 <div class="fsheet" id="fsheet" hidden>
   <div class="fsback" id="fsback"></div>
   <div class="fspanel" id="fsdialog" role="dialog" aria-modal="true" aria-labelledby="fs-h" tabindex="-1">
