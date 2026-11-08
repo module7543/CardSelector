@@ -502,13 +502,15 @@ class Hub {
   await comeBack8();
   await stays("with the Dining category picked (empty search box focused)");
   await inFilters(() => page.locator("#cats button", { hasText: /^All$/ }).click());
-  // The filter sheet open (step 5): no reload, even with nothing picked.
-  await page.click("#ftoggle");
-  await page.waitForTimeout(420);
-  await comeBack8();
-  await stays("with the filter sheet open");
-  await page.click("#fsdone");
-  await page.waitForTimeout(420);
+  // The shared filter dialog blocks code reloads at both widths, even with nothing picked.
+  for (const width of [390, 1000]) {
+    await page.setViewportSize({ width, height: 844 });
+    await page.click("#ftoggle"); await page.waitForTimeout(420);
+    await comeBack8();
+    await stays("with the filter dialog open at " + width + "px");
+    await page.click("#fsdone"); await page.waitForTimeout(420);
+  }
+  await page.setViewportSize({ width: 390, height: 844 });
   await page.evaluate(() => { document.getElementById("editmode").open = true; });
   await page.focus("#q");
   await comeBack8();
@@ -540,14 +542,16 @@ class Hub {
   await page.click("#endchip");
   await page.waitForTimeout(100);
   await page.focus("#q");
-  // Another field in use blocks it too. At phone width every other field is inside a panel that already blocks
-  // the reload (the filter sheet, Edit mode), so this one case runs wide, where the sort select is visible.
-  await page.setViewportSize({ width: 1000, height: 844 });
-  await page.focus("#sort");
-  ok(await page.evaluate(() => document.activeElement.id === "sort"), "wide screen: the sort select has focus");
+  // Isolate the form-field guard: real non-search fields now live in dialogs/Edit mode, which already block reloads.
+  // A test-only field outside those surfaces exercises the independent focused-field check.
+  await page.evaluate(() => {
+    const field = document.createElement("input"); field.id = "test-field";
+    document.querySelector(".wrap").appendChild(field); field.focus();
+  });
+  ok(await page.evaluate(() => document.activeElement.id === "test-field"), "another form field has focus");
   await comeBack8();
-  await stays("with another field (the sort select, wide screen) focused");
-  await page.setViewportSize({ width: 390, height: 844 });
+  await stays("with another form field focused");
+  await page.evaluate(() => document.getElementById("test-field").remove());
   await page.focus("#q");
   ok(await focusQ() && await page.$eval("#q", e => e.value) === "", "the empty search box has focus again");
   await Promise.all([page.waitForNavigation({ timeout: 15000 }).catch(() => null), comeBack8()]);
