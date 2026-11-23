@@ -131518,7 +131518,7 @@
       "bonus": "2% Cash back",
       "expires": null,
       "expires_text": null,
-      "activation": "needs_activation",
+      "activation": "already_activated",
       "channel": "online",
       "spend_cap": null,
       "minimum_spend": null,
