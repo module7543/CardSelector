@@ -43,7 +43,7 @@ sys.path.insert(0, str(ROOT / "tools"))
 from fold_phone_edits import load_pending, with_pending  # noqa: E402
 
 DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
-FIELDS = ["id", "card", "merchant", "category", "bonus", "expires", "expires_text", "activation", "channel",
+FIELDS = ["id", "card", "merchant", "category", "bonus", "expires", "expires_text", "activation", "redemption", "channel",
           "spend_cap", "minimum_spend", "fine_print", "other_details", "last_read", "first_seen", "status",
           "status_since"]
 SIZE_MIN = 0.70          # size check: batch under 70% of the prior active count
@@ -317,6 +317,7 @@ class Adapter:
     card_columns = {"card", "card_name", "card_last4"}
     snapshot = True          # every batch is a complete snapshot of the card
     pair_note_drop = ()      # notes dropped when a truncated name is paired with its full name
+    read_date_column = "read_date"
 
     def check_columns(self, cols):
         missing = self.required - set(cols)
@@ -471,15 +472,40 @@ class CapitalOne(Adapter):
     used = required | {"passes", "seq", "section", "source", "offer_types", "tile_class", "expiration", "category",
                        "view_context_id", "raw_text"}
     CHANNEL = {"online": "online", "in-store": "in_store", "at the pump": "pay_at_pump",
-               "in-store & online": "in_store_and_online", "in-store & in-app": "in_store_and_app"}
+               "in-store & online": "in_store_and_online", "in-store & in-app": "in_store_and_app",
+               "in-app": "in_app", "online & in-app": "online_and_app", "in-app & online": "online_and_app"}
     BADGES = ("BONUS", "NEW OFFER", "EXCLUSIVE COUPON")
+    INVENTORY = {"extraction_date", "layout_variant", "tile_kind", "merchant", "domain", "reward", "channel",
+                 "offer_type", "offer_type_basis", "activation_status"}
+    TYPE_BASES = {"Encoded tile offer-type labels", "Promoted affiliate tile template"}
+    inventory = False
+
+    def check_columns(self, cols):
+        if "extraction_date" in cols:
+            self.inventory = True
+            self.required = self.used = self.INVENTORY
+            self.read_date_column = "extraction_date"
+        return super().check_columns(cols)
 
     def check_rows(self, rows):
+        if self.inventory:
+            dates = {(r.get("extraction_date") or "").strip() for _, r in rows}
+            if len(dates) != 1 or not real_date(next(iter(dates))):
+                raise Refused("the Capital One inventory must have one Pacific extraction_date on every row")
+            return
         # The page shows no expiry; a file that starts carrying one needs a rule first.
         if any(not blank(r.get("expiration")) for _, r in rows):
             raise Refused("the Capital One file has expiration values: CLAUDE.md says no expiry is shown; decide the rule first")
 
+    def pair_name(self, saved, inc, rule):
+        # The inventory can show an unqualified label for a storefront with a verified saved domain alias.
+        if self.inventory and inc.tld and any(a.lower() == inc.tld for a in saved.get("aliases", [])):
+            return saved["merchant"], None, ()
+        return super().pair_name(saved, inc, rule)
+
     def parse(self, rows, read_date, app):
+        if self.inventory:
+            return self.parse_inventory(rows)
         groups = {}
         for line, r in rows:
             if r["merchant"].strip().upper() == "UNREADABLE":
@@ -519,6 +545,71 @@ class CapitalOne(Adapter):
             inc.tld = next((r["merchant_tld"].strip() for _, r in g if r["merchant_tld"].strip()), None)
             inc.add_notes = list(dict.fromkeys(inc.add_notes))
             inc.promo_notes = list(dict.fromkeys(inc.promo_notes))
+            out.append(inc)
+        return out
+
+    def parse_inventory(self, rows):
+        groups, added = {}, {}
+        for line, row in rows:
+            kind = row["tile_kind"].strip()
+            name, reward = row["merchant"].strip(), row["reward"].strip()
+            if (row["layout_variant"].strip() != "current_layout" or kind in {"future_preview", "issuer_bonus_banner"}
+                    or not name or name.upper() == "UNREADABLE" or not reward):
+                continue
+            key = (nkey(name), row["domain"].strip().lower(), bonus_key(reward))
+            target = added if kind == "added_to_card" else groups
+            target.setdefault(key, []).append((line, row))
+
+        out = []
+        for key, placements in groups.items():
+            first = placements[0][1]
+            inc = Inc(first["merchant"].strip(), first["reward"].strip(), [line for line, _ in placements])
+            inc.tld = key[1] or None
+            rows_for_offer = [row for _, row in placements + added.get(key, [])]
+            channels, types, states = set(), set(), set()
+            for row in rows_for_offer:
+                channel = row["channel"].strip().lower()
+                if channel:
+                    if channel not in self.CHANNEL:
+                        raise Refused(f"unknown Capital One channel {channel!r} ({inc.label()})")
+                    channels.add(self.CHANNEL[channel])
+                if row["offer_type_basis"].strip() in self.TYPE_BASES:
+                    types.update(t.strip().lower() for t in row["offer_type"].split("|") if t.strip())
+                state = row["activation_status"].strip().lower()
+                if state:
+                    states.add(state)
+            if len(channels) == 1:
+                inc.set["channel"] = next(iter(channels))
+            elif channels:
+                inc.set["channel"] = "none_shown"
+                inc.flags.append("conflicting channel labels")
+            routes = types & {"affiliate", "cardlinked"}
+            if states & {"activated", "needs activation", "not activated"}:
+                routes.add("cardlinked")
+            if len(states) > 1:
+                inc.flags.append("conflicting activation labels")
+            elif states == {"activated"}:
+                inc.set["activation"] = "already_activated"
+            elif states in ({"needs activation"}, {"not activated"}):
+                inc.set["activation"] = "needs_activation"
+
+            if routes == {"affiliate"}:
+                method = "via_shop_link"
+            elif routes == {"cardlinked"}:
+                method = "card_linked"
+            elif routes:
+                method = "mixed"
+            else:
+                method = "unknown"
+            if types - {"affiliate", "cardlinked", "coupon"}:
+                inc.flags.append("unrecognized redemption type")
+                method = "unknown"
+            basis = "offer_type" if routes & types else "activation_status"
+            inc.set["redemption"] = {"method": method, "evidence": "not_shown" if method == "unknown" else basis}
+            if method == "via_shop_link":
+                inc.set["activation"] = "none_shown"
+            count = len(placements)
+            inc.replace.append((r"^\d+ tiles listed$", f"{count} tiles listed" if count > 1 else None))
             out.append(inc)
         return out
 
@@ -886,14 +977,14 @@ def read_csvs(paths, adapter):
     return rows, cols0, ignored, adapter.guarded(cols0 or [], rows)
 
 
-def pick_read_date(rows, cols, given):
-    if "read_date" in (cols or []):
-        vals = {(r.get("read_date") or "").strip() for _, r in rows}
+def pick_read_date(rows, cols, given, column="read_date"):
+    if column in (cols or []):
+        vals = {(r.get(column) or "").strip() for _, r in rows}
         if len(vals) == 1 and real_date(next(iter(vals))):
             v = next(iter(vals))
             if given and given != v:
-                raise Refused(f"--read-date {given} differs from the file's read_date {v}")
-            return v, "the file's read_date column"
+                raise Refused(f"--read-date {given} differs from the file's {column} {v}")
+            return v, f"the file's {column} column"
         if not given:
             raise Refused("the read_date column is blank or not the same on every row: pass --read-date "
                           "(the date the owner read the page, US Pacific)")
@@ -920,7 +1011,7 @@ def plan(card, paths, given_date, decisions=None, part=False, complete_parts=Fal
     view_list = with_pending(data, pending)
     rows, cols, ignored, guarded = read_csvs(paths, ad)
     ad.check_rows(rows)
-    read_date, date_source = pick_read_date(rows, cols, given_date)
+    read_date, date_source = pick_read_date(rows, cols, given_date, ad.read_date_column)
     dec = decisions or {}
     if decisions is not None:
         unknown = set(dec) - {"card", "read_date", "pairs", "categories", "clashes", "new_names", "owner_approved", "notes"}
@@ -1244,13 +1335,24 @@ def plan(card, paths, given_date, decisions=None, part=False, complete_parts=Fal
             same = alias and not saved and compact(alias) == compact(merchant)
             rename["alias"] = "added" if saved else ("same_name" if same else ("base" if base_alias else "none"))
             rename["alias_added"] = bool(saved)
+        repriced = inc.bonus is not None and bonus_key(inc.bonus) != bonus_key(o["bonus"])
         if inc.bonus is not None and inc.bonus != o["bonus"]:
-            (out["bonus_changes"] if bonus_key(inc.bonus) != bonus_key(o["bonus"]) else out["wording_changes"]).append(
+            (out["bonus_changes"] if repriced else out["wording_changes"]).append(
                 {"id": sid, "merchant": merchant, "from": o["bonus"], "to": inc.bonus})
+            if repriced and "redemption" in inc.set and "activation" not in pe:
+                touch(o, "activation", inc.set.get("activation", "none_shown"))
             touch(o, "bonus", inc.bonus)
         for f, val in inc.set.items():
             if f in pe:
                 continue  # a pending phone edit sets it
+            if "redemption" in inc.set and not repriced and o["last_read"] == read_date:
+                # The replay of a listing can be narrower than offer terms read for the same capture.
+                if f == "channel" and val in {"in_app", "online"} and o["channel"] == "online_and_app":
+                    continue
+                if f == "redemption":
+                    before = o.get(f, {})
+                    if before.get("evidence") == "offer_terms" and before.get("method") == val["method"]:
+                        continue
             touch(o, f, val)
         for f, val in inc.fill.items():
             if blank(o.get(f)):
@@ -1323,7 +1425,7 @@ def plan(card, paths, given_date, decisions=None, part=False, complete_parts=Fal
         set_aliases(o, name, aliases)
         notes_update(o, inc, count=False)
         o["status"] = "expired" if o["expires"] and o["expires"] < read_date else "active"
-        o = {k: o[k] for k in FIELDS[:3] + (["aliases"] if "aliases" in o else []) + FIELDS[3:]}
+        o = {k: o[k] for k in FIELDS[:3] + ["aliases"] + FIELDS[3:] if k in o}
         fresh.append(o)
         out["new"].append({"id": nid, "merchant": name, "bonus": o["bonus"], "category": cat, "category_source": source,
                            "file": inc.merchant, "lines": inc.lines})

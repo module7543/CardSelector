@@ -152,6 +152,65 @@ class RefreshTest(unittest.TestCase):
         o = self.t.offers()["capital-one/pura-vida"]
         self.assertEqual((o["status"], o["status_since"]), ("used", "2026-10-20"))
 
+    def test_capital_one_inventory_redemption(self):
+        with (FIX / "capital_one.csv").open(newline="") as stream:
+            old_rows = list(csv.DictReader(stream))
+        rows = [{
+            "extraction_date": READ, "layout_variant": "current_layout", "tile_kind": "standard",
+            "merchant": r["merchant"], "domain": r["merchant_tld"] or r["merchant"].lower().replace(" ", "-") + ".com",
+            "reward": r["bonus"], "channel": r["channel"], "offer_type": "affiliate",
+            "offer_type_basis": "Encoded tile offer-type labels", "activation_status": "",
+            "promotional_text": "PRIVATE_PROMO_TEST_SENTINEL",
+        } for r in old_rows]
+        by_name = {r["merchant"].lower(): r for r in rows}
+        ebay = by_name["ebay"]
+        ebay["offer_type"] = "affiliate|coupon"
+        loop = by_name["loop-mobile.com"]
+        loop.update(offer_type="cardLinked", channel="In-App")
+        for row in rows:
+            if row["merchant"] == "CVS":
+                row.update(offer_type="affiliate|cardLinked")
+            if row["merchant"] == "Pura Vida":
+                row.update(offer_type_basis="")
+        rows += [
+            dict(loop, tile_kind="added_to_card", offer_type="", offer_type_basis="", activation_status="Activated"),
+            dict(ebay, tile_kind="added_to_card", reward="25% back", activation_status="Activated"),
+            dict(ebay, layout_variant="mobile_layout_mirror", reward="70% back", offer_type="cardLinked"),
+            dict(ebay, tile_kind="future_preview", reward="80% back"),
+            dict(ebay, tile_kind="issuer_bonus_banner", reward="90% back"),
+        ]
+        p = self.t.root / "inventory.csv"
+        with p.open("w", newline="") as stream:
+            writer = csv.DictWriter(stream, fieldnames=rows[0])
+            writer.writeheader()
+            writer.writerows(rows)
+        carhartt = by_name["carhartt"]["domain"]
+        self.t.change_offers(lambda by, _: by["capital-one/carhartt"].update(merchant="Carhartt (workwear)", aliases=[carhartt]))
+        before = self.t.offers()
+        output, report = self.apply_ok("Capital One", [p], read_date=None)
+        after = self.t.offers()
+        self.assertEqual(report["read_date"], READ)
+        self.assertEqual(before.keys(), after.keys())
+        self.assertEqual(after["capital-one/carhartt"]["merchant"], "Carhartt (workwear)")
+        self.assertEqual(after["capital-one/ebay"]["redemption"], {"method": "via_shop_link", "evidence": "offer_type"})
+        self.assertEqual(after["capital-one/ebay"]["activation"], "none_shown")
+        self.assertEqual(after["capital-one/ebay"]["minimum_spend"], before["capital-one/ebay"]["minimum_spend"])
+        self.assertEqual(after["capital-one/cvs"]["redemption"]["method"], "mixed")
+        self.assertEqual(after["capital-one/pura-vida"]["redemption"], {"method": "unknown", "evidence": "not_shown"})
+        self.assertEqual((after["capital-one/loop-mobile"]["redemption"]["method"], after["capital-one/loop-mobile"]["channel"],
+                          after["capital-one/loop-mobile"]["activation"]), ("card_linked", "in_app", "already_activated"))
+        self.assertNotIn("PRIVATE_PROMO_TEST_SENTINEL", output + self.t.read("offers.json"))
+
+        # A pending phone edit still wins over the issuer's observed activation.
+        # A same-capture replay of the app placement preserves explicit online-or-app eligibility.
+        self.t.change_offers(lambda by, _: by["capital-one/loop-mobile"].update(channel="online_and_app"))
+        self.t.write_json("phone-edits.json", {"capital-one/loop-mobile": {"activation": "needs_activation"}})
+        edits = self.t.read("phone-edits.json")
+        self.apply_ok("Capital One", [p], read_date=None)
+        self.assertEqual(self.t.read("phone-edits.json"), edits)
+        self.assertEqual(self.t.offers()["capital-one/loop-mobile"]["activation"], "already_activated")
+        self.assertEqual(self.t.offers()["capital-one/loop-mobile"]["channel"], "online_and_app")
+
     def test_used_offer_in_batch_stays_used(self):
         self.t.change_offers(lambda by, d: by["chase-freedom/whisker"].update(status="used", status_since="2026-10-20"))
         self.apply_ok("Chase Freedom", [self.t.csv("Chase Freedom")])

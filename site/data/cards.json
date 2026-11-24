@@ -26,9 +26,9 @@
         "Discover it"
       ],
       "row_name": "Quicksilver / Discover it",
-      "activation": "add_to_card",
+      "activation": "stored",
       "label": "Capital One offer",
-      "note": "Each offer is applied to one chosen card (\"Apply my offer to\"), and in-store offers lock to that card, so an offer is never ready on both. Shown under After activating as \"add to <card>\", whichever card earns more there."
+      "note": "Check each offer for its redemption method. Shopping-link offers start at Capital One Offers. Card-linked offers apply to the eligible card linked to the offer."
     },
     "Bank of America": {
       "cards": [
