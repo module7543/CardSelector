@@ -1487,6 +1487,17 @@ class RefreshTest(unittest.TestCase):
                 ))
                 self.assert_chase_review_conflict(card, capture, message)
 
+    def test_chase_destination_exclusion_after_hostname_blocks_apply(self):
+        card = "Chase Freedom"
+        _, capture = self.chase_review_fixture(card, reward_description=(
+            "Earn 10% cash back. Offer valid only at shop.example.com. Purchases at outlet.example.com are excluded."
+        ))
+        before = self.t.read("offers.json")
+        code, text, _ = self.t.run("apply", card, [capture], decisions={})
+        self.assertEqual(code, 2, text)
+        self.assertIn("destination restrictions need public evidence", text)
+        self.assertEqual(self.t.read("offers.json"), before)
+
     def test_chase_only_before_purchase_channel_blocks_disagreement(self):
         card = "Chase Freedom"
         _, capture = self.chase_review_fixture(card, reward_description="Earn 10% cash back only on in-store purchases.")

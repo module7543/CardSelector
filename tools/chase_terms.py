@@ -99,6 +99,7 @@ COMBINED = {frozenset(("in_store", "online")): "in_store_and_online",
 PART = re.compile(r"\n+|(?<=[.!?])\s+(?=[A-Z0-9$“]|[a-z]+[A-Z])|(?<=[.!?])(?=Offer\b|Please note\b)|(?<=\d)\s+(?=Offer (?:valid|only valid|not valid|redemption)\b)")
 URL = re.compile(r"(?i)(?:[a-z][a-z0-9+.-]*://|//)[^\s<>\"')\]]+|"
                  r"\b(?:[a-z0-9-]+\.)+[a-z]{2,}[/#?][^\s<>\"')\]]*")
+PUBLIC_PART = re.compile(PART.pattern + r"|(?<=[.!?])\s+(?=(?:https?://|//))")
 # Match hostname syntax rather than a TLD allowlist. This is detection, not authorization.
 HOST = re.compile(r"(?i)\b(?:[a-z0-9-]+\.)+[a-z]{2,63}\b")
 LINK_REF = re.compile(r"\ue000(\d+)\ue001")
@@ -194,6 +195,7 @@ def publication(raw, codes):
     issues = []
     parts = []
     routes = set()
+    redacted_addresses = set()
 
     def withhold_continuation(match):
         if not re.fullmatch(r"[\w.-]+\.?", match[1].strip()):
@@ -201,7 +203,7 @@ def publication(raw, codes):
         return "\nSee the issuer offer for private redemption details.\n"
 
     visible = PRIVATE_CONTINUATION.sub(withhold_continuation, visible)
-    for part in PART.split(visible):
+    for part in PUBLIC_PART.split(visible):
         links = {document.destinations[int(ref)] for ref in LINK_REF.findall(part)}
         unlinked = LINK_SPAN.sub("", part)
         destination = min((m.start() for pattern in (LINK_REF, URL, HOST) for m in pattern.finditer(part)), default=len(part))
@@ -213,6 +215,9 @@ def publication(raw, codes):
         part = " ".join(part.split())
         if not part:
             continue
+        if not links and URL.fullmatch(part):
+            # A standalone URL adds no public wording or placeholder.
+            continue
         # A link's label is not a second route. A separate address outside its
         # label is still evidence, even when both occur in one sentence.
         targets = links | set(URL.findall(unlinked)) | set(HOST.findall(URL.sub("", unlinked)))
@@ -221,6 +226,8 @@ def publication(raw, codes):
                 issues.append("destination restrictions need public evidence")
                 continue
             routes.update(t.rstrip(".") for t in targets)
+        urls = {url.rstrip(".") for url in URL.findall(part)}
+        hosts = {host.casefold() for host in HOST.findall(URL.sub("", part))}
         part = URL.sub(lambda m: "the issuer-specified site" + ("." if m[0].endswith(".") else ""), part)
         part = HOST.sub("the issuer-specified site", part)
 
@@ -243,7 +250,10 @@ def publication(raw, codes):
             issues.append("private text overlaps eligibility or an unrecognized redemption instruction")
             continue
         parts.append(part)
-    if len(routes) > 1:
+        # Track what actually shares the placeholder, independent of how the
+        # source expresses a purchase condition or exclusion.
+        redacted_addresses.update(urls | hosts)
+    if len(routes) > 1 or len(redacted_addresses) > 1:
         issues.append("destination restrictions need public evidence")
     return parts, list(dict.fromkeys(issues))
 
