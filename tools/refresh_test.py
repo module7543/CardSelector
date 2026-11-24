@@ -57,6 +57,9 @@ class Tree:
     def offers(self):
         return {o["id"]: o for o in self.load()["offers"]}
 
+    def data_snapshot(self):
+        return {p.relative_to(self.data): p.read_bytes() for p in self.data.rglob("*") if p.is_file()}
+
     def change_offers(self, fn):
         d = self.load()
         fn({o["id"]: o for o in d["offers"]}, d)
@@ -1307,7 +1310,7 @@ class RefreshTest(unittest.TestCase):
         return sid, self.t.csv(card, update)
 
     def assert_chase_review_conflict(self, card, capture, message, decisions=None):
-        before = self.t.read("offers.json")
+        before = self.t.data_snapshot()
         code, text, report = self.t.run("report", card, [capture], decisions=decisions)
         self.assertEqual(code, 0, text)
         self.assertTrue(report["blockers"], text)
@@ -1315,7 +1318,7 @@ class RefreshTest(unittest.TestCase):
         code, text, _ = self.t.run("apply", card, [capture], decisions=decisions or {})
         self.assertEqual(code, 2, text)
         self.assertIn(message, text)
-        self.assertEqual(self.t.read("offers.json"), before)
+        self.assertEqual(self.t.data_snapshot(), before)
 
     def test_chase_review_abbreviated_reward_keeps_unknown_historical_eligibility(self):
         for card in ("Chase Freedom", "Chase Freedom Flex"):
@@ -1497,6 +1500,43 @@ class RefreshTest(unittest.TestCase):
         self.assertEqual(code, 2, text)
         self.assertIn("destination restrictions need public evidence", text)
         self.assertEqual(self.t.read("offers.json"), before)
+
+    def test_chase_standalone_checkout_urls_do_not_disappear_on_apply(self):
+        card = "Chase Freedom"
+        _, capture = self.chase_review_fixture(card, reward_description=(
+            "Earn 10% cash back. Offer valid only through the following link. https://shop.example.com/checkout"
+            "<br>Offer not valid through the following link. https://outlet.example.com/checkout"
+        ))
+        before = self.t.data_snapshot()
+        code, text, _ = self.t.run("apply", card, [capture], decisions={})
+        self.assertEqual(code, 2, text)
+        self.assertIn("destination restrictions need public evidence", text)
+        self.assertEqual(self.t.data_snapshot(), before)
+
+    def test_chase_unbound_checkout_destinations_refuse_across_source_boundaries(self):
+        card = "Chase Freedom"
+        cases = {
+            "punctuation": "Use the first checkout: https://shop.example.com/checkout; "
+                           "purchases at https://outlet.example.com/checkout are excluded.",
+            "plain line breaks": "Online purchases qualify only as indicated below.\nhttps://shop.example.com/checkout\n"
+                                 "Purchases from the other storefront are excluded.\nhttps://outlet.example.com/checkout",
+            "HTML blocks": "<p>Use the checkout below.</p><div>https://shop.example.com/checkout</div>"
+                           "<p>Orders from this outlet do not qualify.</p><div>https://outlet.example.com/checkout</div>",
+            "same host, different paths": "Use this checkout. https://shop.example.com/checkout<br>"
+                                          "Outlet orders do not qualify. https://shop.example.com/outlet",
+            "standalone URL": "https://shop.example.com/checkout",
+            "single qualifying destination": "The following purchase route is required.<br>https://shop.example.com/checkout",
+            "single excluded destination": "Purchases from the outlet below are excluded.<br>https://outlet.example.com/checkout",
+            "anchor and standalone": 'Offer valid only at <a href="https://shop.example.com/checkout">the shop</a>.'
+                                     '<br>Outlet orders are excluded.<br>https://shop.example.com/outlet',
+            "private link with unbound instruction": 'Offer valid only at <a href="https://shop.example.com/checkout">the shop</a>.'
+                                                     '<br>Offer valid only through the following link.'
+                                                     '<br>Gift cards are excluded. https://shop.example.com/outlet?auth=FIXTURE',
+        }
+        for label, detail in cases.items():
+            with self.subTest(label=label):
+                _, capture = self.chase_review_fixture(card, reward_description=f"Earn 10% cash back.<br>{detail}")
+                self.assert_chase_review_conflict(card, capture, "destination restrictions need public evidence")
 
     def test_chase_only_before_purchase_channel_blocks_disagreement(self):
         card = "Chase Freedom"

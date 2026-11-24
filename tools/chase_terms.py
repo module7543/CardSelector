@@ -5,6 +5,7 @@ from datetime import date
 from decimal import Decimal
 from hashlib import sha256
 from html.parser import HTMLParser
+from urllib.parse import urlsplit
 
 from coupon_promotions import CODE_PHRASE, CODE_WORD, has_code
 
@@ -106,6 +107,8 @@ LINK_REF = re.compile(r"\ue000(\d+)\ue001")
 LINK_SPAN = re.compile(r"\ue000\d+\ue001[^\ue002]*\ue002")
 ROUTE = re.compile(r"\b(?:valid|eligible|qualif\w+|redeem|only|purchases? made|must)\b", re.I)
 EXCLUSION = re.compile(r"\b(?:not|except|exclud\w+|ineligible)\b", re.I)
+DESTINATION_REFERENCE = re.compile(r"\b(?:link|url|address|site|website|storefront|outlet|checkout|destination|below|above)\b", re.I)
+GIFT_CARD_RULE = re.compile(r"(?:gift cards are excluded|offer not valid on gift card purchases)\.", re.I)
 PRIVATE = re.compile(
     r"\b(?:bearer\s+[\w.~+/=-]+|eyJ[\w-]+\.[\w-]+\.[\w-]+|"
     r"(?:[a-z0-9_-]*(?:token|secret|session|auth)[a-z0-9_-]*)\s*[:=]\s*[^\s,;]+|"
@@ -188,14 +191,40 @@ def private_codes(raw):
             if value.casefold() not in {"at", "before", "for", "in", "on", "online", "only", "when", "shown", "listed"}}
 
 
+def addresses(text):
+    urls = {url.rstrip(".") for url in URL.findall(text)}
+    hosts = {host.casefold() for host in HOST.findall(URL.sub("", text))}
+    return urls | hosts
+
+
+def independent_private_address(address, previous, source_addresses, linked_checkouts):
+    # An isolated credential-bearing reference after a complete, independent
+    # gift-card rule can be omitted if checkout is already bound to that host.
+    # Other detached addresses require reviewed public terms.
+    if (source_addresses != {address.rstrip(".")} or len(linked_checkouts) != 1
+            or not GIFT_CARD_RULE.fullmatch(previous) or not PRIVATE.search(address)):
+        return False
+    try:
+        host = urlsplit(address).hostname
+        return bool(host and host == urlsplit(next(iter(linked_checkouts))).hostname)
+    except ValueError:
+        return False
+
+
 def publication(raw, codes):
     """Project safe text, collecting blockers for clauses that cannot be published faithfully."""
     document = Description(raw or "", track_links=True)
     visible = CONTROLS.sub("", unicodedata.normalize("NFC", document.text))
+    # Freeze visible destination evidence before sentence splitting or privacy
+    # omissions. An anchor's visible label is already covered by its href.
+    source_addresses = addresses(LINK_SPAN.sub("", visible))
     issues = []
     parts = []
     routes = set()
     redacted_addresses = set()
+    linked_checkouts = set()
+    detached = []
+    unbound_route = False
 
     def withhold_continuation(match):
         if not re.fullmatch(r"[\w.-]+\.?", match[1].strip()):
@@ -203,7 +232,15 @@ def publication(raw, codes):
         return "\nSee the issuer offer for private redemption details.\n"
 
     visible = PRIVATE_CONTINUATION.sub(withhold_continuation, visible)
-    for part in PUBLIC_PART.split(visible):
+    # Keep the previous fragment within the same source line only. A URL
+    # on a separate HTML block or line cannot qualify as an independent field.
+    source_parts = []
+    for line in visible.split("\n"):
+        previous = ""
+        for fragment in PUBLIC_PART.split(line):
+            source_parts.append((fragment, previous))
+            previous = fragment.strip()
+    for part, previous in source_parts:
         links = {document.destinations[int(ref)] for ref in LINK_REF.findall(part)}
         unlinked = LINK_SPAN.sub("", part)
         destination = min((m.start() for pattern in (LINK_REF, URL, HOST) for m in pattern.finditer(part)), default=len(part))
@@ -216,18 +253,22 @@ def publication(raw, codes):
         if not part:
             continue
         if not links and URL.fullmatch(part):
-            # A standalone URL adds no public wording or placeholder.
+            detached.append((part, previous))
             continue
         # A link's label is not a second route. A separate address outside its
         # label is still evidence, even when both occur in one sentence.
-        targets = links | set(URL.findall(unlinked)) | set(HOST.findall(URL.sub("", unlinked)))
+        targets = links | addresses(unlinked)
+        if not targets and not GIFT_CARD_RULE.fullmatch(part) and (
+                ROUTE.search(part) or EXCLUSION.search(part) or DESTINATION_REFERENCE.search(part)):
+            unbound_route = True
         if targets and ROUTE.search(part):
             if negative_route or len(targets) > 1:
                 issues.append("destination restrictions need public evidence")
                 continue
             routes.update(t.rstrip(".") for t in targets)
-        urls = {url.rstrip(".") for url in URL.findall(part)}
-        hosts = {host.casefold() for host in HOST.findall(URL.sub("", part))}
+            if CHANNEL.match(part) and not EXCLUSION.search(part):
+                linked_checkouts.update(links)
+        visible_addresses = addresses(part)
         part = URL.sub(lambda m: "the issuer-specified site" + ("." if m[0].endswith(".") else ""), part)
         part = HOST.sub("the issuer-specified site", part)
 
@@ -252,8 +293,12 @@ def publication(raw, codes):
         parts.append(part)
         # Track what actually shares the placeholder, independent of how the
         # source expresses a purchase condition or exclusion.
-        redacted_addresses.update(urls | hosts)
-    if len(routes) > 1 or len(redacted_addresses) > 1:
+        redacted_addresses.update(visible_addresses)
+    unresolved_detachment = bool(detached) and (unbound_route or any(
+        not independent_private_address(address, previous, source_addresses, linked_checkouts)
+        for address, previous in detached
+    ))
+    if len(routes) > 1 or len(redacted_addresses) > 1 or unresolved_detachment:
         issues.append("destination restrictions need public evidence")
     return parts, list(dict.fromkeys(issues))
 
