@@ -43,6 +43,23 @@ CODE_PHRASE = re.compile(
     rf"|(?i:{CODE_QUALIFIER}\s+){OPEN_QUOTE}?{QUALIFIER_TOKEN}))(?![\w-])[\"'”’]?"
 )
 CODE_WORD = re.compile(r"\bcode\b", re.I)
+# Keep the deployed four-character instruction check. A later coupon noun also makes an
+# instruction ambiguous when short modifiers such as "a" or "my" precede it.
+REDEMPTION_INSTRUCTION = re.compile(
+    rf"\b{CODE_VERB}\s+(?:[A-Z0-9_-]{{4,}}\b"
+    rf"|[^.!?]*?\b{COUPON_NOUN}(?:\s*[:=;]\s*|\s+){OPEN_QUOTE}?[\w-]+)", re.I
+)
+# Exempt complete, code-free clauses so arbitrary text after a familiar word still gets checked.
+CODE_FREE_INSTRUCTION = re.compile(
+    r"(?:apply\s+(?:discount\s+)?before\s+tax"
+    r"|(?:some\s+)?(?:restrictions|exclusions|limitations)\s+(?:may\s+)?apply\s+without\s+specific\s+products\s+named"
+    r"|use\s+(?:(?:a|the|this|your)\s+)?(?:coupon\s+at\s+checkout|offer\s+before\s+it\s+ends)"
+    r"|apply\s+(?:the\s+)?offer\s+to\s+eligible\s+items"
+    r"|use\s+the\s+offer\s+online|apply\s+promotional\s+pricing\s+at\s+checkout"
+    r"|(?:review\s+exclusions:\s+)?use\s+of\s+(?:promotional|promo)\s+codes\s+not\s+provided\s+by\s+capital\s+one"
+    r"\s+may\s+invalidate\s+your\s+offer)[.!?]?", re.I
+)
+SENTENCE_BREAK = re.compile(r"(?<=[.!?])\s+")
 UNSAFE_TEXT = re.compile(r"[a-z][a-z0-9+.-]*://|www\.|//[\w.-]+[./?]|\b(?:[a-z0-9-]+\.)+[a-z]{2,}[/#?]"
                          r"|[\x00-\x1f]|[\u200b-\u200f\u202a-\u202e\u2060-\u206f]", re.I)
 YEARLESS_LABEL = re.compile(rf"(?:(?:{'|'.join(calendar.day_name)}), )?(?:{'|'.join(list(calendar.month_abbr)[1:])}) "
@@ -81,12 +98,17 @@ def has_code(text, codes):
     return any(re.search(r"(?<![\w])" + re.escape(code) + r"(?![\w])", normal) for code in codes)
 
 
+def ambiguous_instruction(sentence):
+    return REDEMPTION_INSTRUCTION.search(sentence) is not None and CODE_FREE_INSTRUCTION.fullmatch(sentence) is None
+
+
 def public_summary(line, codes):
     if isinstance(line, str):
         line = line.strip()
         normal = unicodedata.normalize("NFKC", line)
-        if 0 < len(line) <= 500 and not (UNSAFE_TEXT.search(normal) or CODE_PHRASE.search(normal)
-                                         or CODE_WORD.search(normal) or has_code(normal, codes)):
+        if 0 < len(line) <= 500 and not (
+                UNSAFE_TEXT.search(normal) or CODE_PHRASE.search(normal) or CODE_WORD.search(normal)
+                or has_code(normal, codes) or any(ambiguous_instruction(part) for part in SENTENCE_BREAK.split(normal))):
             return line
     return None
 
@@ -107,9 +129,9 @@ def summarized_terms(line, codes):
             return "Apply the promotional coupon"
         return ""
 
-    for part in re.split(r"(?<=[.!?;])\s+", normal):
+    for part in SENTENCE_BREAK.split(normal):
         # Withholding an ambiguous sentence preserves the meaning of the independent terms.
-        if any(match["omit"] for match in CODE_PHRASE.finditer(part)):
+        if ambiguous_instruction(part) or any(match["omit"] for match in CODE_PHRASE.finditer(part)):
             continue
         redacted = CODE_PHRASE.sub(replace_code, part)
         redacted = re.sub(r"\s+([.!?,;])", r"\1", redacted).strip()

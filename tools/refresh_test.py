@@ -11,6 +11,7 @@ CSV or of the snapshot, run report / apply, and compare. The repo's own data is 
 """
 import csv, io, json, os, re, shutil, subprocess, sys, tempfile, unittest
 from contextlib import redirect_stdout
+from itertools import product
 from pathlib import Path
 
 sys.dont_write_bytecode = True
@@ -819,6 +820,7 @@ class RefreshTest(unittest.TestCase):
             "Use offer ZQSAVE20.", "Apply discount ZQSAVE20.", "Use coupon zqbigdeal.", "Enter promo zqsave20 in cart.",
             "use the promotional ‘zqbigdeal’.", "Use coupon ZQSYNTH42 at checkout.",
             "New customers use coupon ZQSYNTH42", "Use coupon online-zqsave20.",
+            "Use your coupon ZQSYNTHB2 at checkout.",
         ]
         safe_conditions = [
             "Apply before tax.", "Restrictions apply without specific products named.",
@@ -826,7 +828,7 @@ class RefreshTest(unittest.TestCase):
             "Valid with iPhone15 purchases.", "Apply discount before tax.", "Use the offer online.",
             "Apply promotional pricing at checkout.", "USE COUPON AT CHECKOUT.",
         ]
-        tokens = ("zqsave20", "zqbigdeal", "zqsynth42")
+        tokens = ("zqsave20", "zqbigdeal", "zqsynth42", "zqsynthb2")
 
         def note(line):
             return f'Promo text reads "{line}"'
@@ -877,6 +879,61 @@ class RefreshTest(unittest.TestCase):
                     self.assertIn(message, output)
                     for token in tokens:
                         self.assertNotIn(token, output.casefold())
+
+    def test_coupon_instruction_privacy_floor_and_modifier_matrix(self):
+        from coupon_promotions import legacy_promo_text, public_summary, sanitize, scrub_legacy, valid_promotion
+
+        day = "2026-11-24"
+        companion = Path(self.coupon_evidence(self.coupon_inventory(day)))
+        record = json.loads(companion.read_text())["verified_coupon_offers"][0]
+        coupon = record["coupon"]
+        coupon["code"] = {}
+        verbs = ("use", "apply", "enter")
+        modifiers = ("", "your ", "exclusive current ", "a special limited-time members-only seasonal checkout ")
+        nouns = ("coupon", "promo", "promotional", "voucher", "offer", "discount")
+        tokens = ("zqsynthb2", '"zqsynthb2"', "‘zqbigdeal’")
+        lines = [case(f"{verb} {modifier}{noun} {token} at checkout.")
+                 for verb, modifier, noun, token, case in product(verbs, modifiers, nouns, tokens, (str.lower, str.upper))]
+        lines += [
+            "Use your coupon ZQSAVE20.", "Use this promo ZQSAVE20.", "Use exclusive coupon ZQSAVE20.",
+            "Apply exclusive promo zqsave20 at checkout.", "Enter your promo ZQSAVE20 in cart.",
+            "Use your discount ZQSAVE20.", "Use your coupon; ZQSYNTHB2 at checkout.",
+            "Use coupon ONLINE.", "Apply before tax ZQSYNTHB2.", "Use the offer online ZQSYNTHB2.",
+            "Use a (specially issued) one-time offer zqbigdeal.",
+        ]
+        # The deployed check also blocked long first words even without a coupon noun.
+        lines += [f"{verb} promptly zqsynthb2 at checkout." for verb in verbs]
+
+        def note(line):
+            return f'Promo text reads "{line}"'
+
+        cases = [(line, "Selected styles only.") for line in lines]
+        cases.append(("Use coupon zqsynthb2. Apply before tax.", "Apply before tax. Selected styles only."))
+        for line, expected in cases:
+            with self.subTest(line=line):
+                coupon["additional_conditions_summary"] = [f"{line} Selected styles only."]
+                promotion = sanitize(record, day, set(), [])
+                self.assertEqual(promotion["conditions"], [expected])
+                self.assertFalse(valid_promotion(dict(promotion, conditions=[line])))
+                offer = {"other_details": [note(f"{line} Selected styles only.")]}
+                self.assertEqual(scrub_legacy(offer, set()), 1)
+                self.assertEqual(offer["other_details"], [note(expected)])
+                self.assertIsNone(public_summary(legacy_promo_text(note(line)), set()))
+
+        for line in ("Use your coupon at checkout.", "Use this offer before it ends.", "Apply offer to eligible items.",
+                     "Apply discount before tax. Restrictions apply without specific products named.",
+                     "Review exclusions: Use of promotional codes not provided by Capital One may invalidate your offer.",
+                     "Members save with USAA. Items must be purchased with IKEA Family. Valid with iPhone15 purchases."):
+            with self.subTest(line=line):
+                coupon["additional_conditions_summary"] = [line]
+                promotion = sanitize(record, day, set(), [])
+                self.assertEqual(promotion["conditions"], [line])
+                self.assertTrue(valid_promotion(promotion))
+                offer = {"other_details": [note(line)]}
+                self.assertEqual(scrub_legacy(offer, set()), 0)
+                self.assertEqual(offer["other_details"], [note(line)])
+                self.assertEqual(public_summary(legacy_promo_text(note(line)), set()), line)
+        self.assertIsNone(public_summary("Use the offer online.", {"online"}))
 
     def test_used_offer_in_batch_stays_used(self):
         self.t.change_offers(lambda by, d: by["chase-freedom/whisker"].update(status="used", status_since="2026-10-20"))
