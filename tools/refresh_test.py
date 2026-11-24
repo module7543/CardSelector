@@ -31,7 +31,7 @@ class Tree:
         (self.root / "tools").mkdir()
         data = self.root / "site/data"
         data.mkdir(parents=True)
-        for f in ("refresh.py", "validate.py", "cuisines.py", "fold_phone_edits.py", "coupon_promotions.py"):
+        for f in ("refresh.py", "validate.py", "cuisines.py", "fold_phone_edits.py", "coupon_promotions.py", "chase_terms.py"):
             shutil.copy(REPO / "tools" / f, self.root / "tools" / f)
         for f in ("offers.json", "cuisines.json"):
             shutil.copy(FIX / f, data / f)
@@ -168,7 +168,9 @@ class RefreshTest(unittest.TestCase):
                         b["last_read"] = READ
                         if card == "Capital One":
                             b["redemption"] = {"method": "via_shop_link", "evidence": "offer_type"}
-                    self.assertEqual(o, b, f"{i}: only last_read may move")
+                        if i in {"chase-freedom-flex/at-home", "chase-freedom-flex/away"}:
+                            b["channel"] = "in_store_and_online"
+                    self.assertEqual(o, b, i)
                 bt = [x for x in self.t.load()["batches"] if x["card"] == card]
                 self.assertEqual(bt[-1], {"card": card, "read_date": READ, "offers_found": sum(1 for o in after.values() if o["card"] == card)})
                 self.assertEqual(self.t.read("cuisines.json"), cuis)
@@ -1165,10 +1167,188 @@ class RefreshTest(unittest.TestCase):
             for r in rows:
                 if r["merchant"] == "Babbel":
                     r["offer_end_timestamp"], r["expiration_text"] = "2026-11-01T03:59:59Z", "Offer expires 10/31/2026."
+                    r["reward_description"] = r["reward_description"].replace("11/11/2026", "10/31/2026")
             return rows
         self.apply_ok("Chase Freedom Flex", [self.t.csv("Chase Freedom Flex", fn)])
         o = self.t.offers()["chase-freedom-flex/babbel"]
         self.assertEqual((o["expires"], o["expires_text"]), ("2026-10-31", "Offer expires 10/31/2026"))
+
+    def test_chase_current_detail_replaces_conflicting_terms_in_both_formats(self):
+        cases = [
+            ("Chase Freedom", "Whisker", "bonus_as_shown", "end_timestamp"),
+            ("Chase Freedom Flex", "Babbel", "bonus", "offer_end_timestamp"),
+        ]
+        for card, merchant, bonus_column, timestamp_column in cases:
+            with self.subTest(card=card):
+                old = next(o for o in self.t.offers().values() if o["card"] == card and o["merchant"] == merchant)
+                self.t.change_offers(lambda by, _: by[old["id"]].update(activation="already_activated"))
+
+                def rows_with_new_terms(rows):
+                    row = next(r for r in rows if r["merchant"] == merchant)
+                    row.update({bonus_column: "20% cash back", timestamp_column: "2026-12-01T04:59:59Z",
+                                "expiration_text": "Offer expires 11/30/2026.", "channel": "ONLINE",
+                                "min_spend": "30", "reward_cap": "0", "added_state": "not added",
+                                "reward_description": (
+                                    "<b>Earn 20% cash back</b> on your first two payments when you spend $30 or more."
+                                    "<br>Limit of $15 per statement credit (up to $30 cash back total)."
+                                    "<br>Offer expires 11/30/2026. Offer valid on first two payments only."
+                                    "<br>Offer valid online only. Offer only valid on purchases made directly with the merchant."
+                                    "<br>Gift cards are excluded. Cash back reward valid only for first time customers."
+                                )})
+                    return rows
+
+                capture = self.t.csv(card, rows_with_new_terms)
+                captured_bytes = capture.read_bytes()
+                self.apply_ok(card, [capture])
+                saved = self.t.offers()[old["id"]]
+                self.assertEqual((saved["bonus"], saved["minimum_spend"], saved["channel"], saved["expires"]),
+                                 ("20% cash back", "30", "online", "2026-11-30"))
+                self.assertEqual((saved["activation"], saved["first_seen"]), ("already_activated", old["first_seen"]))
+                self.assertIsNone(saved["spend_cap"])
+                for term in ("$15 per statement credit", "$30 cash back total", "first two payments only",
+                             "Gift cards are excluded", "first time customers"):
+                    self.assertIn(term, saved["fine_print"])
+                self.assertNotIn("<b>", saved["fine_print"])
+                self.assertEqual(capture.read_bytes(), captured_bytes)
+
+    def test_chase_abbreviated_copy_retains_independent_eligibility_and_channel(self):
+        card = "Chase Freedom Flex"
+        sid = "chase-freedom-flex/babbel"
+        self.t.change_offers(lambda by, _: by[sid].update(fine_print=(
+            "Earn 15% cash back on your Babbel purchase with a $45 cash back maximum. Offer expires 11/11/2026. "
+            "Gift cards are excluded. Cash back reward valid only for first time customers. Offer valid online only. "
+            "Payment must be made on or before 11/11/2026."
+        )))
+
+        def update(rows):
+            row = next(r for r in rows if r["merchant"] == "Babbel")
+            row.update(bonus="20% cash back", channel="NONE", reward_cap="35", expiration_text="Offer expires 11/30/2026.",
+                       offer_end_timestamp="2026-12-01T04:59:59Z",
+                       reward_description="Earn 20% cash back on your Babbel purchase, with a $35 cash back maximum.")
+            return rows
+
+        self.apply_ok(card, [self.t.csv(card, update)])
+        offer = self.t.offers()[sid]
+        self.assertEqual(offer["channel"], "online")
+        for condition in ("20% cash back", "$35 cash back maximum", "first time customers", "Gift cards are excluded",
+                          "valid online only", "Payment must be made by the offer deadline"):
+            self.assertIn(condition, offer["fine_print"])
+        for obsolete in ("15% cash back", "$45 cash back maximum", "11/11/2026"):
+            self.assertNotIn(obsolete, offer["fine_print"])
+
+    def test_chase_abbreviated_copy_cannot_drop_an_independent_dated_condition(self):
+        card = "Chase Freedom Flex"
+        before = self.t.read("offers.json")
+
+        def update(rows):
+            row = next(r for r in rows if r["merchant"] == "Babbel")
+            row.update(offer_end_timestamp="2026-12-01T04:59:59Z", expiration_text="Offer expires 11/30/2026.",
+                       reward_description="Earn 15% cash back with a $45 cash back maximum.")
+            return rows
+
+        capture = self.t.csv(card, update)
+        code, out, report = self.t.run("report", card, [capture])
+        self.assertEqual(code, 0, out)
+        self.assertIn("prior dated payment condition unresolved", out)
+        self.assertTrue(report["blockers"])
+        self.assertEqual(self.t.run("apply", card, [capture], decisions={})[0], 2)
+        self.assertEqual(self.t.read("offers.json"), before)
+
+    def test_chase_disagreeing_current_fields_block_publication(self):
+        card = "Chase Freedom Flex"
+        before = self.t.read("offers.json")
+
+        def update(rows):
+            row = next(r for r in rows if r["merchant"] == "Babbel")
+            row.update(min_spend="30", channel="ONLINE", reward_description=(
+                "Earn 25% cash back on your Babbel purchase when you spend $40 or more. Offer valid in-store only."
+            ))
+            return rows
+
+        capture = self.t.csv(card, update)
+        code, out, _ = self.t.run("report", card, [capture])
+        self.assertEqual(code, 0, out)
+        for conflict in ("current reward headline and description disagree", "cashback minimum evidence disagrees",
+                         "current channel evidence disagrees"):
+            self.assertIn(conflict, out)
+        self.assertEqual(self.t.run("apply", card, [capture], decisions={})[0], 2)
+        self.assertEqual(self.t.read("offers.json"), before)
+
+    def test_chase_deadline_decision_is_bound_to_current_row_evidence(self):
+        card = "Chase Freedom"
+        timestamp = "2026-12-14T04:59:59Z"
+
+        def update(rows):
+            row = next(r for r in rows if r["merchant"] == "Whisker")
+            row.update(offer_id="FIXTURE:deadline", end_timestamp=timestamp, expiration_text="Offer expires 11/30/2026.")
+            row["reward_description"] = (
+                "Earn 10% cash back on your purchase when you spend $499.99 or more. Offer expires 11/30/2026."
+                " Payment must be made on or before 11/30/2026. Offer valid one time only. Gift cards are excluded."
+                " Offer valid online only. Offer only valid on purchases made directly with the merchant."
+            )
+            return rows
+
+        capture = self.t.csv(card, update)
+        code, out, report = self.t.run("report", card, [capture])
+        self.assertEqual(code, 0, out)
+        choice = report["chase_deadlines"]["FIXTURE:deadline"]
+        self.assertEqual(choice, {"deadline": "2026-11-30", "timestamp": timestamp, "reason": None})
+        self.assertEqual(self.t.run("apply", card, [capture], decisions={})[0], 2)
+        decisions = {"chase_deadlines": {"FIXTURE:deadline": {**choice, "reason": "Terms confirm the earlier date."}}}
+        self.apply_ok(card, [capture], decisions)
+        offer = self.t.offers()["chase-freedom/whisker"]
+        self.assertEqual((offer["expires"], offer["expires_text"]), ("2026-11-30", "Offer expires 11/30/2026"))
+        stale = dict(choice, timestamp="2026-12-15T04:59:59Z", reason="Old decision")
+        code, out, _ = self.t.run("apply", card, [capture], decisions={"chase_deadlines": {"FIXTURE:deadline": stale}})
+        self.assertEqual(code, 2, out)
+        self.assertIn("match the current timestamp", out)
+
+    def test_chase_description_publication_and_ordinary_travel_expiry(self):
+        card = "Chase Freedom"
+
+        def add(rows):
+            return rows + [dict(rows[0], offer_id="FIXTURE:travel", merchant="Chase Travel", bonus_as_shown="$100 back",
+                                channel="ONLINE", min_spend="600", reward_cap="0", end_timestamp="2027-01-01T04:59:59Z",
+                                expiration_text="Offer expires 12/31/2026.", reward_description=(
+                                    "<b>Get $100 back when you spend $600 or more.</b><br>Offer expires 12/31/2026."
+                                    "<br>Offer valid online only at <a href='https://shop.example/hidden?token=ANCHORSECRET'>"
+                                    "shop.example</a>. Coupon code required: MOCKSAVE."
+                                    "<br>Gift cards are excluded. https://shop.example/private?auth=PATHSECRET."
+                                    "<br>Customer ID: X81Z239Q. session_token=MOCKSESSION."
+                                    "<script>SCRAPEDTOKEN</script>"
+                                ))]
+
+        capture = self.t.csv(card, add)
+        out, report = self.apply_ok(card, [capture], {"categories": {"Chase Travel": "Travel"}})
+        offer = self.t.offers()["chase-freedom/chase-travel"]
+        self.assertEqual(offer["expires_text"], "Offer expires 12/31/2026")
+        self.assertEqual(report["flags"], [])
+        self.assertIn("Gift cards are excluded", offer["fine_print"])
+        self.assertIn("Offer valid online only at shop.example", offer["fine_print"])
+        self.assertIn("promotional coupon required", offer["fine_print"])
+        for forbidden in ("MOCKSAVE", "ANCHORSECRET", "PATHSECRET", "X81Z239Q", "MOCKSESSION", "SCRAPEDTOKEN", "<b>"):
+            self.assertNotIn(forbidden, out)
+            self.assertNotIn(forbidden, offer["fine_print"])
+
+    def test_chase_withheld_new_offer_counts_in_complete_snapshot(self):
+        card = "Chase Freedom"
+
+        def add(rows):
+            return rows + [dict(rows[0], offer_id="FIXTURE:unresolved", merchant="Example Parent Company",
+                                reward_description="Earn $10 cash back on a subscription to Example Subsidiary.")]
+
+        capture = self.t.csv(card, add)
+        decisions = {"chase_withhold_new": {"FIXTURE:unresolved": {
+            "merchant": "Example Parent Company", "reason": "Qualifying storefront remains unconfirmed."
+        }}}
+        _, report = self.apply_ok(card, [capture], decisions)
+        self.assertEqual(report["chase_withheld"], [{"merchant": "Example Parent Company", "lines": [7]}])
+        self.assertEqual((report["offers_in_batch"], report["new"], report["missing"]), (6, [], []))
+        self.assertNotIn("chase-freedom/example-parent-company", self.t.offers())
+        self.assertEqual(self.t.load()["batches"][-1]["offers_found"], 6)
+        code, out, _ = self.t.run("apply", card, [capture], decisions=decisions, extra=("--part",))
+        self.assertEqual(code, 2, out)
+        self.assertIn("requires a full snapshot", out)
 
     def test_chase_tagged_new_follows_badge(self):
         def fn(rows):
