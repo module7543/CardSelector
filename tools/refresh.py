@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """Refresh one card's offers from its issuer CSV (CLAUDE.md, "Refreshing a card").
 
-    python3 tools/refresh.py report --card "Capital One" FILE.csv [MORE.csv] [--read-date YYYY-MM-DD]
+    python3 tools/refresh.py report --card "Capital One" FILE.csv --coupons PRIVATE.json [--read-date YYYY-MM-DD]
                                     [--template decisions.json] [--json report.json]
-    python3 tools/refresh.py apply  --card "Capital One" FILE.csv [MORE.csv] [--read-date YYYY-MM-DD]
-                                    --decisions decisions.json [--part]
+    python3 tools/refresh.py apply  --card "Capital One" FILE.csv --coupons PRIVATE.json [--read-date YYYY-MM-DD]
+                                    --decisions decisions.json
 
 report reads the CSV(s) and site/data/offers.json with the pending phone edits on top (with_pending()) and
 changes nothing. apply makes the same plan, refuses while anything needs a decision, then writes offers.json
