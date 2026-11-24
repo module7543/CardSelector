@@ -1209,6 +1209,102 @@ class RefreshTest(unittest.TestCase):
         self.assertIn("Offer only applies to the following location: 1267 W Temple St, Los Angeles, CA 90026",
                       by["us-bank/park-s-finest-bbq-the"]["other_details"])
 
+    def test_us_bank_corroborated_new_needs_activation(self):
+        sid = "us-bank/misfits-market"
+        self.t.change_offers(lambda by, _: by[sid].update(activation="already_activated"))
+        p = self.t.csv("U.S. Bank", lambda rows: [
+            dict(r, activation_state="NEW", is_activated_prop="false") if r["merchant"] == "Misfits Market" else r
+            for r in rows])
+        self.apply_ok("U.S. Bank", [p])
+        self.assertEqual(self.t.offers()[sid]["activation"], "needs_activation")
+
+    def test_us_bank_uncorroborated_new_is_refused(self):
+        for model, activated, drop in (("ACTIVATABLE", "true", ()), ("ACTIVATABLE", "", ()),
+                                       ("ACTIVATABLE", "false", ("is_activated_prop",)),
+                                       ("", "false", ()), ("AUTO_ACTIVATED", "false", ())):
+            with self.subTest(model=model, activated=activated, drop=drop):
+                p = self.t.csv("U.S. Bank", lambda rows: [
+                    dict(r, activation_state="NEW", activation_model=model, is_activated_prop=activated)
+                    if r["merchant"] == "Misfits Market" else r for r in rows], drop_cols=drop)
+                before = self.data_bytes()
+                code, out, _ = self.t.run("apply", "U.S. Bank", [p], decisions={})
+                self.assertEqual(code, 2, out)
+                self.assertIn("NEW requires activation_model ACTIVATABLE and is_activated_prop false", out)
+                self.assertEqual(self.data_bytes(), before)
+
+    def test_us_bank_bonus_days_is_reported_separately(self):
+        promo = {"deal_id": "1000405330", "merchant": "Bonus Days", "bonus_as_shown": "Earn 2x cash back",
+                 "start_date": "2026-11-20T05:00:00Z", "end_date": "2026-11-28T04:59:59Z",
+                 "reward_copy": "Activate qualifying deals as usual.", "promo_text": "Double the listed rewards."}
+        p = self.t.csv("U.S. Bank", lambda rows: [promo] + rows)
+        out, rep = self.apply_ok("U.S. Bank", [p])
+        self.assertEqual((rep["rows"], rep["offers_in_batch"], rep["size_check"]["batch"]), (7, 6, 6))
+        self.assertEqual(rep["issuer_promotions"], [promo])
+        self.assertIn("Activate qualifying deals as usual.", out)
+        self.assertNotIn("us-bank/bonus-days", self.t.offers())
+        self.assertEqual(self.t.load()["batches"][-1]["offers_found"], 6)
+
+    def test_us_bank_la_colombe_matches_each_channel_in_reversed_source_order(self):
+        def same_expiration(rows):
+            return [dict(r, end_date="2026-12-01T04:59:59Z") if r["merchant"] == "La Colombe" else r
+                    for r in reversed(rows)]
+
+        self.apply_ok("U.S. Bank", [self.t.csv("U.S. Bank", same_expiration)])
+        by = self.t.offers()
+        for sid, channel, terms in (("us-bank/la-colombe", "in_store", "in-store only"),
+                                    ("us-bank/la-colombe-2", "online", "online only")):
+            self.assertEqual(by[sid]["channel"], channel)
+            self.assertEqual(by[sid]["expires"], "2026-11-30")
+            self.assertIn(terms, by[sid]["fine_print"])
+
+    def test_us_bank_explicit_channel_matches_before_blank(self):
+        store_id, online_id = "us-bank/la-colombe", "us-bank/la-colombe-2"
+        self.t.write_json("phone-edits.json", {online_id: {"activation": "needs_activation"}})
+        edits = self.t.read("phone-edits.json")
+        before = self.t.load()
+        other_issuers = [o for o in before["offers"] if o["card"] != "U.S. Bank"]
+        for reverse in (False, True):
+            with self.subTest(reverse=reverse):
+                self.t.write_json("offers.json", before)
+
+                def changed(rows):
+                    rows[0].update(end_date="2026-12-02T04:59:59Z")
+                    rows[1].update(channel="", end_date="2026-12-04T04:59:59Z", activation_state="SERVED")
+                    return list(reversed(rows)) if reverse else rows
+
+                p = self.t.csv("U.S. Bank", changed)
+                _, report = self.apply_ok("U.S. Bank", [p])
+                by = self.t.offers()
+                self.assertEqual((by[store_id]["channel"], by[store_id]["expires"]), ("in_store", "2026-12-01"))
+                self.assertEqual((by[online_id]["channel"], by[online_id]["expires"]), ("online", "2026-12-03"))
+                self.assertEqual(by[online_id]["activation"], "already_activated")
+                self.assertEqual(self.t.read("phone-edits.json"), edits)
+                self.assertEqual([o for o in by.values() if o["card"] != "U.S. Bank"], other_issuers)
+                blank_channels = {row["id"]: row["channel"] for row in report["blank_channels"]}
+                self.assertEqual(blank_channels[online_id], "online")
+                self.assertEqual((report["new"], report["missing"]), ([], []))
+
+    def test_us_bank_competing_channel_matches_refuse_before_writing(self):
+        before = self.data_bytes()
+        generic_pair = {"saved": "us-bank/la-colombe", "file": "La Colombe", "bonus": "15% cash back", "accept": True}
+        for channel, reverse in product(("", "Online"), (False, True)):
+            with self.subTest(channel=channel, reverse=reverse):
+                def competing(rows):
+                    rows[0].update(channel=channel, end_date="2026-12-02T04:59:59Z")
+                    rows[1].update(channel=channel, end_date="2026-12-04T04:59:59Z")
+                    return list(reversed(rows)) if reverse else rows
+
+                p = self.t.csv("U.S. Bank", competing)
+                for mode in ("report", "apply"):
+                    decisions = {"pairs": [generic_pair], "owner_approved": ["missing"]} if mode == "apply" else None
+                    code, out, _ = self.t.run(mode, "U.S. Bank", [p], decisions=decisions)
+                    self.assertEqual(code, 2, out)
+                    self.assertIn("ambiguous U.S. Bank offer identities", out)
+                    self.assertEqual(out.count(f"(source channel: {channel.lower() or 'blank'}) has candidates"), 2, out)
+                    self.assertIn("us-bank/la-colombe (in_store)", out)
+                    self.assertIn("us-bank/la-colombe-2 (online)", out)
+                    self.assertEqual(self.data_bytes(), before)
+
     # --- checks that stop the run -------------------------------------------------------------------------------
 
     def test_size_check_refuses(self):
@@ -1976,14 +2072,19 @@ class RefreshTest(unittest.TestCase):
         self.assertEqual(self.t.offers()["bank-of-america/ali-baba"]["category"], "Dining",
                          "the Ali Baba restaurant was moved out of Dining by an Alibaba clash fix")
 
-    # Review finding B9: U.S. Bank blank channel. Main CLAUDE.md (U.S. Bank refresh): file channel blank -> none_shown. The tool keeps
-    # the saved channel instead (listed in the new CLAUDE.md as a "choice where the rules were silent").
-    def test_us_bank_blank_channel_is_none_shown(self):
+    def test_us_bank_blank_channel_keeps_saved_channel_and_defaults_new_offer(self):
         self.t.change_offers(lambda by, d: by["us-bank/misfits-market"].update(channel="online"))
-        p = self.t.csv("U.S. Bank")  # Misfits Market's channel is blank in the fixture
-        code, out, rep = self.t.run("apply", "U.S. Bank", [p], decisions={})
-        self.assertEqual(code, 0, out)
-        self.assertEqual(self.t.offers()["us-bank/misfits-market"]["channel"], "none_shown")
+        p = self.t.csv("U.S. Bank", lambda rows: rows + [
+            dict(next(r for r in rows if r["merchant"] == "Misfits Market"), deal_id="FIXTURE7", merchant="Meal Plan")])
+        _, rep = self.apply_ok("U.S. Bank", [p], decisions={"categories": {"Meal Plan": "Groceries & Food Delivery"}})
+        self.assertEqual(self.t.offers()["us-bank/misfits-market"]["channel"], "online")
+        self.assertEqual(self.t.offers()["us-bank/meal-plan"]["channel"], "none_shown")
+        self.assertEqual(rep["blank_channels"], [
+            {"id": "us-bank/misfits-market", "merchant": "Misfits Market", "deal_id": "FIXTURE6",
+             "saved_channel": "online", "channel": "online"},
+            {"id": "us-bank/meal-plan", "merchant": "Meal Plan", "deal_id": "FIXTURE7",
+             "saved_channel": None, "channel": "none_shown"},
+        ])
 
 
     # --- after the review ---------------------------------------------------------------------------------------
