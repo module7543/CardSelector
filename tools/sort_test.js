@@ -232,16 +232,27 @@ function listRows(sel) {
   else ok(near(pz[fcc].total, 10) && near(pz[fdc].total, 7) && fcc < fdc,
     "pizza: Fresh Brothers on Custom Cash (" + pz[fcc].total + "%, row " + (fcc + 1) + ") above Double Cash (" + pz[fdc].total + "%, row " + (fdc + 1) + ")");
   // Two test-only Bank of America offers: the 5.25% Customized Cash online shopping rate counts online-only.
+  // Give this channel test a steady 75% boost and an explicit Choice, independent of Preferred Rewards rollover.
+  await page.route("**/data/cards.json", async route => {
+    const d = await (await route.fetch()).json();
+    d.preferred_rewards = { cards: ["Customized Cash", "Unlimited Cash"], percent: 75, then_percent: 75, until: "2026-12-15" };
+    await route.fulfill({ json: d });
+  });
+  await page.route("**/data/bonus-categories.json", async route => {
+    const d = await (await route.fetch()).json();
+    d.entries.find(e => e.card === "Customized Cash").choice = "online shopping";
+    await route.fulfill({ json: d });
+  });
   await page.route("**/data/offers.json", async route => {
     const d = await (await route.fetch()).json();
-    const mk = (id, merchant, channel) => ({ id, card: "Bank of America", merchant, category: "Clothing & Jewelry", bonus: "4% Cash back",
-      expires: null, expires_text: null, activation: "already_activated", channel, spend_cap: null, minimum_spend: null,
-      fine_print: null, other_details: [], last_read: "2026-10-18", first_seen: "2026-10-18", status: "active", status_since: "2026-10-18" });
+    const mk = (id, merchant, channel) => offer(id, "Bank of America", merchant, { bonus: "4% Cash back", channel });
     d.offers.push(mk("test/zqx-online", "Zqxtest Online Shop", "online"), mk("test/zqx-store", "Zqxtest Store", "in_store"));
     await route.fulfill({ json: d });
   });
   const zq = await setup("zqxtest");
   await page.unroute("**/data/offers.json");
+  await page.unroute("**/data/cards.json");
+  await page.unroute("**/data/bonus-categories.json");
   const zo = zq.find(r => r.merchant === "Zqxtest Online Shop"), zs = zq.find(r => r.merchant === "Zqxtest Store");
   ok(zo && near(zo.total, 9.25) && /Customized Cash/.test(zo.totalText), "BofA online-only offer: 4% + 5.25% online shopping = " + (zo && zo.totalText));
   ok(zs && near(zs.total, 6.63) && /Unlimited Cash/.test(zs.totalText), "BofA in-store offer: no online rate, 4% + Unlimited Cash 2.625% = " + (zs && zs.totalText));
@@ -757,9 +768,18 @@ function listRows(sel) {
   // Card bonuses warning's color, 15px) before exactly those cards, with a hidden ", not activated"; the line still
   // fits whole names and +N counts the rest, at 390 and 360px.
   const FORCE = new Set(["Freedom Flex", "Freedom", "Discover it"]);
+  let activation = "not_confirmed";
   await page.route("**/data/bonus-categories.json", async route => {
     const d = await (await route.fetch()).json();
-    d.entries.forEach(e => { if (FORCE.has(e.card)) e.activation = "not_confirmed"; });
+    const dining = { name: "dining", list: "dining_chains", app_categories: ["Dining"] };
+    const grocery = { name: "grocery stores", list: "grocery_stores",
+      button_categories: ["Groceries & Food Delivery"], button_note: "Grocery stores only, excluding delivery services." };
+    const entertainment = { name: "entertainment", list: "entertainment",
+      button_categories: ["Streaming & Entertainment"], button_note: "Discover it: streaming and subscriptions are excluded." };
+    d.entries = d.entries.filter(e => !FORCE.has(e.card)).concat([...FORCE].map(card => ({
+      id: "test/warning-" + card.toLowerCase().replace(/ /g, "-"), card, kind: "rotating", rate: 5, activation, search: true,
+      match: card === "Discover it" ? [dining, entertainment] : [dining, grocery]
+    })));
     await route.fulfill({ json: d });
   });
   const marks = () => page.$$eval("#use details.bonusrow .bent", (es, force) => {
@@ -790,7 +810,7 @@ function listRows(sel) {
     ok(warned > 0, "not activated @" + w + ": " + warned + " ⚠ marks seen");
   }
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.unroute("**/data/bonus-categories.json");
+  activation = "activated";
 
   // Caveat line: a closed row with notes shows them as one cut line (no Matched, no Likely); open, the line hides
   // and every note shows in full.
@@ -822,6 +842,7 @@ function listRows(sel) {
     }, i);
     ok(op.open && !op.cav && op.notes.length && op.notes.every(Boolean), name + ": open hides the line and shows all " + op.notes.length + " notes in full");
   }
+  await page.unroute("**/data/bonus-categories.json");
 
   // What changed and the New tag, on test-only offers and batches that replace the real ones (so real data moving
   // can't turn these red), with the clock fixed at noon on Nov 1, 2026. Cards and reads:
