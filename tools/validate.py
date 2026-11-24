@@ -4,7 +4,7 @@ import json, re, sys, unicodedata
 from datetime import date
 from pathlib import Path
 
-from coupon_promotions import valid_promotion
+from coupon_promotions import legacy_promo_text, public_summary, valid_promotion
 
 PATH = Path(__file__).resolve().parent.parent / "site/data/offers.json"
 DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
@@ -96,6 +96,9 @@ for o in data["offers"]:
             if compact(str(o.get("merchant"))) in keys: bad("alias repeats the merchant name")
     for t in o.get("other_details") or []:
         if isinstance(t, str) and re.match(r"(Earlier name|Name shown as)\b", t): bad(f"rename note {t!r} belongs in aliases")
+        if (o.get("card") == "Capital One" and isinstance(t, str) and t.startswith("Promo text reads")
+                and public_summary(legacy_promo_text(t), set()) is None):
+            bad("unsafe public Capital One promotional note")
 for b in data["batches"]:
     if not DATE.match(str(b.get("read_date"))) or not b.get("card"): errors.append(f"bad batch {b}")
 # The page's "Offer freshness" panel reads each card's newest batch read_date (the last complete read).

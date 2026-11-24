@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """Refresh one card's offers from its issuer CSV (CLAUDE.md, "Refreshing a card").
 
-    python3 tools/refresh.py report --card "Capital One" FILE.csv [MORE.csv] [--read-date YYYY-MM-DD]
+    python3 tools/refresh.py report --card "Capital One" FILE.csv --coupons PRIVATE.json [--read-date YYYY-MM-DD]
                                     [--template decisions.json] [--json report.json]
-    python3 tools/refresh.py apply  --card "Capital One" FILE.csv [MORE.csv] [--read-date YYYY-MM-DD]
-                                    --decisions decisions.json [--part]
+    python3 tools/refresh.py apply  --card "Capital One" FILE.csv --coupons PRIVATE.json [--read-date YYYY-MM-DD]
+                                    --decisions decisions.json
 
 report reads the CSV(s) and site/data/offers.json with the pending phone edits on top (with_pending()) and
 changes nothing. apply makes the same plan, refuses while anything needs a decision, then writes offers.json
@@ -23,7 +23,9 @@ The tool encodes the mechanical rules. Judgment stays with the session, through 
    "clashes": {"<merchant>": "<category>"},             set on every offer with that name, on every card
    "new_names": {"<file merchant>": {"merchant": "...", "aliases": [...]}},  a new offer saved under another name
    "distinct_rewards": [{"offers": [[merchant, domain, reward], [merchant, domain, reward]], "confirm": true}],
-   "owner_approved": ["size_check", "missing", "new_share", "card_check", "parts", "location_pairs"]}   only after the owner said go ahead
+   "clear_minimums": {"<Capital One offer id>": true},   confirm clearing a saved minimum whose current terms are unknown
+   "owner_approved": ["size_check", "missing", "new_share", "card_check", "parts", "location_pairs",
+                      "incomplete_coupon_scan"]}   only after the owner said go ahead
 report --template writes one with every open question set to null. A pair the tool did not propose can be added.
 
 Never stored: card or account numbers. Columns such as card / card_name / card_last4 are read only by the card
@@ -34,6 +36,7 @@ and cleanup of offers with a pending edit.
 """
 import argparse, copy, csv, difflib, html, json, re, subprocess, sys, unicodedata
 from datetime import date, datetime, timedelta, timezone
+from decimal import Decimal
 from pathlib import Path
 
 sys.dont_write_bytecode = True
@@ -42,7 +45,8 @@ DATA = ROOT / "site/data"
 OFFERS, CUISINES, LOCATIONS = DATA / "offers.json", DATA / "cuisines.json", DATA / "merchant-locations.json"
 sys.path.insert(0, str(ROOT / "tools"))
 from fold_phone_edits import load_pending, with_pending  # noqa: E402
-from coupon_promotions import CouponEvidenceError, reconcile as reconcile_coupons  # noqa: E402
+from coupon_promotions import (CODE_PHRASE, UNSAFE_TEXT, CouponEvidenceError, has_code, read_evidence,
+                               reconcile as reconcile_coupons)  # noqa: E402
 
 DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 FIELDS = ["id", "card", "merchant", "category", "bonus", "expires", "expires_text", "activation", "redemption", "channel",
@@ -468,8 +472,9 @@ class USBank(Adapter):
 
 class CapitalOne(Adapter):
     card, slugp = "Capital One", "capital-one"
-    required = used = {"extraction_date", "layout_variant", "tile_kind", "merchant", "domain", "reward", "channel",
-                       "offer_type", "offer_type_basis", "activation_status"}
+    required = {"extraction_date", "layout_variant", "tile_kind", "merchant", "domain", "reward", "channel",
+                "offer_type", "offer_type_basis", "activation_status", "grid_position"}
+    used = required | {"badge"}
     read_date_column = "extraction_date"
     CHANNEL = {"online": "online", "in-store": "in_store", "at the pump": "pay_at_pump",
                "in-store & online": "in_store_and_online", "in-store & in-app": "in_store_and_app",
@@ -478,6 +483,10 @@ class CapitalOne(Adapter):
                      "online_and_app": {"online", "in_app"}}
     TYPE_BASES = {"Encoded tile offer-type labels", "Promoted affiliate tile template"}
     ACTIVATION = {"activated": "already_activated", "needs activation": "needs_activation", "not activated": "needs_activation"}
+    AMOUNT = r"(?:[0-9]{1,3}(?:,[0-9]{3})+|[0-9]+)(?:\.[0-9]+)?"
+    SPEND_TO_EARN = re.compile(
+        rf"Spend\s+\$\s*({AMOUNT})(?:\s*[,;]\s*|\s+and\s+|\s+)"
+        rf"(?:earn|get)\s+(?:up to\s+)?\$\s*({AMOUNT})(?:\s+(?:cash\s*)?back)?\.?", re.I)
 
     def check_columns(self, cols):
         if "extraction_date" not in cols and {"merchant_tld", "bonus", "activation_label"} <= set(cols):
@@ -486,9 +495,47 @@ class CapitalOne(Adapter):
         return super().check_columns(cols)
 
     def check_rows(self, rows):
+        for line, row in rows:
+            if None in row or any(row[column] is None for column in self.required):
+                raise Refused(f"Capital One inventory row does not match its CSV columns (line {line})")
         dates = {(r.get("extraction_date") or "").strip() for _, r in rows}
         if len(dates) != 1 or not real_date(next(iter(dates))):
             raise Refused("the Capital One inventory must have one Pacific extraction_date on every row")
+
+    @classmethod
+    def headline_minimum(cls, reward):
+        match = cls.SPEND_TO_EARN.fullmatch(reward.strip())
+        if match and all(Decimal(n.replace(",", "")) > 0 for n in match.groups()):
+            return match[1].replace(",", "")
+
+    def reconcile_minimum(self, inc, saved, returning, decisions):
+        if "minimum_spend" in inc.set or not saved["minimum_spend"]:
+            return False
+        if not returning and bonus_key(saved["bonus"]) == bonus_key(inc.bonus):
+            return False
+        old_min = self.headline_minimum(saved["bonus"])
+        stored = re.fullmatch(rf"\s*\$?\s*({self.AMOUNT})\s*", saved["minimum_spend"])
+        inc.set["minimum_spend"] = None
+        if old_min and stored and Decimal(old_min) == Decimal(stored[1].replace(",", "")):
+            inc.flags.append("retired the minimum tied to the previous spend-to-earn headline")
+        elif decisions.get(saved["id"]) is True:
+            inc.flags.append("cleared the ambiguous minimum with owner confirmation; current minimum unknown")
+        else:
+            return True
+        return False
+
+    def check_public_fields(self, rows, codes):
+        for line, row in rows:
+            if row["layout_variant"].strip() != "current_layout" or row["tile_kind"].strip() in {"future_preview", "issuer_bonus_banner"}:
+                continue
+            for field in ("merchant", "domain", "reward"):
+                value = unicodedata.normalize("NFKC", row[field]).strip()
+                if field == "domain":
+                    unsafe = value and not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9.-]*", value)
+                else:
+                    unsafe = UNSAFE_TEXT.search(value) or CODE_PHRASE.search(value)
+                if unsafe or has_code(value, codes):
+                    raise Refused(f"Capital One inventory has unsafe text in a public offer field (line {line})")
 
     def pair_name(self, saved, inc, rule):
         # The inventory can show an unqualified label for a storefront with a verified saved domain alias.
@@ -525,11 +572,11 @@ class CapitalOne(Adapter):
             supplemental = [] if inc.added_only else added.get(key, [])
             inc.lines.extend(line for line, _ in supplemental)
             channels, types, states = set(), set(), set()
-            for _, row in placements + supplemental:
+            for line, row in placements + supplemental:
                 channel = row["channel"].strip().lower()
                 if channel:
                     if channel not in self.CHANNEL:
-                        raise Refused(f"unknown Capital One channel {channel!r} ({inc.label()})")
+                        raise Refused(f"unknown Capital One channel (line {line})")
                     channels.add(self.CHANNEL[channel])
                 if row["offer_type_basis"].strip() in self.TYPE_BASES:
                     types.update(t.strip().lower() for t in row["offer_type"].split("|") if t.strip())
@@ -563,6 +610,8 @@ class CapitalOne(Adapter):
                 method = "unknown"
             basis = "offer_type" if routes & types else "activation_status"
             inc.set["redemption"] = {"method": method, "evidence": "not_shown" if method == "unknown" else basis}
+            if minimum := self.headline_minimum(inc.bonus):
+                inc.set["minimum_spend"] = minimum
             # This note predates structured activation. Leaving it in details can imply that the old evidence is current.
             inc.drop_notes.append("Capital One shows Activated under Added to Card. The selected card was not shown.")
             count = len(placements)
@@ -1056,10 +1105,16 @@ def plan(card, paths, given_date, decisions=None, part=False, complete_parts=Fal
     rows, cols, ignored, guarded = read_csvs(paths, ad)
     ad.check_rows(rows)
     read_date, date_source = pick_read_date(rows, cols, given_date, ad.read_date_column)
+    if isinstance(ad, CapitalOne):
+        try:
+            records, scan_complete, codes = read_evidence(coupons, read_date, rows)
+        except CouponEvidenceError as exc:
+            raise Refused(str(exc)) from None
+        ad.check_public_fields(rows, codes)
     dec = decisions or {}
     if decisions is not None:
         unknown = set(dec) - {"card", "read_date", "pairs", "categories", "clashes", "new_names",
-                              "distinct_rewards", "owner_approved", "notes"}
+                              "distinct_rewards", "clear_minimums", "owner_approved", "notes"}
         if unknown:
             raise Refused(f"decisions file: unknown keys {sorted(unknown)}")
         if dec.get("card") != card or dec.get("read_date") != read_date:
@@ -1277,15 +1332,23 @@ def plan(card, paths, given_date, decisions=None, part=False, complete_parts=Fal
     open_pairs = [(i, o, why) for i, o, why in open_pairs if i not in match and o["id"] not in claimed]
     inventory_issues = []
     distinct_rewards = []
+    ambiguous_minimums = []
     if isinstance(ad, CapitalOne):
+        clear_minimums = dec.get("clear_minimums", {})
+        if not isinstance(clear_minimums, dict) or any(v is not None and v is not True for v in clear_minimums.values()):
+            raise Refused("decisions file: set a clear_minimums entry from the template to true only after owner confirmation")
         inventory_issues, distinct_rewards = ad.reconcile_added(
             incs, idx, {o["id"]: o for o in mine}, match, ambiguous_added, dec.get("distinct_rewards") or [])
+        unavailable = {"missing", "expired"}
         for i, (sid, _, _) in match.items():
             inc, saved = incs[i], raw_by_id[sid]
             if "activation" in pending.get(sid, {}) and bonus_key(saved["bonus"]) != bonus_key(inc.bonus):
                 inventory_issues.append(f"{sid}: a pending activation edit must be resolved before repricing "
                                         f"{saved['bonus']} to {inc.bonus}")
             ad.reconcile_channel(inc, saved)
+            returning = saved["status"] in unavailable or view[sid]["status"] in unavailable or ended(saved)
+            if ad.reconcile_minimum(inc, saved, returning, clear_minimums):
+                ambiguous_minimums.append(sid)
     # A decided pair whose location changes (CLAUDE.md, Automatic vs proposed) is the owner's call, not the session's.
     loc_decided = []
     for (sid, fname, bkey), acc in decided.items():
@@ -1308,6 +1371,8 @@ def plan(card, paths, given_date, decisions=None, part=False, complete_parts=Fal
         out["inventory_issues"] = inventory_issues
     if distinct_rewards:
         out["distinct_rewards"] = distinct_rewards
+    if ambiguous_minimums:
+        out["ambiguous_minimums"] = ambiguous_minimums
     for i, inc in enumerate(incs):
         for fl in inc.flags:
             out["flags"].append(f"{inc.label()} (line {', '.join(map(str, inc.lines))}): {fl}")
@@ -1756,12 +1821,22 @@ def plan(card, paths, given_date, decisions=None, part=False, complete_parts=Fal
                              if peer != sid and peer in current and bonus_key(saved["bonus"]) == key[2]]
                 resolved.setdefault(key, []).extend([current[sid], *ambiguous])
         try:
-            out["coupons"], issues = reconcile_coupons(new, rows, resolved, coupons, read_date, nkey, bonus_key)
+            out["coupons"], issues = reconcile_coupons(new, rows, resolved, (records, scan_complete, codes),
+                                                       read_date, nkey, bonus_key)
         except CouponEvidenceError as exc:
             raise Refused(str(exc)) from None
         if issues:
             out["coupon_issues"] = issues
             blockers.append(f"{len(issues)} unresolved coupon placement(s)")
+        elif not out["coupons"]["complete"]:
+            key = "incomplete_coupon_scan"
+            message = "coupon inspection is incomplete; owner confirmation is required to apply the reported coupon changes"
+            out["stops"].append({"key": key, "text": message, "owner_approved": key in approved})
+            if key not in approved:
+                blockers.append(message)
+        if ambiguous_minimums:
+            blockers.append(f"{len(ambiguous_minimums)} ambiguous Capital One minimum(s) require current cashback evidence "
+                            "or owner confirmation to clear in clear_minimums")
 
     # card numbers: nothing written may carry the digits of a card/account column or of the file name
     secrets = secret_digits(paths, rows, guarded, read_date)
@@ -1850,6 +1925,7 @@ def show(out, limit=40):
     lst("Deleted by the 30-day cleanup", out["deleted"], lambda m: f"{m['id']} ({m['status']} since {m['since']})")
     lst("Row notes", out["flags"], lambda m: m)
     lst("Capital One inventory reconciliation", out.get("inventory_issues", []), lambda m: m)
+    lst("Capital One minimums needing a decision", out.get("ambiguous_minimums", []), lambda m: m)
     ch = out["changes"]
     p(f"\nField changes on saved offers: {json.dumps(ch['fields'], sort_keys=True) or '{}'}; "
       f"notes added {ch['notes_added']}, removed {ch['notes_removed']}")
@@ -1864,8 +1940,10 @@ def show(out, limit=40):
         c = out["coupons"]
         p(f"\nCoupons ({'complete scan' if c['complete'] else 'incomplete scan'}): "
           f"{c['verified']} verified, {c['listing']} listing only, {c['unverified']} check issuer, "
-          f"{c['unresolved']} unresolved listings, {c['withdrawn']} withdrawn, {c['withheld']} withheld, "
-          f"{c['scrubbed_notes']} old notes removed")
+          f"{c['unresolved']} unresolved listings, {c['partial_panels']} partial panels, {c['withdrawn']} withdrawn, "
+          f"{c['withheld']} prior terms withheld, {c['scrubbed_notes']} legacy notes sanitized")
+        if c["scan_declared_incomplete"]:
+            p("  The companion declares the coupon inspection incomplete.")
         lst("Coupon reconciliation", out.get("coupon_issues", []), lambda m: m)
     p("\nApply: " + ("ready" if not out["blockers"] else "blocked: " + "; ".join(out["blockers"])))
 
@@ -1879,6 +1957,8 @@ def template(out):
             "new_names": {}, "owner_approved": []}
     if out.get("distinct_rewards"):
         result["distinct_rewards"] = out["distinct_rewards"]
+    if out.get("ambiguous_minimums"):
+        result["clear_minimums"] = dict.fromkeys(out["ambiguous_minimums"])
     return result
 
 

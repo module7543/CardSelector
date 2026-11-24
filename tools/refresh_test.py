@@ -11,6 +11,7 @@ CSV or of the snapshot, run report / apply, and compare. The repo's own data is 
 """
 import csv, io, json, os, re, shutil, subprocess, sys, tempfile, unittest
 from contextlib import redirect_stdout
+from itertools import product
 from pathlib import Path
 
 sys.dont_write_bytecode = True
@@ -37,6 +38,7 @@ class Tree:
         for f in ("cards.json", "bonus-categories.json", "card-links.json"):
             shutil.copy(REPO / "site/data" / f, data / f)
         self.data = data
+        self.companions = {}
         self.write_json("merchant-locations.json", {"groups": {}})  # its own, whatever groups are deployed
         self.write_json("phone-edits.json", edits or {})
 
@@ -69,11 +71,12 @@ class Tree:
             rows = fn(rows)
         if card == "Capital One":
             # Keep the small historical fixture and write it in the supported inventory format for matching tests.
-            rows = [dict(extraction_date=READ, layout_variant="current_layout", tile_kind=r["tile_kind"],
+            kinds = {"carousel-item": "carousel_card", "top-offer": "hero"}
+            rows = [dict(extraction_date=READ, layout_variant="current_layout", tile_kind=kinds.get(r["tile_kind"], r["tile_kind"]),
                          merchant=r["merchant"], domain=r["merchant_tld"], reward=r["bonus"], channel=r["channel"],
                          offer_type=r["offer_types"], offer_type_basis="Encoded tile offer-type labels",
                          activation_status="") for r in rows]
-            cols = list(rows[0])
+            return self.inventory(rows, name or CSVS[card])
         p = self.root / (name or CSVS[card])
         with open(p, "w", newline="", encoding="utf-8") as f:
             w = csv.DictWriter(f, fieldnames=cols)
@@ -82,7 +85,35 @@ class Tree:
                 w.writerow({c: r.get(c, "") for c in cols})
         return p
 
-    def run(self, mode, card, paths, read_date=READ, decisions=None, extra=(), dec_date=None):
+    def inventory(self, rows, name="inventory.csv"):
+        grid_kinds = {"standard", "carousel_card", "hero", "showcase", "promoted_affiliate"}
+        grid_size = 0
+        positioned = []
+        for row in rows:
+            if row["layout_variant"] == "current_layout" and row["tile_kind"] in grid_kinds:
+                grid_size += 1
+                positioned.append({"grid_position": str(grid_size), **row})
+            else:
+                positioned.append({"grid_position": "", **row})
+        p = self.root / name
+        with p.open("w", newline="") as stream:
+            writer = csv.DictWriter(stream, fieldnames=list(dict.fromkeys(k for row in positioned for k in row)))
+            writer.writeheader()
+            writer.writerows(positioned)
+        companion = self.root / (p.stem + "-companion.json")
+        companion.write_text(json.dumps(self.coupon_capture(rows[0]["extraction_date"], grid_size)))
+        self.companions[p] = companion
+        return p
+
+    @staticmethod
+    def coupon_capture(day, grid_size, *, complete=True, panels=(), listings=()):
+        return {"schema_version": 1, "capture_date": day, "capture_timezone": "America/Los_Angeles",
+                "verified_coupon_offers": list(panels), "listing_only_promotions": list(listings),
+                "source": {"platform": "Capital One Offers", "surface": "Unfiltered main offer feed",
+                           "inventory_scan": {"available_feed_exhausted": True, "loaded_grid_entries": grid_size,
+                                              "coupon_scan_complete": complete}}}
+
+    def run(self, mode, card, paths, read_date=READ, decisions=None, extra=(), dec_date=None, auto_coupon=True):
         args = [sys.executable, str(self.root / "tools/refresh.py"), mode, "--card", card] + [str(p) for p in paths]
         if read_date:
             args += ["--read-date", read_date]
@@ -93,6 +124,8 @@ class Tree:
         jp = self.root / "report.json"
         if jp.exists():
             jp.unlink()
+        if auto_coupon and len(paths) == 1 and paths[0] in self.companions and "--coupons" not in extra:
+            args += ["--coupons", str(self.companions[paths[0]])]
         args += ["--json", str(jp)] + list(extra)
         r = subprocess.run(args, cwd=self.root, capture_output=True, text=True)
         rep = json.loads(jp.read_text()) if jp.exists() else None
@@ -187,15 +220,12 @@ class RefreshTest(unittest.TestCase):
             dict(ebay, tile_kind="future_preview", reward="80% back"),
             dict(ebay, tile_kind="issuer_bonus_banner", reward="90% back"),
         ]
-        p = self.t.root / "inventory.csv"
-        with p.open("w", newline="") as stream:
-            writer = csv.DictWriter(stream, fieldnames=rows[0])
-            writer.writeheader()
-            writer.writerows(rows)
+        p = self.write_inventory(rows)
+        decisions = {"owner_approved": ["incomplete_coupon_scan"]}
         carhartt = by_name["carhartt"]["domain"]
         self.t.change_offers(lambda by, _: by["capital-one/carhartt"].update(merchant="Carhartt (workwear)", aliases=[carhartt]))
         before = self.t.offers()
-        output, report = self.apply_ok("Capital One", [p], read_date=None)
+        output, report = self.apply_ok("Capital One", [p], read_date=None, decisions=decisions)
         after = self.t.offers()
         self.assertEqual(report["read_date"], READ)
         self.assertEqual(before.keys(), after.keys())
@@ -217,7 +247,7 @@ class RefreshTest(unittest.TestCase):
             }))
         self.t.write_json("phone-edits.json", {"capital-one/loop-mobile": {"activation": "needs_activation"}})
         edits = self.t.read("phone-edits.json")
-        self.apply_ok("Capital One", [p], read_date=None)
+        self.apply_ok("Capital One", [p], read_date=None, decisions=decisions)
         self.assertEqual(self.t.read("phone-edits.json"), edits)
         self.assertEqual(self.t.offers()["capital-one/loop-mobile"]["activation"], "already_activated")
         self.assertEqual(self.t.offers()["capital-one/loop-mobile"]["channel"], "online_and_app")
@@ -248,12 +278,14 @@ class RefreshTest(unittest.TestCase):
         return snapshot, saved, inventory_row
 
     def write_inventory(self, rows):
-        p = self.t.root / "inventory.csv"
-        with p.open("w", newline="") as stream:
-            writer = csv.DictWriter(stream, fieldnames=rows[0])
-            writer.writeheader()
-            writer.writerows(rows)
-        return p
+        return self.t.inventory(rows)
+
+    def main_grid_control(self, row):
+        # A real grid listing alongside a standalone Added to Card placement.
+        cvs = json.loads((FIX / "offers.json").read_text())
+        offer = next(o for o in cvs["offers"] if o["id"] == "capital-one/cvs")
+        self.t.change_offers(lambda _, data: data["offers"].append(offer))
+        return dict(row, merchant=offer["merchant"], reward=offer["bonus"], domain="cvs.com")
 
     def test_capital_one_inventory_refresh_rechecks_activation(self):
         snapshot, saved, inventory_row = self.seven_eleven_inventory()
@@ -292,11 +324,11 @@ class RefreshTest(unittest.TestCase):
     def test_capital_one_standalone_added_placement_stays_active(self):
         _, saved, row = self.seven_eleven_inventory()
         added = dict(row, tile_kind="added_to_card", activation_status="Activated", offer_type="", offer_type_basis="")
-        p = self.write_inventory([added])
+        p = self.write_inventory([self.main_grid_control(row), added])
         self.t.write_json("phone-edits.json", {saved["id"]: {"activation": "needs_activation"}})
         pending = self.t.read("phone-edits.json")
         _, report = self.apply_ok("Capital One", [p], read_date=row["extraction_date"])
-        self.assertEqual((report["offers_in_batch"], report["new"], report["missing"]), (1, [], []))
+        self.assertEqual((report["offers_in_batch"], report["new"], report["missing"]), (2, [], []))
         actual = self.t.offers()[saved["id"]]
         self.assertEqual((actual["status"], actual["bonus"], actual["activation"], actual["channel"]),
                          ("active", "10% back", "already_activated", "online_and_app"))
@@ -336,7 +368,7 @@ class RefreshTest(unittest.TestCase):
         snapshot, saved, row = self.seven_eleven_inventory()
         snapshot["offers"].append(dict(saved, id="capital-one/7-eleven-2"))
         self.t.write_json("offers.json", snapshot)
-        p = self.write_inventory([dict(row, tile_kind="added_to_card", activation_status="Activated")])
+        p = self.write_inventory([self.main_grid_control(row), dict(row, tile_kind="added_to_card", activation_status="Activated")])
         code, output, report = self.t.run("report", "Capital One", [p], read_date=row["extraction_date"])
         self.assertEqual(code, 0, output)
         self.assertEqual({p["saved"] for p in report["proposals"]}, {saved["id"], "capital-one/7-eleven-2"})
@@ -388,8 +420,9 @@ class RefreshTest(unittest.TestCase):
     def test_capital_one_pending_edit_blocks_repricing(self):
         _, saved, row = self.seven_eleven_inventory()
         self.t.write_json("phone-edits.json", {saved["id"]: {"activation": "needs_activation"}})
+        p = self.write_inventory([self.main_grid_control(row),
+                                  dict(row, reward="12% back", tile_kind="added_to_card", activation_status="Activated")])
         before, pending = (self.t.read(f) for f in ("offers.json", "phone-edits.json"))
-        p = self.write_inventory([dict(row, reward="12% back", tile_kind="added_to_card", activation_status="Activated")])
         code, output, report = self.t.run("report", "Capital One", [p], read_date=row["extraction_date"])
         self.assertEqual(code, 0, output)
         self.assertIn("pending activation edit must be resolved before repricing", report["inventory_issues"][0])
@@ -415,7 +448,7 @@ class RefreshTest(unittest.TestCase):
                     offer_type_basis="Encoded tile offer-type labels", activation_status="", grid_position="1",
                     badge="EXCLUSIVE COUPON" if candidate else "")
 
-    def coupon_evidence(self, row, *, value=20, cap=None, through="2026-12-05", complete=True, include=True):
+    def coupon_evidence(self, row, *, value=20, cap=None, through="2026-12-05", complete=True, include=True, grid_size=1):
         records = [{
             "evidence_status": "verified_detail_panel", "capture_date": row["extraction_date"],
             "merchant": {"name": row["merchant"], "domain": row["domain"]},
@@ -436,12 +469,7 @@ class RefreshTest(unittest.TestCase):
                          "issuer_evidence": {"cashback_based_on_eligible_subtotal_after_coupon": True}},
         }] if include else []
         p = self.t.root / "coupons.json"
-        p.write_text(json.dumps({"schema_version": 1, "capture_date": row["extraction_date"],
-                                 "capture_timezone": "America/Los_Angeles", "verified_coupon_offers": records,
-                                 "listing_only_promotions": [], "source": {"platform": "Capital One Offers",
-                                 "surface": "Unfiltered main offer feed",
-                                 "inventory_scan": {"available_feed_exhausted": True, "loaded_grid_entries": 1,
-                                                    "coupon_scan_complete": complete}}}))
+        p.write_text(json.dumps(self.t.coupon_capture(row["extraction_date"], grid_size, complete=complete, panels=records)))
         return str(p)
 
     def test_coupon_replacement_disappearance_and_expiry_leave_rebate_intact(self):
@@ -484,8 +512,19 @@ class RefreshTest(unittest.TestCase):
         self.apply_ok("Capital One", [self.write_inventory([first])], read_date=first["extraction_date"],
                       extra=("--coupons", self.coupon_evidence(first)))
         later = self.coupon_inventory("2026-11-25")
-        _, report = self.apply_ok("Capital One", [self.write_inventory([later])], read_date=later["extraction_date"],
-                                  extra=("--coupons", self.coupon_evidence(later, include=False)))
+        p = self.write_inventory([later])
+        extra = ("--coupons", self.coupon_evidence(later, include=False))
+        before = self.data_bytes()
+        code, output, report = self.t.run("report", "Capital One", [p], read_date=later["extraction_date"], extra=extra)
+        self.assertEqual(code, 0, output)
+        self.assertIn("0 verified, 0 listing only, 1 check issuer", output)
+        self.assertIn("1 prior terms withheld", output)
+        self.assertEqual(report["stops"][-1]["key"], "incomplete_coupon_scan")
+        self.assertEqual(self.t.run("apply", "Capital One", [p], read_date=later["extraction_date"],
+                                    decisions={}, extra=extra)[0], 2)
+        self.assertEqual(self.data_bytes(), before)
+        approval = {"owner_approved": ["incomplete_coupon_scan"]}
+        _, report = self.apply_ok("Capital One", [p], read_date=later["extraction_date"], decisions=approval, extra=extra)
         self.assertFalse(report["coupons"]["complete"])
         self.assertEqual((report["coupons"]["withheld"], report["coupons"]["withdrawn"]), (1, 0))
         self.assertEqual(self.t.offers()[saved["id"]]["promotions"], [{
@@ -498,12 +537,16 @@ class RefreshTest(unittest.TestCase):
         del data["verified_coupon_offers"][0]["evidence"]["detail_panel"]["expanded_cashback_terms_read"]
         companion.write_text(json.dumps(data))
         _, report = self.apply_ok("Capital One", [self.write_inventory([partial_panel])],
-                                  read_date=partial_panel["extraction_date"], extra=("--coupons", str(companion)))
+                                  read_date=partial_panel["extraction_date"], decisions=approval, extra=("--coupons", str(companion)))
         self.assertEqual((report["coupons"]["verified"], report["coupons"]["unverified"]), (0, 1))
+        self.assertEqual(report["coupons"]["partial_panels"], 1)
         self.assertNotIn("discount", self.t.offers()[saved["id"]]["promotions"][0])
         next_day = self.coupon_inventory("2026-11-27", candidate=False)
-        _, report = self.apply_ok("Capital One", [self.write_inventory([next_day])], read_date=next_day["extraction_date"])
-        self.assertEqual((report["coupons"]["withheld"], report["coupons"]["withdrawn"]), (1, 0))
+        _, report = self.apply_ok("Capital One", [self.write_inventory([next_day])], read_date=next_day["extraction_date"],
+                                  decisions=approval, extra=("--coupons", self.coupon_evidence(next_day, complete=False, include=False)))
+        self.assertTrue(report["coupons"]["scan_declared_incomplete"])
+        self.assertFalse(report["coupons"]["complete"])
+        self.assertEqual((report["coupons"]["withheld"], report["coupons"]["withdrawn"]), (0, 0))
         self.assertNotIn("promotions", self.t.offers()[saved["id"]])
 
     def test_coupon_repricing_requires_evidence_of_the_new_reward(self):
@@ -532,13 +575,118 @@ class RefreshTest(unittest.TestCase):
                 if not duplicate_placement:
                     snapshot["offers"].append(dict(saved, id="capital-one/7-eleven-2"))
                     self.t.write_json("offers.json", snapshot)
-                p = self.write_inventory([row, row] if duplicate_placement else [row])
+                p = self.write_inventory([row, dict(row, grid_position="2")] if duplicate_placement else [row])
                 before = self.t.read("offers.json")
-                code, output, _ = self.t.run("apply", "Capital One", [p], read_date=row["extraction_date"], decisions={},
-                                             extra=("--coupons", self.coupon_evidence(row)))
+                code, output, _ = self.t.run("apply", "Capital One", [p], read_date=row["extraction_date"],
+                                             decisions={"owner_approved": ["incomplete_coupon_scan"]},
+                                             extra=("--coupons", self.coupon_evidence(row, grid_size=2 if duplicate_placement else 1)))
                 self.assertEqual(code, 2, output)
                 self.assertIn("does not match a unique current placement and offer reward", output)
                 self.assertEqual(self.t.read("offers.json"), before)
+
+    def data_bytes(self):
+        return {p.name: p.read_bytes() for p in self.t.data.glob("*.json")}
+
+    def test_coupon_companion_is_required_even_for_same_day_replay(self):
+        self.seven_eleven_inventory()
+        row = self.coupon_inventory("2026-11-24")
+        p = self.write_inventory([row])
+        opts = {"read_date": row["extraction_date"], "extra": ("--coupons", self.coupon_evidence(row))}
+        self.apply_ok("Capital One", [p], **opts)
+        before = self.data_bytes()
+        self.apply_ok("Capital One", [p], **opts)
+        self.assertEqual(self.data_bytes(), before)
+        for mode in ("report", "apply"):
+            code, output, _ = self.t.run(mode, "Capital One", [p], read_date=row["extraction_date"], auto_coupon=False,
+                                         decisions={"owner_approved": ["incomplete_coupon_scan"]})
+            self.assertEqual(code, 2, output)
+            self.assertIn("require --coupons", output)
+            self.assertEqual(self.data_bytes(), before)
+
+    def test_coupon_companion_checks_main_inventory_before_planning_snapshot(self):
+        _, _, row = self.seven_eleven_inventory()
+        day = row["extraction_date"]
+        approval = {"owner_approved": ["incomplete_coupon_scan", "size_check", "missing"]}
+        before = self.data_bytes()
+        companion = self.t.root / "evidence.json"
+        cases = (
+            (row, {"available_feed_exhausted": False}, {}, "establish exhaustion"),
+            (row, {"loaded_grid_entries": 2}, {}, "grid coverage"),
+            (dict(row, grid_position=""), {}, {}, "grid coverage"),
+            (dict(row, grid_position="2"), {}, {}, "invalid grid positions"),
+            (dict(row, merchant="UNREADABLE"), {}, {}, "unreadable current"),
+            (row, {"loaded_grid_entries": True}, {}, "positive loaded grid"),
+            (row, {"coupon_scan_complete": "false"}, {}, "must be true or false"),
+            (row, {}, {"capture_date": "2026-11-23"}, "match the Pacific"),
+            (row, {}, {"capture_date": "2026-11-99"}, "match the Pacific"),
+            (row, {}, {"capture_timezone": "UTC"}, "match the Pacific"),
+        )
+        for placement, scan, evidence, message in cases:
+            with self.subTest(message=message, scan=scan, evidence=evidence):
+                p = self.write_inventory([placement])
+                capture = self.t.coupon_capture(day, 1)
+                capture["source"]["inventory_scan"].update(scan)
+                companion.write_text(json.dumps(dict(capture, **evidence)))
+                for mode in ("report", "apply"):
+                    code, output, _ = self.t.run(mode, "Capital One", [p], read_date=day, decisions=approval,
+                                                 extra=("--coupons", str(companion)))
+                    self.assertEqual(code, 2, output)
+                    self.assertIn(message, output)
+                    self.assertEqual(self.data_bytes(), before)
+        _, report = self.apply_ok("Capital One", [self.write_inventory([row])], read_date=day)
+        self.assertTrue(report["coupons"]["complete"])
+
+    def test_coupon_partial_scan_approval_cannot_resolve_ambiguous_evidence(self):
+        self.seven_eleven_inventory()
+        row = self.coupon_inventory("2026-11-24")
+        before = self.data_bytes()
+        for case in ("duplicate inventory candidate", "duplicate partial panel", "reward conflict"):
+            with self.subTest(case=case):
+                duplicates = case == "duplicate inventory candidate"
+                p = self.write_inventory([row, dict(row, grid_position="2")] if duplicates else [row])
+                companion = Path(self.coupon_evidence(row, complete=False, include=not duplicates, grid_size=2 if duplicates else 1))
+                data = json.loads(companion.read_text())
+                if not duplicates:
+                    panel = data["verified_coupon_offers"][0]
+                    panel["evidence"]["detail_panel"]["expanded_cashback_terms_read"] = False
+                    if case == "duplicate partial panel":
+                        data["verified_coupon_offers"].append(panel)
+                    else:
+                        panel["cashback"]["text_exact"] = "25% back"
+                    companion.write_text(json.dumps(data))
+                code, output, _ = self.t.run("apply", "Capital One", [p], read_date=row["extraction_date"],
+                                             decisions={"owner_approved": ["incomplete_coupon_scan"]},
+                                             extra=("--coupons", str(companion)))
+                self.assertEqual(code, 2, output)
+                self.assertIn("unresolved coupon placement", output)
+                self.assertEqual(self.data_bytes(), before)
+
+    def test_coupon_complete_scan_can_include_panel_and_listing_only_for_one_offer(self):
+        _, saved, _ = self.seven_eleven_inventory()
+        row = self.coupon_inventory("2026-11-24")
+        hero = dict(row, tile_kind="hero", grid_position="2", badge="")
+        p = self.write_inventory([row, hero])
+        companion = Path(self.coupon_evidence(row, grid_size=2))
+        capture = json.loads(companion.read_text())
+        panel = capture["verified_coupon_offers"][0]
+        listing = dict(panel, evidence_status="listing_only", evidence={"listing": {"source": "hero"}})
+        capture["listing_only_promotions"].append(listing)
+        companion.write_text(json.dumps(capture))
+        opts = {"read_date": row["extraction_date"], "extra": ("--coupons", str(companion))}
+        _, report = self.apply_ok("Capital One", [p], **opts)
+        self.assertTrue(report["coupons"]["complete"])
+        self.assertEqual((report["coupons"]["verified"], report["coupons"]["listing"]), (1, 1))
+        promotions = self.t.offers()[saved["id"]]["promotions"]
+        self.assertEqual([p["source"] for p in promotions], ["verified_panel", "listing_only"])
+        self.assertNotIn("conditions", promotions[1])
+
+        capture["source"]["inventory_scan"]["coupon_scan_complete"] = False
+        capture["listing_only_promotions"].clear()
+        companion.write_text(json.dumps(capture))
+        _, report = self.apply_ok("Capital One", [p], decisions={"owner_approved": ["incomplete_coupon_scan"]}, **opts)
+        self.assertEqual((report["coupons"]["verified"], report["coupons"]["unverified"], report["coupons"]["withheld"]), (1, 1, 1))
+        self.assertEqual(self.t.offers()[saved["id"]]["promotions"][0], promotions[0])
+        self.assertNotIn("discount", self.t.offers()[saved["id"]]["promotions"][1])
 
     def test_coupon_yearless_end_is_fixed_and_conflicting_dates_are_only_freshness(self):
         from datetime import date
@@ -553,6 +701,239 @@ class RefreshTest(unittest.TestCase):
                                                                {"month": 2, "day": 1, "weekday": "Monday"}]}
         expiry, visible = expiration(conflicting, read, None)
         self.assertEqual((expiry["basis"], expiry["date"], visible), ("conflict", None, "2026-11-29"))
+
+    def test_capital_one_minimum_follows_current_headline(self):
+        snapshot, saved, row = self.seven_eleven_inventory()
+        oid = saved["id"]
+        prior = saved["last_read"]
+        saved.update(bonus="Spend $20, earn $10", minimum_spend="20")
+        other_issuers = {o["id"]: o for o in snapshot["offers"] if o["card"] != "Capital One"}
+        cases = (
+            (prior, "Spend $20, earn $10", "active", "20", "20"),
+            (prior, "8% back", "active", "20", None),
+            (row["extraction_date"], "$12 back", "active", "20", None),
+            (row["extraction_date"], "Spend $1,250.50 and get $100 back", "active", "20", "1250.50"),
+            (row["extraction_date"], "Spend $45, earn $15", "active", None, "45"),
+            (row["extraction_date"], "Up to $20 back", "missing", "20", None),
+            (row["extraction_date"], "Spend $20, earn $10", "missing", "20", "20"),
+            (row["extraction_date"], "Free gift when you spend $60", "missing", "20", None),
+            (row["extraction_date"], "Spend $75, earn up to $20", "active", "20", "75"),
+        )
+        for day, reward, status, old, expected in cases:
+            with self.subTest(day=day, reward=reward, status=status, old=old):
+                saved.update(status=status, minimum_spend=old)
+                self.t.write_json("offers.json", snapshot)
+                p = self.write_inventory([dict(row, extraction_date=day, reward=reward)])
+                self.apply_ok("Capital One", [p], read_date=day)
+                actual = self.t.offers()[oid]
+                self.assertEqual((actual["bonus"], actual["minimum_spend"], actual["status"], actual["first_seen"]),
+                                 (reward, expected, "active", saved["first_seen"]))
+                self.assertEqual({i: o for i, o in self.t.offers().items() if o["card"] != "Capital One"}, other_issuers)
+                before = self.data_bytes()
+                self.apply_ok("Capital One", [p], read_date=day)
+                self.assertEqual(self.data_bytes(), before)
+
+    def test_capital_one_ambiguous_saved_minimum_requires_per_offer_resolution(self):
+        snapshot, saved, row = self.seven_eleven_inventory()
+        day, oid = row["extraction_date"], saved["id"]
+        saved["minimum_spend"] = "25"
+        self.t.write_json("offers.json", snapshot)
+        self.apply_ok("Capital One", [self.write_inventory([row])], read_date=day)
+        self.assertEqual(self.t.offers()[oid]["minimum_spend"], "25")
+        for returning in (False, True):
+            with self.subTest(returning=returning):
+                saved["status"] = "missing" if returning else "active"
+                self.t.write_json("offers.json", snapshot)
+                edits = {oid: {"status": "active", "status_since": day}} if returning else {}
+                self.t.write_json("phone-edits.json", edits)
+                p = self.write_inventory([row if returning else dict(row, reward="$12 back")])
+                before = self.data_bytes()
+                template = self.t.root / "template.json"
+                code, output, report = self.t.run("report", "Capital One", [p], read_date=day,
+                                                 extra=("--template", str(template)))
+                self.assertEqual(code, 0, output)
+                self.assertEqual(report["ambiguous_minimums"], [oid])
+                self.assertEqual(json.loads(template.read_text())["clear_minimums"], {oid: None})
+                code, output, _ = self.t.run("apply", "Capital One", [p], read_date=day,
+                                             decisions={"owner_approved": ["incomplete_coupon_scan"]})
+                self.assertEqual(code, 2, output)
+                self.assertEqual(self.data_bytes(), before)
+                self.apply_ok("Capital One", [p], read_date=day, decisions={"clear_minimums": {oid: True}})
+                self.assertIsNone(self.t.offers()[oid]["minimum_spend"])
+                self.assertEqual(self.t.load("phone-edits.json"), edits)
+
+    def test_coupon_sanitizer_keeps_code_free_restrictions_and_private_fields_out(self):
+        from coupon_promotions import valid_promotion
+        _, saved, _ = self.seven_eleven_inventory()
+        row = self.coupon_inventory("2026-11-24")
+        oid, day = saved["id"], row["extraction_date"]
+        legacy = 'Promo text reads "First purchase only with SYNTHLEGACY99. Selected items only."'
+        self.t.change_offers(lambda by, _: by[oid]["other_details"].append(legacy))
+        p = self.write_inventory([dict(row, raw_text="SYNTHRAW99", promo_code="SYNTHRAW99")])
+        companion = Path(self.coupon_evidence(row))
+        capture = json.loads(companion.read_text())
+        record = capture["verified_coupon_offers"][0]
+        record["coupon"]["minimum_purchase"] = {"status": "stated", "amount": 75, "currency": "USD"}
+        record["coupon"]["additional_conditions_summary"] = [
+            "New customers only with SYNTHWITH99. Cannot combine with other promotions.",
+            'Use code "syntheticlower". Online orders only.',
+            "Selected items only. //offers.example/private?session=SYNTHLINK99",
+            "First order only. offers.example/private?session=SYNTHLINK99",
+            "Eligible with 1000 reward points.",
+        ]
+        record["cashback"]["authenticated_link"] = "https://offers.example/?session=SYNTHLINK99"
+        companion.write_text(json.dumps(capture))
+        template = self.t.root / "template.json"
+        extra = ("--coupons", str(companion))
+        code, report_stdout, _ = self.t.run("report", "Capital One", [p], read_date=day, extra=(*extra, "--template", str(template)))
+        self.assertEqual(code, 0, report_stdout)
+        report_json = (self.t.root / "report.json").read_text()
+        apply_stdout, report = self.apply_ok("Capital One", [p], read_date=day, extra=extra)
+        self.assertEqual(report["coupons"]["scrubbed_notes"], 1)
+        offer = self.t.offers()[oid]
+        self.assertIsNone(offer["minimum_spend"])
+        promotion = offer["promotions"][0]
+        self.assertEqual(promotion["minimum_purchase"], 75)
+        self.assertEqual(promotion["conditions"], ["Cannot combine with other promotions.",
+                                                   "Online orders only.", "Selected items only.", "First order only.",
+                                                   "Eligible with 1000 reward points."])
+        self.assertIn('Promo text reads "Selected items only."', offer["other_details"])
+        self.assertFalse(valid_promotion(dict(promotion, conditions=["New customers only with SYNTHWITH99."])))
+        before = self.data_bytes()
+        unsafe = self.write_inventory([dict(row, domain="offers.example/private?session=SYNTHLINK99")])
+        code, refusal, _ = self.t.run("report", "Capital One", [unsafe], read_date=day, extra=extra)
+        self.assertEqual(code, 2, refusal)
+        self.assertIn("unsafe text", refusal)
+        self.assertEqual(self.data_bytes(), before)
+        public = report_stdout + report_json + apply_stdout + template.read_text() + refusal
+        public += "".join(self.t.read(f) for f in before)
+        for word in ("SYNTHLEGACY99", "SYNTHRAW99", "SYNTHWITH99", "syntheticlower", "SYNTHLINK99", "PRIVATE-COUPON-SENTINEL"):
+            self.assertNotIn(word, public)
+
+    def test_coupon_noun_instructions_stay_out_of_reports_and_public_data(self):
+        _, saved, _ = self.seven_eleven_inventory()
+        row = self.coupon_inventory("2026-11-24")
+        oid, day = saved["id"], row["extraction_date"]
+        instructions = [
+            "Use coupon ZQSAVE20.", "Apply coupon ZQSAVE20 at checkout.", "Enter coupon ZQSAVE20 at checkout.",
+            "Use promo ZQSAVE20.", "Apply promo ZQSAVE20.", "Use voucher ZQSAVE20.", "Enter voucher zqsave20.",
+            "Use offer ZQSAVE20.", "Apply discount ZQSAVE20.", "Use coupon zqbigdeal.", "Enter promo zqsave20 in cart.",
+            "use the promotional ‘zqbigdeal’.", "Use coupon ZQSYNTH42 at checkout.",
+            "New customers use coupon ZQSYNTH42", "Use coupon online-zqsave20.",
+            "Use your coupon ZQSYNTHB2 at checkout.",
+        ]
+        safe_conditions = [
+            "Apply before tax.", "Restrictions apply without specific products named.",
+            "Members save with USAA.", "Items must be purchased with IKEA Family.",
+            "Valid with iPhone15 purchases.", "Apply discount before tax.", "Use the offer online.",
+            "Apply promotional pricing at checkout.", "USE COUPON AT CHECKOUT.",
+        ]
+        tokens = ("zqsave20", "zqbigdeal", "zqsynth42", "zqsynthb2")
+
+        def note(line):
+            return f'Promo text reads "{line}"'
+
+        self.t.change_offers(lambda by, _: by[oid]["other_details"].extend(map(note, instructions + safe_conditions)))
+        companion = Path(self.coupon_evidence(row))
+        capture = json.loads(companion.read_text())
+        coupon = capture["verified_coupon_offers"][0]["coupon"]
+        coupon["code"] = {}  # The private value was unavailable to the capture.
+        coupon["additional_conditions_summary"] = instructions + safe_conditions + [
+            "Enter promo zqbigdeal in cart. Selected styles only.",
+        ]
+        companion.write_text(json.dumps(capture))
+        p, template = self.write_inventory([row]), self.t.root / "template.json"
+        extra = ("--coupons", str(companion))
+        code, report_output, _ = self.t.run("report", "Capital One", [p], read_date=day, extra=(*extra, "--template", str(template)))
+        self.assertEqual(code, 0, report_output)
+        report_json = (self.t.root / "report.json").read_text()
+        apply_output, _ = self.apply_ok("Capital One", [p], read_date=day, extra=extra)
+        apply_json = (self.t.root / "report.json").read_text()
+        public = report_output + report_json + template.read_text() + apply_output + apply_json + self.t.read("offers.json")
+        for token in tokens:
+            self.assertNotIn(token, public.casefold())
+        saved = self.t.offers()[oid]
+        self.assertEqual(saved["other_details"], list(map(note, safe_conditions)))
+        self.assertEqual(saved["promotions"][0]["conditions"], safe_conditions + ["Selected styles only."])
+
+        def validate():
+            return subprocess.run([sys.executable, "tools/validate.py"], cwd=self.t.root, capture_output=True, text=True)
+
+        clean_data = self.t.load()
+        result = validate()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        offer = next(o for o in clean_data["offers"] if o["id"] == oid)
+        targets = (
+            ("panel summary", offer["promotions"][0]["conditions"], "bad public coupon promotion"),
+            ("legacy note", offer["other_details"], "unsafe public Capital One promotional note"),
+        )
+        for field, target, message in targets:
+            for line in instructions:
+                with self.subTest(line=line, field=field):
+                    target.append(note(line) if field == "legacy note" else line)
+                    self.t.write_json("offers.json", clean_data)
+                    target.pop()
+                    result = validate()
+                    output = result.stdout + result.stderr
+                    self.assertNotEqual(result.returncode, 0, output)
+                    self.assertIn(message, output)
+                    for token in tokens:
+                        self.assertNotIn(token, output.casefold())
+
+    def test_coupon_instruction_privacy_floor_and_modifier_matrix(self):
+        from coupon_promotions import legacy_promo_text, public_summary, sanitize, scrub_legacy, valid_promotion
+
+        day = "2026-11-24"
+        companion = Path(self.coupon_evidence(self.coupon_inventory(day)))
+        record = json.loads(companion.read_text())["verified_coupon_offers"][0]
+        coupon = record["coupon"]
+        coupon["code"] = {}
+        verbs = ("use", "apply", "enter")
+        modifiers = ("", "your ", "exclusive current ", "a special limited-time members-only seasonal checkout ")
+        nouns = ("coupon", "promo", "promotional", "voucher", "offer", "discount")
+        tokens = ("zqsynthb2", '"zqsynthb2"', "‘zqbigdeal’")
+        lines = [case(f"{verb} {modifier}{noun} {token} at checkout.")
+                 for verb, modifier, noun, token, case in product(verbs, modifiers, nouns, tokens, (str.lower, str.upper))]
+        lines += [
+            "Use your coupon ZQSAVE20.", "Use this promo ZQSAVE20.", "Use exclusive coupon ZQSAVE20.",
+            "Apply exclusive promo zqsave20 at checkout.", "Enter your promo ZQSAVE20 in cart.",
+            "Use your discount ZQSAVE20.", "Use your coupon; ZQSYNTHB2 at checkout.",
+            "Use coupon ONLINE.", "Apply before tax ZQSYNTHB2.", "Use the offer online ZQSYNTHB2.",
+            "Use a (specially issued) one-time offer zqbigdeal.",
+        ]
+        # The deployed check also blocked long first words even without a coupon noun.
+        lines += [f"{verb} promptly zqsynthb2 at checkout." for verb in verbs]
+
+        def note(line):
+            return f'Promo text reads "{line}"'
+
+        cases = [(line, "Selected styles only.") for line in lines]
+        cases.append(("Use coupon zqsynthb2. Apply before tax.", "Apply before tax. Selected styles only."))
+        for line, expected in cases:
+            with self.subTest(line=line):
+                coupon["additional_conditions_summary"] = [f"{line} Selected styles only."]
+                promotion = sanitize(record, day, set(), [])
+                self.assertEqual(promotion["conditions"], [expected])
+                self.assertFalse(valid_promotion(dict(promotion, conditions=[line])))
+                offer = {"other_details": [note(f"{line} Selected styles only.")]}
+                self.assertEqual(scrub_legacy(offer, set()), 1)
+                self.assertEqual(offer["other_details"], [note(expected)])
+                self.assertIsNone(public_summary(legacy_promo_text(note(line)), set()))
+
+        for line in ("Use your coupon at checkout.", "Use this offer before it ends.", "Apply offer to eligible items.",
+                     "Apply discount before tax. Restrictions apply without specific products named.",
+                     "Review exclusions: Use of promotional codes not provided by Capital One may invalidate your offer.",
+                     "Members save with USAA. Items must be purchased with IKEA Family. Valid with iPhone15 purchases."):
+            with self.subTest(line=line):
+                coupon["additional_conditions_summary"] = [line]
+                promotion = sanitize(record, day, set(), [])
+                self.assertEqual(promotion["conditions"], [line])
+                self.assertTrue(valid_promotion(promotion))
+                offer = {"other_details": [note(line)]}
+                self.assertEqual(scrub_legacy(offer, set()), 0)
+                self.assertEqual(offer["other_details"], [note(line)])
+                self.assertEqual(public_summary(legacy_promo_text(note(line)), set()), line)
+        self.assertIsNone(public_summary("Use the offer online.", {"online"}))
 
     def test_used_offer_in_batch_stays_used(self):
         self.t.change_offers(lambda by, d: by["chase-freedom/whisker"].update(status="used", status_since="2026-10-20"))

@@ -265,9 +265,32 @@
   //   dollar:  "Spend $20, earn $10" -> 10, "$16 back" -> 16, "Up to $45 back" -> 45
   //   rate:    reward as a percent of spend: "Spend $20, earn $10" -> 50; percent offers use their percent
   //   upTo:    the bonus starts "Up to" (ranked after the definite amounts in the percent, dollar and rate sorts)
+  // The Capital One inventory uses these cashback headlines. Keep the spend-to-earn
+  // form in sync with CapitalOne.SPEND_TO_EARN in tools/refresh.py.
+  var cashbackAmount = "((?:[0-9]{1,3}(?:,[0-9]{3})+|[0-9]+)(?:\\.[0-9]+)?)";
+  var spendToEarn = new RegExp("^spend\\s+\\$\\s*" + cashbackAmount + "(?:\\s*[,;]\\s*|\\s+and\\s+|\\s+)" +
+    "(?:earn|get)\\s+(up to\\s+)?\\$\\s*" + cashbackAmount + "(?:\\s+(?:cash\\s*)?back)?\\.?$", "i");
+  var directCashback = new RegExp("^(up to\\s+)?(\\$\\s*)?" + cashbackAmount + "\\s*(%)?\\s+(?:cash\\s*)?back\\.?$", "i");
+
+  function capitalOneMetrics(s) {
+    var m = spendToEarn.exec(s.trim()), percent = null, dollar = null, minimum = null, rate = null, upTo = false;
+    if (m && +m[1].replace(/,/g, "") > 0 && +m[3].replace(/,/g, "") > 0) {
+      minimum = +m[1].replace(/,/g, "");
+      upTo = !!m[2];
+      dollar = +m[3].replace(/,/g, "");
+      if (!upTo) rate = dollar / minimum * 100;
+    } else if ((m = directCashback.exec(s.trim())) && !!m[2] !== !!m[4]) {
+      upTo = !!m[1];
+      if (m[2]) dollar = +m[3].replace(/,/g, "");
+      else rate = percent = +m[3].replace(/,/g, "");
+    }
+    return { percent: percent, dollar: dollar, rate: rate, upTo: upTo, minimum: minimum };
+  }
+
   function metrics(o) {
     if (o._m) return o._m;
     var s = (o.bonus || "").toLowerCase(), m, pct = null, dollar = null, rate = null;
+    if (o.card === "Capital One") return (o._m = capitalOneMetrics(s));
     if (isDiscount(s)) return (o._m = { percent: null, dollar: null, rate: null, upTo: false }); // a discount is not a reward
     if ((m = /(\d+(?:\.\d+)?)\s*%/.exec(s))) pct = +m[1];
     if ((m = /earn\s*\$\s*(\d+(?:\.\d+)?)/.exec(s)) || (pct === null && (m = /\$\s*(\d+(?:\.\d+)?)/.exec(s)))) dollar = +m[1];
@@ -2278,12 +2301,13 @@
 
   // "25% back" -> pct; "Spend $20, earn $10" -> +$10 on $20+; "Save 20%" -> discount.
   function offerValue(o) {
-    var s = (o.bonus || "").toLowerCase(), m = metrics(o), up = /^\s*up to\b/.test(s);
+    var s = (o.bonus || "").toLowerCase(), m = metrics(o), up = m.upTo;
     if (isDiscount(s)) return { kind: "discount" };
     if (m.percent !== null) return { kind: "pct", pct: m.percent, upTo: up };
     if (m.dollar !== null) {
-      var sp = /spend\s*\$\s*(\d+(?:\.\d+)?)/.exec(s);
-      var min = sp ? +sp[1] : /^\d+(\.\d+)?$/.test(o.minimum_spend || "") && +o.minimum_spend > 0 ? +o.minimum_spend : null;
+      var sp = o.card !== "Capital One" && /spend\s*\$\s*(\d+(?:\.\d+)?)/.exec(s);
+      var min = o.card === "Capital One" ? m.minimum : sp ? +sp[1] : null;
+      if (min === null && /^\d+(\.\d+)?$/.test(o.minimum_spend || "") && +o.minimum_spend > 0) min = +o.minimum_spend;
       return { kind: "dollar", amt: m.dollar, min: min, upTo: up };
     }
     return { kind: "other" };
@@ -2428,7 +2452,10 @@
           var rc = at(c).cond;
           if (rc) conds.push({ C: c, total: rc.rate + v.pct, base: rc, o: o, v: v, L: L, state: state, act: action });
         });
-      } else { cand.value = v.min ? v.amt / v.min * 100 + base.rate : null; deals.push(cand); }
+      } else {
+        cand.value = v.min && !(o.card === "Capital One" && v.upTo) ? v.amt / v.min * 100 + base.rate : null;
+        deals.push(cand);
+      }
     });
     // The sure fallback for a hedged Ready now line: the best ready total with no "may not count" doubt.
     var sure = pick(ready.filter(function (c) { return !c.base.mnc; }));

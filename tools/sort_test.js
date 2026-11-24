@@ -4217,6 +4217,18 @@ function listRows(sel) {
         data.offers.push({ ...sample, id: "test/route-" + name, merchant: "Zqroute " + name, bonus, activation, channel,
           redemption: { method, evidence: method === "unknown" ? "not_shown" : "offer_type" } });
       }
+      for (const [name, bonus, minimum] of [
+        ["Fixed", "Spend $1,250.50 and get $100 back", "1250.50"],
+        ["Percent", "12% back", null],
+        ["Unknown", "$100 back", null],
+        ["Upper", "Up to $100 back", null],
+        ["Capped", "Spend $75, earn up to $100", "75"],
+        ["Gift", "Free gift when you spend $50", null],
+      ]) {
+        data.offers.push({ ...sample, id: "test/minimum-" + name, merchant: "Zqminimum " + name, bonus,
+          minimum_spend: minimum, activation: "none_shown", channel: "online",
+          redemption: { method: "via_shop_link", evidence: "offer_type" } });
+      }
       // This BofA offer would rank first if the mixed placement were ignored as channel evidence.
       const bank = data.offers.find(o => o.id === "bank-of-america/expedia");
       data.offers.push({ ...bank, id: "test/route-Bank", merchant: "Zqroute Mixed", bonus: "32% Cash back",
@@ -4235,6 +4247,28 @@ function listRows(sel) {
       await page.locator("#acts button", { hasText: name }).click();
       await closeFilters();
     };
+    await lookup("zqminimum fixed");
+    await choose("online");
+    const fixed = offer("test/minimum-Fixed");
+    await fixed.locator("xpath=ancestor::li[contains(@class,'mc')]").locator(".mchead").click();
+    const fixedRow = await fixed.innerText(), fixedAnswer = await answer();
+    ok(await fixed.locator(".obig").innerText() === "$100" && /\$1250\.50\+/.test(fixedRow) &&
+      /minimum spend\s+\$1250\.50/i.test(fixedRow) && /\$100 on \$1250\.50\+/.test(fixedAnswer),
+      "cashback minimum: a spend-to-earn headline agrees with the row, details and recommendation " + JSON.stringify([fixedRow, fixedAnswer]));
+    await choose("any");
+    await lookup("zqminimum");
+    await page.locator("#sort").evaluate(el => { el.value = "rate"; el.dispatchEvent(new Event("change")); });
+    const sorted = await page.locator("#main .offer[data-oid]").evaluateAll(rows => rows.map(row => row.dataset.oid));
+    ok(sorted.length === 6 && sorted[0] === "test/minimum-Percent" && sorted[1] === "test/minimum-Fixed",
+      "cashback minimum: effective-rate sorting uses the full spend amount and leaves unknown minimums unranked by rate");
+    ok(await rowText("test/minimum-Unknown", ".obig") === "$100" && await rowText("test/minimum-Upper", ".obig") === "up to $100" &&
+      await rowText("test/minimum-Gift", ".obig") === "Free gift when you spend $50" &&
+      !(await offer("test/minimum-Unknown").innerText()).includes(" on $"),
+      "cashback minimum: fixed cashback without a minimum, upper bounds and free gifts remain distinct");
+    await lookup("zqminimum capped");
+    ok(/up to \$100\s+on \$75\+/.test(await offer("test/minimum-Capped").innerText()) && !/Best deal/.test(await answer()),
+      "cashback minimum: an upper-bound reward keeps its explicit spend condition outside the best-deal calculation");
+    await page.locator("#sort").evaluate(el => { el.value = "best"; el.dispatchEvent(new Event("change")); });
     await lookup("bartesian");
     const bart = await answer();
     ok(await rowText("capital-one/bartesian", ".ostat") === "Shop link" &&
