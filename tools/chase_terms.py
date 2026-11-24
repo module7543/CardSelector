@@ -47,7 +47,7 @@ PAYMENT = re.compile(
     rf"\b(?:payment(?:s)?(?:\s+\w+){{0,5}}\s+(?:by|before|on or before)|"
     rf"(?:must|to)\s+make\s+(?:the\s+)?first\s+(?:recurring\s+)?payment\s+(?:by|before))\s+({DAY})(?![\d/])", re.I
 )
-STANDARD_PAYMENT = re.compile(rf"Payments? must be made (?:on or )?before (?:{DAY})\.?", re.I)
+STANDARD_PAYMENT = re.compile(rf"Payment must be made ((?:on or )?before) (?:{DAY})\.?", re.I)
 REQUIRED_PAYMENT = re.compile(
     rf"\b(?:payment must be made|must make (?:the )?first (?:recurring )?payment)"
     rf"\s+(?:by|before|on or before)\s+({DAY})(?![\d/])", re.I)
@@ -277,8 +277,9 @@ def reconcile(raw, saved, fields, bonus, raw_cap, read_date, codes):
                     continue
                 old_days = explicit_days(PAYMENT, part, read_date)
                 if old_days and old_days != current_payment_days:
-                    if STANDARD_PAYMENT.fullmatch(part) and old_days <= old_expiries and known_end:
-                        part = "Payment must be made by the offer deadline."
+                    standard = STANDARD_PAYMENT.fullmatch(part)
+                    if standard and old_days <= old_expiries and known_end:
+                        part = f"Payment must be made {standard[1].lower()} the offer deadline."
                     elif old_days == {known_end} and not current_payment_days:
                         pass
                     elif current_payment_days and REQUIRED_PAYMENT.search(part) and REQUIRED_PAYMENT.search(current_text):

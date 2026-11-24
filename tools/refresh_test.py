@@ -1217,7 +1217,7 @@ class RefreshTest(unittest.TestCase):
         self.t.change_offers(lambda by, _: by[sid].update(fine_print=(
             "Earn 15% cash back on your Babbel purchase with a $45 cash back maximum. Offer expires 11/11/2026. "
             "Gift cards are excluded. Cash back reward valid only for first time customers. Offer valid online only. "
-            "Payment must be made on or before 11/11/2026."
+            "Payment must be made before 11/11/2026."
         )))
 
         def update(rows):
@@ -1231,7 +1231,7 @@ class RefreshTest(unittest.TestCase):
         offer = self.t.offers()[sid]
         self.assertEqual(offer["channel"], "online")
         for condition in ("20% cash back", "$35 cash back maximum", "first time customers", "Gift cards are excluded",
-                          "valid online only", "Payment must be made by the offer deadline"):
+                          "valid online only", "Payment must be made before the offer deadline"):
             self.assertIn(condition, offer["fine_print"])
         for obsolete in ("15% cash back", "$45 cash back maximum", "11/11/2026"):
             self.assertNotIn(obsolete, offer["fine_print"])
