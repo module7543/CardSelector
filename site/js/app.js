@@ -45,7 +45,7 @@
   var CHANNELS = [["any", "Any"], ["store", "In store"], ["online", "Online"]];
   var CHANNEL_OK = {
     store: ["in_store", "in_store_and_online", "in_store_and_app", "pay_at_pump"],
-    online: ["online", "in_store_and_online", "in_store_and_app"]
+    online: ["online", "in_app", "online_and_app", "in_store_and_online", "in_store_and_app"]
   };
   var chanMode = "any";
   // Whether an offer is kept under a channel choice ("any", "store", "online"); none_shown stays under both.
@@ -77,23 +77,33 @@
   // Activation: "any", "ready" (nothing to do first) or "needs". Shop-link offers stay under Any only,
   // because they need the issuer's "Shop now" link rather than an activation tap.
   var ACT_KEY = "cardselector.activation";
-  // "Activate or add" (step 5's name for the old "Needs activation"): the same rule, needs_activation and Capital One's
-  // add-to-card offers.
   var ACTS = [["any", "Any"], ["ready", "Ready now"], ["needs", "Activate or add"]];
   var ACT_OK = {
     ready: ["already_activated", "auto_enrolled", "none_shown"],
-    needs: ["needs_activation", "add_to_card"]
+    needs: ["needs_activation"]
   };
   var actMode = "any";
-  // Capital One offers are saved as none_shown, but each must be added to one card first (cards.json offer
-  // list activation "add_to_card"), so they count as needing activation and read "Add to card".
   function actOf(o) {
     var a = o.activation || "none_shown";
-    return a === "none_shown" && addToCard(o.card) ? "add_to_card" : a;
+    var method = o.redemption && o.redemption.method;
+    if (method === "via_shop_link") return "via_shop_link";
+    if (method === "card_linked") return a === "none_shown" ? "activation_unknown" : a;
+    if (method || o.card === "Capital One") return "check_issuer";
+    return a;
   }
-  function addToCard(c) {
-    var l = cardsRaw && cardsRaw.offer_lists && cardsRaw.offer_lists[c];
-    return !!l && l.activation === "add_to_card";
+
+  // A shared card-linked offer can be activated on a card the feed doesn't identify.
+  function activatedCardUnknown(o, L) {
+    return !!o.redemption && o.redemption.method === "card_linked" && actOf(o) === "already_activated" && L.cards.length > 1;
+  }
+  function recommendOffer(o, L) {
+    var a = actOf(o);
+    return a !== "check_issuer" && a !== "activation_unknown" && !activatedCardUnknown(o, L) &&
+      (o.card !== "Capital One" || (o.channel && o.channel !== "none_shown"));
+  }
+  function offerAction(o) {
+    var a = actOf(o);
+    return a === "via_shop_link" ? "via the Shop now link" : a === "needs_activation" ? "after activating" : null;
   }
   // Signed in only. usedMode: the "Used (N)" filter lists used offers, newest used first. keep: offers whose
   // status was changed on this page (offer id -> status_since before the change); they stay where they are,
@@ -510,17 +520,20 @@
   }
 
   function activation(o) {
-    if (actOf(o) === "add_to_card") return ["Add to card", "needs"];
-    if (o.activation === "needs_activation") return ["Needs activation", "needs"];
-    if (o.activation === "already_activated") return ["Already activated", "done"];
-    if (o.activation === "auto_enrolled") return ["Auto-enrolled", "done"];
-    if (o.activation === "via_shop_link") return ["Via shop link", "needs"];
+    var a = actOf(o);
+    if (a === "needs_activation") return ["Needs activation", "needs"];
+    if (a === "already_activated") return ["Already activated", "done"];
+    if (a === "auto_enrolled") return ["Auto-enrolled", "done"];
+    if (a === "via_shop_link") return ["Via shop link", "needs"];
+    if (a === "check_issuer") return ["Check issuer", ""];
     return ["Activation not listed", ""];
   }
 
   function channel(o) {
     if (o.channel === "in_store") return "In-store";
     if (o.channel === "online") return "Online";
+    if (o.channel === "in_app") return "In-app only";
+    if (o.channel === "online_and_app") return "In app or online";
     if (o.channel === "pay_at_pump") return "Pay at pump";
     if (o.channel === "in_store_and_online") return "In-store & online";
     if (o.channel === "in_store_and_app") return "In-store & in-app";
@@ -578,9 +591,22 @@
     add("Spending cap", tidy(o.spend_cap), "spending cap");
     add("Max reward", maxReward(o), "max reward");
     add("Channel", channel(o), "channel");
+    if (o.channel_terms && o.channel_terms.conflicted) {
+      field(dl, "Channel evidence", "Check current purchase eligibility in Capital One Offers.");
+    }
     // Some cards store the minimum as a bare number ("20").
     add("Minimum spend", tidy(/^\d+(\.\d+)?$/.test(o.minimum_spend || "") ? "$" + o.minimum_spend : o.minimum_spend), "minimum spend");
     add("Fine print", tidy(o.fine_print), "fine print", "fine");
+    if (o.card === "Capital One") {
+      var method = o.redemption && o.redemption.method;
+      if (method === "mixed") field(dl, "Redemption", "Capital One lists shopping-link and card-linked options. Check the reward and eligibility for the route you use.");
+      if (!method || method === "unknown") field(dl, "Redemption", "Check Capital One Offers for redemption instructions.");
+      if (method === "card_linked") {
+        var L = cardsCfg && cardsCfg.lists[o.card];
+        field(dl, "Redemption", L && activatedCardUnknown(o, L) ?
+          "Pay with the card you activated in Capital One Offers. The selected card was not shown." : "Pay with the eligible card linked to the offer.");
+      }
+    }
     // Signed in, an activation switch at the top already shows the status next to its control.
     if (gone && !hasActControl(o)) field(dl, "Activation", activation(o)[0]);
     if (dl.children.length) box.appendChild(dl);
@@ -591,6 +617,7 @@
     if (o.aliases && o.aliases.length) field(dl2, "Also known as", o.aliases.join(", "));
     // Issuer tags, conditions and "Used on" stay in view; notes on how the screen was read go to Source notes.
     var shown = (o.other_details || []).filter(function (t) { return !isSourceNote(t); });
+    if (o.channel_terms && !o.channel_terms.conflicted && o.channel_terms.channel === o.channel) shown.push(o.channel_terms.note);
     var src = (o.other_details || []).filter(isSourceNote);
     if (shown.length) {
       dl2.appendChild(el("dt", null, "Other details"));
@@ -880,12 +907,13 @@
     return cu || one(function (o) { return o.category; });
   }
 
-  // What a row's status says: "Ready" (with a check), "Activate", "Add to card" or "Shop link", and its style.
+  // The row shows the required action or the observed activation status.
   function statusOf(o) {
     var a = actOf(o);
     if (a === "needs_activation") return ["Activate", "needs"];
-    if (a === "add_to_card") return ["Add to card", "needs"];
     if (a === "via_shop_link") return ["Shop link", "needs"];
+    if (a === "check_issuer") return ["Check issuer", ""];
+    if (a === "already_activated" && o.redemption) return ["Activated", "done"];
     if (a === "already_activated" || a === "auto_enrolled") return ["Ready", "done"];
     return ["Activation not listed", ""];
   }
@@ -928,7 +956,7 @@
       var num = /^\d+(\.\d+)?$/.test(o.minimum_spend);
       t.push({ text: "Min " + tidy(num ? "$" + o.minimum_spend : o.minimum_spend), cls: num ? null : "long" });
     }
-    if (o.activation === "via_shop_link") t.push({ text: "Shop now link only" });
+    if (actOf(o) === "via_shop_link") t.push({ text: "Shop now link only" });
     return t;
   }
 
@@ -1134,18 +1162,20 @@
     var add = function (k, w) { if (k) parts.push(k + " " + w); };
     var cnt = function (f) { return list.filter(f).length; };
     var none = cnt(function (o) { return (o.channel || "none_shown") === "none_shown"; });
-    if (n || (chanMode !== "any" && hidden)) parts.push(n + noun + (n === 1 ? "" : "s") +
+    if (n || hidden.length) parts.push(n + noun + (n === 1 ? "" : "s") +
       (chanMode !== "any" ? " shown for " + chanName(chanMode) : "") + scope + hint);
     if (chanMode === "any") {
       add(cnt(function (o) { return o.channel === "online"; }), "online only");
+      add(cnt(function (o) { return o.channel === "in_app"; }), "in app only");
+      add(cnt(function (o) { return o.channel === "online_and_app"; }), "in app or online");
       add(cnt(function (o) { return o.channel === "in_store" || o.channel === "pay_at_pump"; }), "in store only");
       add(cnt(function (o) { return o.channel === "in_store_and_online"; }), "in store & online");
       add(cnt(function (o) { return o.channel === "in_store_and_app"; }), "in store & app");
       add(none, "channel not shown");
     } else {
       add(none, "channel not shown");
-      // Hidden: In store hides online-only offers; Online hides in-store-only ones (pay at the pump included).
-      add(hidden, (chanMode === "store" ? "online only" : "in store only") + " hidden");
+      var appHidden = hidden.some(function (o) { return o.channel === "in_app" || o.channel === "online_and_app"; });
+      add(hidden.length, (chanMode === "online" ? "in store only" : appHidden ? "online or in-app" : "online only") + " hidden");
     }
     return parts;
   }
@@ -1201,10 +1231,7 @@
       b.addEventListener("click", function () { setAct(a[0]); });
       actsEl.appendChild(b);
     });
-    // In the sheet: what "Activate or add" keeps (the offer lists whose offers are added to a card, from cards.json).
-    var adds = cardsRaw && cardsRaw.offer_lists ? Object.keys(cardsRaw.offer_lists).filter(addToCard) : [];
-    actExplain.textContent = "Activate or add: offers to activate" + (adds.length ? ", and " + adds.join(" and ") +
-      " offers to add to a card." : ".");
+    actExplain.textContent = "Activate or add: offers that need card activation.";
     actExplain.hidden = false;
     var shop = counts ? counts.shop : 0;
     actNote.hidden = !shop;
@@ -1959,7 +1986,7 @@
     var tp = ctx ? topOffer(ctx.hits, today) : null;
     if (tp && tp.total > (h ? h.top : 0)) {
       useEl.appendChild(el("div", "usenote usetop", "Top offer: " + tp.M.name + " " + pct(tp.total) + "% with " + tp.C.name +
-        (tp.online ? ", online" : "") + (tp.ready ? "" : tp.add ? ", add to " + tp.C.name : ", after activating") +
+        (tp.channel ? ", " + tp.channel : "") + (tp.action ? ", " + tp.action : "") +
         // Inside the answer card: a conditional rate or an offer with no channel shown is never worded as certain.
         (tp.cond ? ", conditional: " + condWhy(tp.cond) : "") + (tp.unknown && mode !== "any" ? ", channel not shown" : "") + "."));
     }
@@ -2047,8 +2074,8 @@
   // Flex's 3% dining, or a live bonus category that replaces it) + a percent merchant offer on that card.
   // Dollar offers are never folded into a percent: they show as "+$10 on $20+". Discounts ("Save 20%") go in
   // an "Also:" note. Each offer list pays on the cards cards.json names (U.S. Bank: Smartly only; Capital One:
-  // whichever of Quicksilver / Discover it earns more, and never ready, because the offer must be added to one
-  // card; Bank of America: the better of Unlimited Cash / Customized Cash, stored activation state).
+  // whichever supported Capital One card earns more; Bank of America: the better of Unlimited Cash /
+  // Customized Cash, stored activation state).
   var cardsRaw = null, cardsCfg = null;
 
   function prepCards() {
@@ -2071,7 +2098,7 @@
     var lists = {};
     Object.keys(j.offer_lists || {}).forEach(function (k) {
       var l = j.offer_lists[k];
-      lists[k] = { cards: l.cards.map(function (n) { return by[n]; }).filter(Boolean), activation: l.activation, label: l.label };
+      lists[k] = { cards: l.cards.map(function (n) { return by[n]; }).filter(Boolean), label: l.label };
     });
     cardsCfg = { cards: j.cards, lists: lists, by: by };
   }
@@ -2202,7 +2229,7 @@
   function offerTotal(o, today) {
     if (o.id in totalCache) return totalCache[o.id];
     var res = null, v = offerValue(o), L = cardsCfg && cardsCfg.lists[o.card];
-    if (v.kind === "pct" && L && L.cards.length) {
+    if (v.kind === "pct" && L && L.cards.length && recommendOffer(o, L)) {
       var M = { names: containerNames(o), offers: [o], online: o.channel === "online", rates: {} }, best = null;
       L.cards.forEach(function (C) {
         var r = rateAt(C, M, today, o.channel !== "online", true).ready;
@@ -2294,11 +2321,8 @@
   // Candidates at one merchant (one channel view): ready (nothing to do), after (activate / add to a card / shop
   // link), deals (dollar offers), discounts, up to, and cond (a conditional top-category rate: Citi Custom Cash).
   function merchantTotals(M, today) {
-    var cards = payCards(), ready = [], after = [], deals = [], discounts = [], upto = [], conds = [];
+    var cards = payCards(), ready = [], after = [], deals = [], discounts = [], upto = [], conds = [], guidance = [];
     var at = function (C, inStore) { return rateAt(C, M, today, inStore === undefined ? M.inStore : inStore, false, true); };
-    var actText = function (state, C, needs) {
-      return state === "add" ? "add to " + C.name : state === "shop" ? "via the Shop now link" : needs && state === "needs" ? "after activating" : null;
-    };
     cards.forEach(function (C) {
       var r = at(C);
       ready.push({ C: C, total: r.ready.rate, base: r.ready });
@@ -2312,13 +2336,19 @@
       if (!cs.length) return;
       var v = offerValue(o);
       if (v.kind === "other") return;
-      var a = actOf(o);
-      var state = L.activation === "add_to_card" ? "add" : a === "needs_activation" ? "needs" : a === "via_shop_link" ? "shop" : "ready";
+      if (!recommendOffer(o, L)) {
+        if (activatedCardUnknown(o, L) && o.channel && o.channel !== "none_shown") {
+          guidance.push(tidy(o.bonus) + " (" + channel(o).toLowerCase() + ") · pay with the card you activated");
+        }
+        return;
+      }
+      var a = actOf(o), action = offerAction(o);
+      var state = a === "needs_activation" ? "needs" : a === "via_shop_link" ? "shop" : "ready";
       if (v.kind === "discount") { discounts.push({ o: o, L: L, state: state }); return; }
       // The card in the list that earns most here (ready rates only: a conditional rate never picks the card).
       var C = cs.reduce(function (x, c) { return at(c).ready.rate > at(x).ready.rate ? c : x; });
       var base = at(C).ready;
-      var cand = { C: C, base: base, o: o, v: v, L: L, state: state, act: actText(state, C) };
+      var cand = { C: C, base: base, o: o, v: v, L: L, state: state, act: state === "shop" || v.upTo ? action : null };
       // "Up to 20% back" never wins a line on its full rate: it gets its own "Up to:" line, below definite rates.
       if (v.kind === "pct") {
         cand.total = base.rate + v.pct;
@@ -2326,7 +2356,7 @@
         // The same offer with a card's conditional rate (a Citi Custom Cash offer at a restaurant): conditional too.
         if (!v.upTo) cs.forEach(function (c) {
           var rc = at(c).cond;
-          if (rc) conds.push({ C: c, total: rc.rate + v.pct, base: rc, o: o, v: v, L: L, state: state, act: actText(state, c, true) });
+          if (rc) conds.push({ C: c, total: rc.rate + v.pct, base: rc, o: o, v: v, L: L, state: state, act: action });
         });
       } else { cand.value = v.min ? v.amt / v.min * 100 + base.rate : null; deals.push(cand); }
     });
@@ -2338,26 +2368,31 @@
     if (M.ch === "any") {
       var st = cards.map(function (C) { var b = at(C, true).ready; return { C: C, total: b.rate, base: b }; });
       ready.forEach(function (c) {
-        if (!c.o || c.o.channel === "online" || c.v.upTo) return;
+        if (!c.o || !chanIn("store", c.o) || c.v.upTo) return;
         var b = at(c.C, true).ready;
         st.push({ C: c.C, total: b.rate + c.v.pct, base: b, o: c.o, v: c.v, L: c.L, state: c.state });
       });
       store = pick(st.filter(function (c) { return !c.base.mnc; }));
     }
-    return { ready: pick(ready), after: pick(after), deals: deals, discounts: discounts, upto: pick(upto), sure: sure, store: store, cond: pick(conds) };
+    return { ready: pick(ready), after: pick(after, true), deals: deals, discounts: discounts, upto: pick(upto, true), sure: sure,
+      store: store, cond: pick(conds), guidance: guidance };
   }
 
   // Highest total first; Smartly wins a tie it is in, then candidates with nothing to do; one per card.
-  function pick(list) {
+  function pick(list, sameAction) {
     if (!list.length) return null;
     var top = Math.max.apply(null, list.map(function (c) { return c.total; }));
     var seen = [], wins = [];
+    var state = function (c) { return c.state || "needs"; }; // an unactivated card category also needs activation
     list.map(function (c, i) { return { c: c, i: i }; }).filter(function (w) { return w.c.total === top; })
       .sort(function (a, b) {
         return ((b.c.C.name === "Smartly") - (a.c.C.name === "Smartly")) || ((a.c.act ? 1 : 0) - (b.c.act ? 1 : 0)) ||
           ((b.c.o ? 1 : 0) - (a.c.o ? 1 : 0)) || (cardsCfg.cards.indexOf(a.c.C) - cardsCfg.cards.indexOf(b.c.C)) || a.i - b.i;
       })
-      .forEach(function (w) { if (seen.indexOf(w.c.C) === -1) { seen.push(w.c.C); wins.push(w.c); } });
+      .forEach(function (w) {
+        if (sameAction && wins.length && state(w.c) !== state(wins[0])) return;
+        if (seen.indexOf(w.c.C) === -1) { seen.push(w.c.C); wins.push(w.c); }
+      });
     return { total: top, wins: wins };
   }
 
@@ -2370,7 +2405,8 @@
     var mx = maxReward(o);
     if (mx && c.v.kind === "pct" && c.v.pct > 0) return "first " + money(Math.round(+mx.replace(/[$,]/g, "") / c.v.pct * 100));
     if (c.v.kind === "pct" && /^\d+(\.\d+)?$/.test(o.minimum_spend || "") && +o.minimum_spend > 0) return "on " + money(+o.minimum_spend) + "+";
-    var ch = { in_store: "in store", online: "online", pay_at_pump: "at the pump", in_store_and_app: "in store & app" }[o.channel];
+    var ch = { in_store: "in store", online: "online", in_app: "in app only", online_and_app: "in app or online",
+      pay_at_pump: "at the pump", in_store_and_app: "in store & app" }[o.channel];
     var said = M && ((ch === "online" && (needsOnline(c) || M.ch === "online")) || (ch === "in store" && M.ch === "store"));
     if (ch && !said) return ch;
     if (o.expires) {
@@ -2436,7 +2472,7 @@
   // Also (discounts) and the conditional Citi Custom Cash line. value: the best definite result (ready, after or
   // best deal; never Up to or a conditional rate), to compare channels; sig: what the lines recommend.
   function merchantLines(M, today) {
-    var t = merchantTotals(M, today), out = { lines: [], named: [], also: [], cond: null };
+    var t = merchantTotals(M, today), out = { lines: [], named: [], also: [], guidance: t.guidance, cond: null };
     if (!t.ready) return null;
     var r = winText(t.ready, today, M, true);
     // "(entertainment, may not count for StubHub) · else Smartly 4%" when the winner is in doubt.
@@ -2464,17 +2500,16 @@
     } else if (aft) {
       // Activation is promoted only when it beats what is ready now (a tie isn't worth a step): "+1 pt".
       var a = winText(aft, today, M);
-      // Compact rows keep the kind of step: a Capital One add or a BofA Shop now link is not an activation.
-      var aAct = aft.wins[0].act;
-      out.lines.push({ label: "After activating", first: a.first, text: a.names, extra: a.more + a.extra, short: a.names, mnc: a.mnc,
+      var shop = aft.wins[0].state === "shop";
+      out.lines.push({ label: shop ? "Via shop link" : "After activating", first: a.first, text: a.names, extra: a.more + a.extra, short: a.names, mnc: a.mnc,
         cns: a.cns, note: a.note, gain: gainText(aft.total - best), value: aft.total,
-        clabel: aAct && /^(add to |via the Shop now)/.test(aAct) ? aAct : "after activating" });
+        clabel: shop ? offerAction(aft.wins[0].o) : "after activating" });
       out.named = out.named.concat(a.named);
     } else if (t.upto && t.upto.total > best) {
       // Only when no definite second line: "Up to: Quicksilver 21.5% (1.5% + up to 20% Capital One offer, ...)".
       var u = winText(t.upto, today, M);
       out.lines.push({ label: "Up to", first: u.first, text: u.names, extra: u.more + u.extra, short: u.names.replace(/ (\d[\d.]*%)/g, " up to $1"),
-        bare: true, cns: u.cns, note: u.note, value: null });
+        bare: true, clabel: t.upto.wins[0].act, cns: u.cns, note: u.note, value: null });
       out.named = out.named.concat(u.named);
     }
     t.discounts.forEach(function (x) {
@@ -2483,6 +2518,11 @@
       if (unknownCh(x, M)) ch = "channel not shown";
       out.also.push(tidy(x.o.bonus) + (x.state === "shop" ? " via the Shop now link" : x.state === "needs" ? " after activating" : "") +
         " (" + x.L.label.replace(/ offer$/, "") + (ch ? ", " + ch : "") + ")");
+    });
+    t.deals.forEach(function (d) {
+      if (d.o.card === "Capital One" && d.value === null && d.state === "shop") {
+        out.guidance.push(tidy(d.o.bonus) + " " + d.act + " · pay with " + d.C.name);
+      }
     });
     // Citi Custom Cash: its own line, never Ready now; "strong" (a separate alternative with its gain) when it
     // would beat the ready answer.
@@ -2526,7 +2566,7 @@
     lines.forEach(function (ln, i) {
       if (i) d.appendChild(document.createTextNode(" · "));
       useStrong(d, ln.short, ln.first);
-      if (!ln.bare) d.appendChild(el("span", "useextra", " " + (ln.clabel || ln.label.toLowerCase())));
+      if (!ln.bare || ln.clabel) d.appendChild(el("span", "useextra", " " + (ln.clabel || ln.label.toLowerCase())));
       // The line's one short condition, as on its full line ("first $60", "on $20+", "ends Nov 9"), and "channel not shown".
       var cs = [withNote ? ln.note : null, ln.cns ? "channel not shown" : null, ln.mnc ? "may not count" : null].filter(Boolean);
       if (cs.length) d.appendChild(el("span", "useextra", " (" + cs.join(", ") + ")"));
@@ -2614,6 +2654,7 @@
       if (L.cond) useEl.appendChild(condLine(L.cond));
       if (alt) useEl.appendChild(chanRow(alt[0], alt[1], true));
       L.also.forEach(function (a) { notes.push("Also: " + a + "."); });
+      L.guidance.forEach(function (a) { notes.push(a + "."); });
     } else {
       per.forEach(function (x) {
         var d = el("div", "usehead usem");
@@ -2626,6 +2667,7 @@
           d.appendChild(el("span", "useextra", " conditional"));
         }
         if (x.L.cond) condNote = x.L.cond.e;
+        x.L.guidance.forEach(function (a) { notes.push(x.M.name + " · " + a + "."); });
         useEl.appendChild(d);
         last = d;
         named = named.concat(x.L.named);
@@ -2663,16 +2705,18 @@
     });
     hits.forEach(function (o) {
       var L = cardsCfg.lists[o.card];
-      if (!L) return;
+      if (!L || !recommendOffer(o, L)) return;
       var v = offerValue(o);
       if (v.kind !== "pct" || v.upTo) return;
       var M = by[containerKey(o)];
       L.cards.forEach(function (C) {
         if (cards.indexOf(C) === -1) return;
         var rb = rateAt(C, M, today).ready, total = rb.rate + v.pct;
-        var a = actOf(o), ready = L.activation !== "add_to_card" && a !== "needs_activation" && a !== "via_shop_link";
-        if (!best || total > best.total || (total === best.total && ready && !best.ready)) {
-          best = { total: total, C: C, M: M, ready: ready, add: L.activation === "add_to_card", online: !!rb.online || o.channel === "online",
+        var action = offerAction(o);
+        if (!best || total > best.total || (total === best.total && !action && best.action)) {
+          var ch = o.channel === "in_app" || o.channel === "online_and_app" ? channel(o).toLowerCase() :
+            rb.online || o.channel === "online" ? "online" : null;
+          best = { total: total, C: C, M: M, action: action, channel: ch,
             cond: rb.e && isConditional(rb.e) ? rb.e : null, unknown: (o.channel || "none_shown") === "none_shown" };
         }
       });
@@ -3223,7 +3267,7 @@
     // The count line, with the main list's hints: "(showing N, keep typing to narrow)" while a plain search
     // shows part of the list, and how many the In store / Online choice hides.
     var inTab = isNewTab ? function (o) { return isNew(o, today); } : isDropped;
-    var chanHidden = chanMode === "any" ? 0 : search(query, function (o) { return !chanOk(o) && actOk(o) && inAnyChan(o) && inTab(o); }).length;
+    var chanHidden = chanMode === "any" ? [] : search(query, function (o) { return !chanOk(o) && actOk(o) && inAnyChan(o) && inTab(o); });
     // shown: the New rows (an offer marked used here doesn't count) or the Gone rows on the page so far.
     var counted = isNewTab ? list.filter(function (o) { return isNew(o, today); }) : list;
     var setCount = function (liveShown, rowsShown) {
@@ -3818,8 +3862,8 @@
     var top = function (c) {
       var tp = topOffer(live.filter(function (o) { return o.category === c; }), today);
       if (!tp) return null;
-      return "Top offer in " + c + ": " + tp.M.name + " " + pct(tp.total) + "% with " + tp.C.name + (tp.online ? ", online" : "") +
-        (tp.ready ? "" : tp.add ? ", add to " + tp.C.name : ", after activating") + (tp.cond ? ", conditional: " + condWhy(tp.cond) : "") + ".";
+      return "Top offer in " + c + ": " + tp.M.name + " " + pct(tp.total) + "% with " + tp.C.name + (tp.channel ? ", " + tp.channel : "") +
+        (tp.action ? ", " + tp.action : "") + (tp.cond ? ", conditional: " + condWhy(tp.cond) : "") + ".";
     };
     var para = function (t, cls) { s.appendChild(el("p", "dtp" + (cls ? " " + cls : ""), t)); };
     cats.forEach(function (c) {
@@ -4139,10 +4183,10 @@
       if (actMode !== "any") hits = hits.filter(actOk);
       var liveCount = hits.filter(function (o) { return isLive(o, today); }).length;
       // How many live matches the In store / Online choice is hiding (shown on the count line).
-      var chanHidden = chanMode === "any" ? 0 : search(query, function (o) {
+      var chanHidden = chanMode === "any" ? [] : search(query, function (o) {
         return !chanOk(o) && actOk(o) && isLive(o, today) && (category === null || o.category === category) &&
           (card === null || o.card === card) && (cuis === null || cuisineLabel(o) === cuis) && inEnd(o);
-      }).length;
+      });
       // Sorted as a copy: the headline (allHits) keeps the search's own name-match order.
       hits = hits.slice().sort(cmp);
       // The count line; a search with no filter adds a narrowing hint while not everything is shown.
@@ -4659,7 +4703,8 @@
   function editing() { return !!(window.CardStore && window.CardStore.canEdit()); }
   // Signed in, offers needing or having activation get a switch in their details (see offerEdits).
   function hasActControl(o) {
-    return editing() && (o.activation === "needs_activation" || o.activation === "already_activated");
+    var a = actOf(o);
+    return editing() && (a === "needs_activation" || a === "already_activated");
   }
 
   function editBtn(text, change, cls) {

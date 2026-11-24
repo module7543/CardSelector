@@ -67,6 +67,13 @@ class Tree:
             cols, rows = [c for c in rd.fieldnames if c not in drop_cols] + list(extra_cols), list(rd)
         if fn:
             rows = fn(rows)
+        if card == "Capital One":
+            # Keep the small historical fixture and write it in the supported inventory format for matching tests.
+            rows = [dict(extraction_date=READ, layout_variant="current_layout", tile_kind=r["tile_kind"],
+                         merchant=r["merchant"], domain=r["merchant_tld"], reward=r["bonus"], channel=r["channel"],
+                         offer_type=r["offer_types"], offer_type_basis="Encoded tile offer-type labels",
+                         activation_status="") for r in rows]
+            cols = list(rows[0])
         p = self.root / (name or CSVS[card])
         with open(p, "w", newline="", encoding="utf-8") as f:
             w = csv.DictWriter(f, fieldnames=cols)
@@ -126,6 +133,8 @@ class RefreshTest(unittest.TestCase):
                     if o["card"] == card:
                         self.assertEqual(o["last_read"], READ, i)
                         b["last_read"] = READ
+                        if card == "Capital One":
+                            b["redemption"] = {"method": "via_shop_link", "evidence": "offer_type"}
                     self.assertEqual(o, b, f"{i}: only last_read may move")
                 bt = [x for x in self.t.load()["batches"] if x["card"] == card]
                 self.assertEqual(bt[-1], {"card": card, "read_date": READ, "offers_found": sum(1 for o in after.values() if o["card"] == card)})
@@ -151,6 +160,254 @@ class RefreshTest(unittest.TestCase):
         self.apply_ok("Capital One", [p])
         o = self.t.offers()["capital-one/pura-vida"]
         self.assertEqual((o["status"], o["status_since"]), ("used", "2026-10-20"))
+
+    def test_capital_one_inventory_redemption(self):
+        with (FIX / "capital_one.csv").open(newline="") as stream:
+            old_rows = list(csv.DictReader(stream))
+        rows = [{
+            "extraction_date": READ, "layout_variant": "current_layout", "tile_kind": "standard",
+            "merchant": r["merchant"], "domain": r["merchant_tld"] or r["merchant"].lower().replace(" ", "-") + ".com",
+            "reward": r["bonus"], "channel": r["channel"], "offer_type": "affiliate",
+            "offer_type_basis": "Encoded tile offer-type labels", "activation_status": "",
+            "promotional_text": "PRIVATE_PROMO_TEST_SENTINEL",
+        } for r in old_rows]
+        by_name = {r["merchant"].lower(): r for r in rows}
+        ebay = by_name["ebay"]
+        ebay["offer_type"] = "affiliate|coupon"
+        loop = by_name["loop-mobile.com"]
+        loop.update(offer_type="cardLinked", channel="In-App")
+        for row in rows:
+            if row["merchant"] == "CVS":
+                row.update(offer_type="affiliate|cardLinked")
+            if row["merchant"] == "Pura Vida":
+                row.update(offer_type_basis="")
+        rows += [
+            dict(loop, tile_kind="added_to_card", offer_type="", offer_type_basis="", activation_status="Activated"),
+            dict(ebay, layout_variant="mobile_layout_mirror", reward="70% back", offer_type="cardLinked"),
+            dict(ebay, tile_kind="future_preview", reward="80% back"),
+            dict(ebay, tile_kind="issuer_bonus_banner", reward="90% back"),
+        ]
+        p = self.t.root / "inventory.csv"
+        with p.open("w", newline="") as stream:
+            writer = csv.DictWriter(stream, fieldnames=rows[0])
+            writer.writeheader()
+            writer.writerows(rows)
+        carhartt = by_name["carhartt"]["domain"]
+        self.t.change_offers(lambda by, _: by["capital-one/carhartt"].update(merchant="Carhartt (workwear)", aliases=[carhartt]))
+        before = self.t.offers()
+        output, report = self.apply_ok("Capital One", [p], read_date=None)
+        after = self.t.offers()
+        self.assertEqual(report["read_date"], READ)
+        self.assertEqual(before.keys(), after.keys())
+        self.assertEqual(after["capital-one/carhartt"]["merchant"], "Carhartt (workwear)")
+        self.assertEqual(after["capital-one/ebay"]["redemption"], {"method": "via_shop_link", "evidence": "offer_type"})
+        self.assertEqual(after["capital-one/ebay"]["activation"], "none_shown")
+        self.assertEqual(after["capital-one/ebay"]["minimum_spend"], before["capital-one/ebay"]["minimum_spend"])
+        self.assertEqual(after["capital-one/cvs"]["redemption"]["method"], "mixed")
+        self.assertEqual(after["capital-one/pura-vida"]["redemption"], {"method": "unknown", "evidence": "not_shown"})
+        self.assertEqual((after["capital-one/loop-mobile"]["redemption"]["method"], after["capital-one/loop-mobile"]["channel"],
+                          after["capital-one/loop-mobile"]["activation"]), ("card_linked", "in_app", "already_activated"))
+        self.assertNotIn("PRIVATE_PROMO_TEST_SENTINEL", output + self.t.read("offers.json"))
+
+        # A pending phone edit still wins over the issuer's observed activation.
+        # A same-capture replay of the app placement preserves explicit online-or-app eligibility.
+        self.t.change_offers(lambda by, _: by["capital-one/loop-mobile"].update(
+            channel="online_and_app", channel_terms={
+                "channel": "online_and_app", "domain": loop["domain"], "method": "card_linked", "read_date": READ, "note": "App or web."
+            }))
+        self.t.write_json("phone-edits.json", {"capital-one/loop-mobile": {"activation": "needs_activation"}})
+        edits = self.t.read("phone-edits.json")
+        self.apply_ok("Capital One", [p], read_date=None)
+        self.assertEqual(self.t.read("phone-edits.json"), edits)
+        self.assertEqual(self.t.offers()["capital-one/loop-mobile"]["activation"], "already_activated")
+        self.assertEqual(self.t.offers()["capital-one/loop-mobile"]["channel"], "online_and_app")
+
+    def seven_eleven_inventory(self):
+        offer_id, previous_read, later_read = "capital-one/7-eleven", "2026-11-23", "2026-11-24"
+        eligibility = "Order through 7Now or 7-Eleven. Physical in-store and fuel purchases are excluded."
+        historical_activation = "Capital One shows Activated under Added to Card. The selected card was not shown."
+        saved = {
+            "id": offer_id, "card": "Capital One", "merchant": "7-Eleven", "category": "Groceries & Food Delivery",
+            "bonus": "10% back", "expires": None, "expires_text": None, "activation": "already_activated",
+            "redemption": {"method": "card_linked", "evidence": "offer_type"}, "channel": "online_and_app",
+            "channel_terms": {"channel": "online_and_app", "domain": "7-eleven.com", "method": "card_linked", "read_date": previous_read,
+                              "note": eligibility},
+            "spend_cap": None, "minimum_spend": None, "fine_print": None,
+            "other_details": [historical_activation], "last_read": previous_read,
+            "first_seen": "2026-11-10", "status": "active", "status_since": "2026-11-10",
+        }
+        inventory_row = {
+            "extraction_date": later_read, "layout_variant": "current_layout", "tile_kind": "standard",
+            "merchant": "7-Eleven", "domain": "7-eleven.com", "reward": "10% back", "channel": "In-App",
+            "offer_type": "cardLinked", "offer_type_basis": "Encoded tile offer-type labels", "activation_status": "",
+        }
+        snapshot = self.t.load()
+        snapshot["offers"] = [o for o in snapshot["offers"] if o["card"] != "Capital One"] + [saved]
+        snapshot["batches"].append({"card": "Capital One", "read_date": previous_read, "offers_found": 1})
+        self.t.write_json("offers.json", snapshot)
+        return snapshot, saved, inventory_row
+
+    def write_inventory(self, rows):
+        p = self.t.root / "inventory.csv"
+        with p.open("w", newline="") as stream:
+            writer = csv.DictWriter(stream, fieldnames=rows[0])
+            writer.writeheader()
+            writer.writerows(rows)
+        return p
+
+    def test_capital_one_inventory_refresh_rechecks_activation(self):
+        snapshot, saved, inventory_row = self.seven_eleven_inventory()
+        offer_id, later_read = saved["id"], inventory_row["extraction_date"]
+        activated = dict(inventory_row, tile_kind="added_to_card", activation_status="Activated")
+        nonactivated = dict(inventory_row, activation_status="Not activated")
+        cases = (
+            ("no current evidence", [inventory_row], "none_shown", False, None),
+            ("conflicting evidence", [nonactivated, activated], "none_shown", True, None),
+            ("explicit nonactivation", [nonactivated, dict(inventory_row, activation_status="Needs activation")],
+             "needs_activation", False, None),
+            ("explicit activation with an unknown label on another placement",
+             [dict(inventory_row, activation_status="Unknown"), activated], "already_activated", False, None),
+            ("pending activation edit", [inventory_row], "already_activated", False, "needs_activation"),
+        )
+        for case, rows, expected, conflicting, pending in cases:
+            with self.subTest(case=case):
+                self.t.write_json("offers.json", snapshot)
+                self.t.write_json("phone-edits.json", {offer_id: {"activation": pending}} if pending else {})
+                edits = self.t.read("phone-edits.json")
+                p = self.write_inventory(rows)
+                _, report = self.apply_ok("Capital One", [p], read_date=None, dec_date=later_read)
+                self.assertEqual(report["read_date"], later_read)
+                self.assertEqual(any("conflicting activation labels" in flag for flag in report["flags"]), conflicting)
+                offer = self.t.offers()[offer_id]
+                self.assertEqual(offer["activation"], expected)
+                self.assertEqual(offer["redemption"], saved["redemption"])
+                self.assertEqual(offer["bonus"], saved["bonus"])
+                self.assertEqual(offer["first_seen"], saved["first_seen"])
+                self.assertEqual(offer["last_read"], later_read)
+                self.assertEqual(offer["channel"], "online_and_app")
+                self.assertEqual(offer["channel_terms"], saved["channel_terms"])
+                self.assertNotIn(saved["other_details"][0], offer["other_details"])
+                self.assertEqual(self.t.read("phone-edits.json"), edits)
+
+    def test_capital_one_standalone_added_placement_stays_active(self):
+        _, saved, row = self.seven_eleven_inventory()
+        added = dict(row, tile_kind="added_to_card", activation_status="Activated", offer_type="", offer_type_basis="")
+        p = self.write_inventory([added])
+        self.t.write_json("phone-edits.json", {saved["id"]: {"activation": "needs_activation"}})
+        pending = self.t.read("phone-edits.json")
+        _, report = self.apply_ok("Capital One", [p], read_date=row["extraction_date"])
+        self.assertEqual((report["offers_in_batch"], report["new"], report["missing"]), (1, [], []))
+        actual = self.t.offers()[saved["id"]]
+        self.assertEqual((actual["status"], actual["bonus"], actual["activation"], actual["channel"]),
+                         ("active", "10% back", "already_activated", "online_and_app"))
+        self.assertEqual(actual["redemption"], {"method": "card_linked", "evidence": "activation_status"})
+        self.assertEqual(self.t.read("phone-edits.json"), pending)
+
+    def test_capital_one_competing_added_placement_needs_reconciliation(self):
+        _, saved, row = self.seven_eleven_inventory()
+        added = dict(row, tile_kind="added_to_card", activation_status="Activated", offer_type="", offer_type_basis="")
+        for grid in ([dict(row, reward="12% back")], [dict(row, merchant="7Now")], [dict(row, merchant="7Now"), row]):
+            with self.subTest(grid=grid):
+                p = self.write_inventory([*grid, added])
+                code, output, report = self.t.run("report", "Capital One", [p], read_date=row["extraction_date"])
+                self.assertEqual(code, 0, output)
+                self.assertEqual(report["offers_in_batch"], 2)
+                self.assertIn(added["reward"], report["inventory_issues"][0])
+                self.assertIn(grid[0]["merchant"] + " | " + grid[0]["reward"], report["inventory_issues"][0])
+                before = self.t.read("offers.json")
+                self.assertEqual(self.t.run("apply", "Capital One", [p], read_date=row["extraction_date"], decisions={})[0], 2)
+                self.assertEqual(self.t.read("offers.json"), before)
+
+        # The two distinct rewards must be confirmed before adding a new variant.
+        p = self.write_inventory([dict(row, reward="12% back"), added])
+        _, _, report = self.t.run("report", "Capital One", [p], read_date=row["extraction_date"])
+        separate = dict(report["distinct_rewards"][0], confirm=True)
+        _, report = self.apply_ok("Capital One", [p], read_date=row["extraction_date"], decisions={
+            "distinct_rewards": [separate], "owner_approved": ["new_share"],
+        })
+        self.assertEqual([o["bonus"] for o in report["new"]], ["12% back"])
+        # Established reward-specific identities reconcile on later runs.
+        _, report = self.apply_ok("Capital One", [p], read_date=row["extraction_date"])
+        self.assertEqual((report["new"], report["missing"]), ([], []))
+        self.assertEqual(self.t.offers()[saved["id"]]["activation"], "already_activated")
+        self.assertEqual(self.t.offers()["capital-one/7-eleven-2"]["activation"], "none_shown")
+
+    def test_capital_one_ambiguous_standalone_added_identity_requires_a_pair(self):
+        snapshot, saved, row = self.seven_eleven_inventory()
+        snapshot["offers"].append(dict(saved, id="capital-one/7-eleven-2"))
+        self.t.write_json("offers.json", snapshot)
+        p = self.write_inventory([dict(row, tile_kind="added_to_card", activation_status="Activated")])
+        code, output, report = self.t.run("report", "Capital One", [p], read_date=row["extraction_date"])
+        self.assertEqual(code, 0, output)
+        self.assertEqual({p["saved"] for p in report["proposals"]}, {saved["id"], "capital-one/7-eleven-2"})
+        self.assertIn("ambiguous saved offers", report["inventory_issues"][0])
+        before = self.t.read("offers.json")
+        self.assertEqual(self.t.run("apply", "Capital One", [p], read_date=row["extraction_date"], decisions={})[0], 2)
+        self.assertEqual(self.t.read("offers.json"), before)
+        pair = {"saved": saved["id"], "file": saved["merchant"], "bonus": saved["bonus"], "accept": True}
+        _, report = self.apply_ok("Capital One", [p], read_date=row["extraction_date"],
+                                  decisions={"pairs": [pair], "owner_approved": ["size_check"]})
+        self.assertEqual(report["new"], [])
+        self.assertEqual(self.t.offers()[saved["id"]]["status"], "active")
+
+    def test_capital_one_channel_terms_follow_evidence(self):
+        snapshot, saved, row = self.seven_eleven_inventory()
+        p = self.write_inventory([row, dict(row, channel="In-Store")])
+        _, report = self.apply_ok("Capital One", [p], read_date=row["extraction_date"])
+        actual = self.t.offers()[saved["id"]]
+        self.assertEqual(actual["channel"], "none_shown")
+        self.assertEqual(actual["channel_terms"], dict(saved["channel_terms"], conflicted=True))
+        self.assertTrue(any("contradicts verified channel terms" in flag for flag in report["flags"]))
+
+        # The uncertainty survives the next dated listing. It needs a fresh detail read to restore confidence.
+        later = dict(row, extraction_date="2026-11-25")
+        self.apply_ok("Capital One", [self.write_inventory([later])], read_date=later["extraction_date"])
+        self.assertEqual(self.t.offers()[saved["id"]]["channel"], "none_shown")
+        self.assertTrue(self.t.offers()[saved["id"]]["channel_terms"]["conflicted"])
+
+        # A listing without route metadata gives no contradictory evidence about the original method.
+        self.t.write_json("offers.json", snapshot)
+        self.apply_ok("Capital One", [self.write_inventory([dict(row, offer_type="", offer_type_basis="")])],
+                      read_date=row["extraction_date"])
+        self.assertEqual(self.t.offers()[saved["id"]]["channel_terms"], saved["channel_terms"])
+
+        for change, channel in (({"reward": "12% back"}, "in_app"),
+                                ({"reward": "12% back", "channel": ""}, "none_shown"),
+                                ({"offer_type": "affiliate", "channel": "Online"}, "online"),
+                                ({"domain": "example.com"}, "in_app")):
+            with self.subTest(change=change):
+                self.t.write_json("offers.json", snapshot)
+                _, report = self.apply_ok("Capital One", [self.write_inventory([dict(row, **change)])],
+                                          read_date=row["extraction_date"])
+                actual = self.t.offers()[saved["id"]]
+                self.assertEqual(actual["channel"], channel)
+                self.assertIsNone(actual["channel_terms"])
+                self.assertNotIn(saved["channel_terms"]["note"], actual["other_details"])
+                self.assertTrue(any("verified channel terms need a fresh read" in flag for flag in report["flags"]))
+
+    def test_capital_one_pending_edit_blocks_repricing(self):
+        _, saved, row = self.seven_eleven_inventory()
+        self.t.write_json("phone-edits.json", {saved["id"]: {"activation": "needs_activation"}})
+        before, pending = (self.t.read(f) for f in ("offers.json", "phone-edits.json"))
+        p = self.write_inventory([dict(row, reward="12% back", tile_kind="added_to_card", activation_status="Activated")])
+        code, output, report = self.t.run("report", "Capital One", [p], read_date=row["extraction_date"])
+        self.assertEqual(code, 0, output)
+        self.assertIn("pending activation edit must be resolved before repricing", report["inventory_issues"][0])
+        self.assertEqual(self.t.run("apply", "Capital One", [p], read_date=row["extraction_date"], decisions={})[0], 2)
+        self.assertEqual((self.t.read("offers.json"), self.t.read("phone-edits.json")), (before, pending))
+
+    def test_capital_one_legacy_inventory_is_refused_before_mutation(self):
+        self.t.change_offers(lambda by, _: by["capital-one/cvs"].update(
+            activation="already_activated", redemption={"method": "card_linked", "evidence": "offer_type"}))
+        files = ("offers.json", "phone-edits.json", "cuisines.json", "merchant-locations.json")
+        before = [self.t.read(f) for f in files]
+        for mode in ("report", "apply"):
+            code, output, _ = self.t.run(mode, "Capital One", [FIX / "capital_one.csv"],
+                                         read_date="2026-11-24", decisions={})
+            self.assertEqual(code, 2, output)
+            self.assertIn("legacy Capital One CSV is retired", output)
+            self.assertIn("including the Added to Card placements", output)
+            self.assertEqual([self.t.read(f) for f in files], before)
 
     def test_used_offer_in_batch_stays_used(self):
         self.t.change_offers(lambda by, d: by["chase-freedom/whisker"].update(status="used", status_since="2026-10-20"))
@@ -259,7 +516,7 @@ class RefreshTest(unittest.TestCase):
 
     def test_repeat_tiles_collapse(self):
         def fn(rows):
-            extra = dict(next(r for r in rows if r["merchant"] == "CVS"), tile_kind="hero", badge="NEW OFFER")
+            extra = dict(next(r for r in rows if r["merchant"] == "CVS"), tile_kind="hero")
             return rows + [extra]
         p = self.t.csv("Capital One", fn)
         code, out, rep = self.t.run("report", "Capital One", [p])
@@ -268,7 +525,6 @@ class RefreshTest(unittest.TestCase):
         notes = self.t.offers()["capital-one/cvs"]["other_details"]
         self.assertIn("3 tiles listed", notes)
         self.assertNotIn("2 tiles listed", notes)
-        self.assertIn("Tile label reads 'NEW OFFER'", notes)
 
     def test_bank_of_america_rows_collapse(self):
         out, rep = self.apply_ok("Bank of America", [self.t.csv("Bank of America")])

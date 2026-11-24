@@ -8,7 +8,13 @@ PATH = Path(__file__).resolve().parent.parent / "site/data/offers.json"
 DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 STATUS = {"active", "missing", "expired", "used"}
 ACTIVATION = {"needs_activation", "already_activated", "auto_enrolled", "via_shop_link", "none_shown"}
-CHANNEL = {"in_store", "online", "pay_at_pump", "in_store_and_online", "in_store_and_app", "none_shown"}
+CHANNEL = {"in_store", "online", "in_app", "online_and_app", "pay_at_pump", "in_store_and_online", "in_store_and_app", "none_shown"}
+REDEMPTION = {
+    "via_shop_link": ("offer_type", "offer_terms"),
+    "card_linked": ("offer_type", "offer_terms", "activation_status"),
+    "mixed": ("offer_type", "offer_terms"),
+    "unknown": ("not_shown",),
+}
 STR_OR_NULL = ("expires_text", "spend_cap", "minimum_spend", "fine_print")
 
 def compact(s):
@@ -51,6 +57,25 @@ for o in data["offers"]:
         if k not in o or not (o[k] is None or isinstance(o[k], str)): bad(f"{k} must be string or null")
     if o.get("activation") not in ACTIVATION: bad("bad activation")
     if o.get("channel") not in CHANNEL: bad("bad channel")
+    if "redemption" in o:
+        r = o["redemption"]
+        if (o.get("card") != "Capital One" or not isinstance(r, dict) or set(r) != {"method", "evidence"}
+                or not isinstance(r["method"], str) or r["evidence"] not in REDEMPTION.get(r["method"], ())):
+            bad("bad Capital One redemption or evidence")
+    terms = o.get("channel_terms")
+    if terms is not None:
+        if (o.get("card") != "Capital One" or not isinstance(terms, dict)
+                or not {"channel", "domain", "method", "read_date", "note"} <= set(terms)
+                or set(terms) - {"channel", "domain", "method", "read_date", "note", "conflicted"}
+                or not isinstance(terms["channel"], str) or terms["channel"] not in CHANNEL - {"none_shown"}
+                or not re.fullmatch(r"[a-z0-9][a-z0-9.-]*\.[a-z]{2,}", str(terms["domain"]))
+                or terms["method"] not in ("via_shop_link", "card_linked", "mixed")
+                or not DATE.fullmatch(str(terms["read_date"])) or str(terms["read_date"]) > str(o.get("last_read"))
+                or not isinstance(terms["note"], str) or not terms["note"].strip()
+                or ("conflicted" in terms and terms["conflicted"] is not True)):
+            bad("bad verified Capital One channel terms")
+        elif o.get("channel") != ("none_shown" if terms.get("conflicted") else terms["channel"]):
+            bad("channel must agree with the current verified terms or be unknown while they conflict")
     if o.get("status") not in STATUS: bad("bad status")
     if not isinstance(o.get("other_details"), list): bad("other_details must be a list")
     # aliases: optional extra names the search matches (earlier names, alternate spellings); omitted when none.

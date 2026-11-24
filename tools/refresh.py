@@ -22,6 +22,7 @@ The tool encodes the mechanical rules. Judgment stays with the session, through 
    "categories": {"<new merchant>": "<category>" or {"category": "...", "unsure": true}},
    "clashes": {"<merchant>": "<category>"},             set on every offer with that name, on every card
    "new_names": {"<file merchant>": {"merchant": "...", "aliases": [...]}},  a new offer saved under another name
+   "distinct_rewards": [{"offers": [[merchant, domain, reward], [merchant, domain, reward]], "confirm": true}],
    "owner_approved": ["size_check", "missing", "new_share", "card_check", "parts", "location_pairs"]}   only after the owner said go ahead
 report --template writes one with every open question set to null. A pair the tool did not propose can be added.
 
@@ -43,7 +44,7 @@ sys.path.insert(0, str(ROOT / "tools"))
 from fold_phone_edits import load_pending, with_pending  # noqa: E402
 
 DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
-FIELDS = ["id", "card", "merchant", "category", "bonus", "expires", "expires_text", "activation", "channel",
+FIELDS = ["id", "card", "merchant", "category", "bonus", "expires", "expires_text", "activation", "redemption", "channel",
           "spend_cap", "minimum_spend", "fine_print", "other_details", "last_read", "first_seen", "status",
           "status_since"]
 SIZE_MIN = 0.70          # size check: batch under 70% of the prior active count
@@ -290,7 +291,6 @@ class Inc:
         self.add_notes = []       # added when absent
         self.drop_notes = []      # removed when present
         self.replace = []         # [(regex, note or None)]: notes matching regex replaced by the note
-        self.promo_notes = []     # added only when the offer has no 'Promo text reads' note yet
         self.new_aliases = []     # aliases this row brings (a Citi domain name matched to the app's name)
         self.tld = None           # Capital One merchant_tld
         self.flags = []           # report lines about this row
@@ -317,6 +317,7 @@ class Adapter:
     card_columns = {"card", "card_name", "card_last4"}
     snapshot = True          # every batch is a complete snapshot of the card
     pair_note_drop = ()      # notes dropped when a truncated name is paired with its full name
+    read_date_column = "read_date"
 
     def check_columns(self, cols):
         missing = self.required - set(cols)
@@ -466,61 +467,190 @@ class USBank(Adapter):
 
 class CapitalOne(Adapter):
     card, slugp = "Capital One", "capital-one"
-    required = {"merchant", "merchant_tld", "tile_kind", "channel", "bonus", "min_spend", "badge", "promo_text",
-                "activation_label"}
-    used = required | {"passes", "seq", "section", "source", "offer_types", "tile_class", "expiration", "category",
-                       "view_context_id", "raw_text"}
+    required = used = {"extraction_date", "layout_variant", "tile_kind", "merchant", "domain", "reward", "channel",
+                       "offer_type", "offer_type_basis", "activation_status"}
+    read_date_column = "extraction_date"
     CHANNEL = {"online": "online", "in-store": "in_store", "at the pump": "pay_at_pump",
-               "in-store & online": "in_store_and_online", "in-store & in-app": "in_store_and_app"}
-    BADGES = ("BONUS", "NEW OFFER", "EXCLUSIVE COUPON")
+               "in-store & online": "in_store_and_online", "in-store & in-app": "in_store_and_app",
+               "in-app": "in_app", "online & in-app": "online_and_app", "in-app & online": "online_and_app"}
+    CHANNEL_PARTS = {"in_store_and_online": {"in_store", "online"}, "in_store_and_app": {"in_store", "in_app"},
+                     "online_and_app": {"online", "in_app"}}
+    TYPE_BASES = {"Encoded tile offer-type labels", "Promoted affiliate tile template"}
+    ACTIVATION = {"activated": "already_activated", "needs activation": "needs_activation", "not activated": "needs_activation"}
+
+    def check_columns(self, cols):
+        if "extraction_date" not in cols and {"merchant_tld", "bonus", "activation_label"} <= set(cols):
+            raise Refused("legacy Capital One CSV is retired. Export the comprehensive inventory with extraction_date "
+                          "and activation_status, including the Added to Card placements")
+        return super().check_columns(cols)
 
     def check_rows(self, rows):
-        # The page shows no expiry; a file that starts carrying one needs a rule first.
-        if any(not blank(r.get("expiration")) for _, r in rows):
-            raise Refused("the Capital One file has expiration values: CLAUDE.md says no expiry is shown; decide the rule first")
+        dates = {(r.get("extraction_date") or "").strip() for _, r in rows}
+        if len(dates) != 1 or not real_date(next(iter(dates))):
+            raise Refused("the Capital One inventory must have one Pacific extraction_date on every row")
+
+    def pair_name(self, saved, inc, rule):
+        # The inventory can show an unqualified label for a storefront with a verified saved domain alias.
+        if inc.tld and any(a.lower() == inc.tld for a in saved.get("aliases", [])):
+            return saved["merchant"], None, ()
+        return super().pair_name(saved, inc, rule)
 
     def parse(self, rows, read_date, app):
-        groups = {}
-        for line, r in rows:
-            if r["merchant"].strip().upper() == "UNREADABLE":
-                self.skipped = getattr(self, "skipped", 0) + 1
+        groups, added = {}, {}
+        for line, row in rows:
+            kind = row["tile_kind"].strip()
+            name, reward = row["merchant"].strip(), row["reward"].strip()
+            if row["layout_variant"].strip() != "current_layout" or kind in {"future_preview", "issuer_bonus_banner"}:
                 continue
-            k = (nkey(r["merchant"]), bonus_key(r["bonus"]) if r["bonus"].strip() else None)
-            groups.setdefault(k, []).append((line, r))
+            if not name or name.upper() == "UNREADABLE" or not reward:
+                if kind == "added_to_card":
+                    raise Refused(f"Added to Card placement on line {line} needs a merchant and reward for reconciliation")
+                continue
+            key = (nkey(name), row["domain"].strip().lower(), bonus_key(reward))
+            target = added if kind == "added_to_card" else groups
+            target.setdefault(key, []).append((line, row))
+
+        standalone = added.keys() - groups.keys()
+        for key, placements in added.items():
+            if key in standalone:
+                groups[key] = placements
         out = []
-        for g in groups.values():
-            first = g[0][1]
-            inc = Inc(first["merchant"], first["bonus"], [l for l, _ in g])
-            ch = next((r["channel"].strip() for _, r in g if r["channel"].strip()), "")
-            if ch:
-                if ch.lower() not in self.CHANNEL:
-                    raise Refused(f"unknown Capital One channel {ch!r} ({inc.label()})")
-                inc.set["channel"] = self.CHANNEL[ch.lower()]
-            mn = next((r["min_spend"].strip() for _, r in g if r["min_spend"].strip()), "")
-            if mn:
-                inc.set["minimum_spend"] = mn
-            inc.new.update(channel="none_shown", activation="none_shown")
-            for _, r in g:
-                lab = r["activation_label"].strip().lower()
-                if not lab.startswith("none shown"):
-                    raise Refused(f"unknown Capital One activation label {r['activation_label']!r} ({inc.label()})")
-                if "get this offer" in lab:
-                    inc.add_notes.append("Top-offer tile shows a 'Get This Offer' button")
-                b = r["badge"].strip()
-                if b:
-                    if b.upper() not in self.BADGES:
-                        inc.flags.append(f"badge {b!r} is not one of {', '.join(self.BADGES)}: not stored")
-                    else:
-                        inc.add_notes.append(f"Tile label reads '{b.upper()}'")
-                p = r["promo_text"].strip()
-                if p and r["tile_kind"].strip() != "top-offer":  # the top-offer tile's schedule text is not copied
-                    inc.promo_notes.append('Promo text reads "' + re.sub(r"\s*\|\s*", " ", p) + '"')
-            inc.replace.append((r"^\d+ tiles listed$", f"{len(g)} tiles listed" if len(g) > 1 else None))
-            inc.tld = next((r["merchant_tld"].strip() for _, r in g if r["merchant_tld"].strip()), None)
-            inc.add_notes = list(dict.fromkeys(inc.add_notes))
-            inc.promo_notes = list(dict.fromkeys(inc.promo_notes))
+        for key, placements in groups.items():
+            first = placements[0][1]
+            inc = Inc(first["merchant"].strip(), first["reward"].strip(), [line for line, _ in placements])
+            inc.tld = key[1] or None
+            inc.added_only = key in standalone
+            inc.has_added = key in added
+            supplemental = [] if inc.added_only else added.get(key, [])
+            inc.lines.extend(line for line, _ in supplemental)
+            channels, types, states = set(), set(), set()
+            for _, row in placements + supplemental:
+                channel = row["channel"].strip().lower()
+                if channel:
+                    if channel not in self.CHANNEL:
+                        raise Refused(f"unknown Capital One channel {channel!r} ({inc.label()})")
+                    channels.add(self.CHANNEL[channel])
+                if row["offer_type_basis"].strip() in self.TYPE_BASES:
+                    types.update(t.strip().lower() for t in row["offer_type"].split("|") if t.strip())
+                state = self.ACTIVATION.get(row["activation_status"].strip().lower())
+                if state:
+                    states.add(state)
+            if len(channels) == 1:
+                inc.set["channel"] = next(iter(channels))
+            elif channels:
+                inc.set["channel"] = "none_shown"
+                inc.flags.append("conflicting channel labels")
+            inc.listing_channels = channels
+            routes = types & {"affiliate", "cardlinked"}
+            if states:
+                routes.add("cardlinked")
+            if len(states) > 1:
+                inc.flags.append("conflicting activation labels")
+            # Each inventory supplies current activation evidence; a blank or conflict clears the previous observation.
+            inc.set["activation"] = next(iter(states)) if len(states) == 1 else "none_shown"
+
+            if routes == {"affiliate"}:
+                method = "via_shop_link"
+            elif routes == {"cardlinked"}:
+                method = "card_linked"
+            elif routes:
+                method = "mixed"
+            else:
+                method = "unknown"
+            if types - {"affiliate", "cardlinked", "coupon"}:
+                inc.flags.append("unrecognized redemption type")
+                method = "unknown"
+            basis = "offer_type" if routes & types else "activation_status"
+            inc.set["redemption"] = {"method": method, "evidence": "not_shown" if method == "unknown" else basis}
+            # This note predates structured activation. Leaving it in details can imply that the old evidence is current.
+            inc.drop_notes.append("Capital One shows Activated under Added to Card. The selected card was not shown.")
+            count = len(placements)
+            inc.replace.append((r"^\d+ tiles listed$", f"{count} tiles listed" if count > 1 else None))
             out.append(inc)
         return out
+
+    def placement_identities(self, inc, idx):
+        names = {nkey(inc.merchant)}
+        if inc.tld:
+            names.update((nkey(inc.tld), nkey(domain_base(inc.tld))))
+        return {o["id"]: o for name in names for _, o in idx.get(name, [])}
+
+    def added_candidates(self, inc, idx):
+        candidates = list(self.placement_identities(inc, idx).values())
+        same_reward = [o for o in candidates if bonus_key(o["bonus"]) == bonus_key(inc.bonus)]
+        return same_reward or candidates
+
+    def reconcile_added(self, incs, idx, saved, match, ambiguous, decisions):
+        """Require verified identity before applying competing Added to Card and listing placements."""
+        if not isinstance(decisions, list):
+            raise Refused("decisions file: distinct_rewards must be a list")
+        confirmed = set()
+        for entry in decisions:
+            if (not isinstance(entry, dict) or set(entry) != {"offers", "confirm"}
+                    or not isinstance(entry["offers"], list) or len(entry["offers"]) != 2
+                    or any(not isinstance(row, list) or len(row) != 3 or not all(isinstance(x, str) for x in row)
+                           for row in entry["offers"])
+                    or (entry["confirm"] is not None and not isinstance(entry["confirm"], bool))):
+                raise Refused("decisions file: copy a distinct_rewards entry from the template and set confirm to true")
+            if entry["confirm"] is True:
+                confirmed.add(frozenset(tuple(row) for row in entry["offers"]))
+        issues, proposals, seen = [], [], set()
+        def label(inc):
+            return f"{inc.label()} ({inc.tld or 'domain not shown'}, lines {', '.join(map(str, inc.lines))})"
+
+        for i, inc in enumerate(incs):
+            if not inc.has_added:
+                continue
+            if inc.added_only and inc.set["activation"] != "already_activated":
+                issues.append(f"Added to Card {label(inc)}: standalone placement lacks unambiguous activation evidence")
+                continue
+            name = nkey(inc.merchant)
+            bonus = bonus_key(inc.bonus)
+            if i in ambiguous and (i not in match or match[i][1] != "decided"):
+                ids = ", ".join(o["id"] for o in ambiguous[i])
+                issues.append(f"Added to Card {label(inc)}: ambiguous saved offers {ids}")
+            identities = self.placement_identities(inc, idx)
+            for j, other in enumerate(incs):
+                key = (min(i, j), max(i, j))
+                if j == i or key in seen or not (
+                        name == nkey(other.merchant) or (inc.tld and inc.tld == other.tld)
+                        or identities.keys() & self.placement_identities(other, idx).keys()):
+                    continue
+                seen.add(key)
+                other_bonus = bonus_key(other.bonus)
+                # Two different rewards can coexist when both placements resolve to established reward-specific IDs.
+                if (other_bonus != bonus and i in match and j in match and
+                        len(self.added_candidates(other, idx)) == 1 and
+                        bonus_key(saved[match[i][0]]["bonus"]) == bonus and
+                        bonus_key(saved[match[j][0]]["bonus"]) == other_bonus):
+                    continue
+                if other_bonus != bonus:
+                    offers = [[x.merchant, x.tld or "", x.bonus] for x in (inc, other)]
+                    if frozenset(tuple(x) for x in offers) in confirmed:
+                        continue
+                    proposals.append({"offers": offers, "confirm": None})
+                issues.append(f"Added to Card {label(inc)}: reconcile with {label(other)}")
+        return issues, proposals
+
+    def reconcile_channel(self, inc, saved):
+        terms = saved.get("channel_terms")
+        if not terms:
+            return
+        reward_changed = bonus_key(saved["bonus"]) != bonus_key(inc.bonus)
+        method_changed = inc.set["redemption"]["method"] not in {terms["method"], "unknown"}
+        storefront_changed = inc.tld and inc.tld != terms["domain"]
+        if reward_changed or method_changed or storefront_changed:
+            inc.set["channel_terms"] = None
+            inc.set["channel"] = inc.channel or "none_shown"
+            inc.flags.append("verified channel terms need a fresh read after a reward, redemption or storefront change")
+            return
+        verified = self.CHANNEL_PARTS.get(terms["channel"], {terms["channel"]})
+        if terms.get("conflicted") or any(self.CHANNEL_PARTS.get(ch, {ch}) - verified for ch in inc.listing_channels):
+            inc.set["channel_terms"] = dict(terms, conflicted=True)
+            inc.set["channel"] = "none_shown"
+            inc.flags.append("listing contradicts verified channel terms or an earlier conflict is unresolved; recheck the terms")
+        else:
+            inc.set["channel"] = terms["channel"]
 
 
 class BankOfAmerica(Adapter):
@@ -886,14 +1016,14 @@ def read_csvs(paths, adapter):
     return rows, cols0, ignored, adapter.guarded(cols0 or [], rows)
 
 
-def pick_read_date(rows, cols, given):
-    if "read_date" in (cols or []):
-        vals = {(r.get("read_date") or "").strip() for _, r in rows}
+def pick_read_date(rows, cols, given, column="read_date"):
+    if column in (cols or []):
+        vals = {(r.get(column) or "").strip() for _, r in rows}
         if len(vals) == 1 and real_date(next(iter(vals))):
             v = next(iter(vals))
             if given and given != v:
-                raise Refused(f"--read-date {given} differs from the file's read_date {v}")
-            return v, "the file's read_date column"
+                raise Refused(f"--read-date {given} differs from the file's {column} {v}")
+            return v, f"the file's {column} column"
         if not given:
             raise Refused("the read_date column is blank or not the same on every row: pass --read-date "
                           "(the date the owner read the page, US Pacific)")
@@ -912,6 +1042,8 @@ def plan(card, paths, given_date, decisions=None, part=False, complete_parts=Fal
     if card not in ADAPTERS:
         raise Refused(f"unknown card {card!r}; one of: {', '.join(ADAPTERS)}")
     ad = ADAPTERS[card]()
+    if isinstance(ad, CapitalOne) and (part or complete_parts):
+        raise Refused("refresh Capital One with the full inventory in one run, including all Added to Card evidence")
     text = OFFERS.read_text()
     data = json.loads(text)
     if json.dumps(data, indent=2, ensure_ascii=False) + "\n" != text:
@@ -920,10 +1052,11 @@ def plan(card, paths, given_date, decisions=None, part=False, complete_parts=Fal
     view_list = with_pending(data, pending)
     rows, cols, ignored, guarded = read_csvs(paths, ad)
     ad.check_rows(rows)
-    read_date, date_source = pick_read_date(rows, cols, given_date)
+    read_date, date_source = pick_read_date(rows, cols, given_date, ad.read_date_column)
     dec = decisions or {}
     if decisions is not None:
-        unknown = set(dec) - {"card", "read_date", "pairs", "categories", "clashes", "new_names", "owner_approved", "notes"}
+        unknown = set(dec) - {"card", "read_date", "pairs", "categories", "clashes", "new_names",
+                              "distinct_rewards", "owner_approved", "notes"}
         if unknown:
             raise Refused(f"decisions file: unknown keys {sorted(unknown)}")
         if dec.get("card") != card or dec.get("read_date") != read_date:
@@ -955,6 +1088,12 @@ def plan(card, paths, given_date, decisions=None, part=False, complete_parts=Fal
         for i, n in enumerate([o["merchant"]] + o.get("aliases", [])):
             idx.setdefault(nkey(n), []).append((i > 0, o))
     claimed, match = set(), {}  # match: inc index -> (offer id, rule, reason)
+    added_candidates = {}
+    if isinstance(ad, CapitalOne):
+        for i, inc in enumerate(incs):
+            if inc.has_added:
+                added_candidates[i] = ad.added_candidates(inc, idx)
+    ambiguous_added = {i: cs for i, cs in added_candidates.items() if len(cs) > 1}
 
     def cands(inc, same_bonus=True):
         out = []
@@ -970,6 +1109,8 @@ def plan(card, paths, given_date, decisions=None, part=False, complete_parts=Fal
                                          x[1]["status"] != "active", x[1]["id"]))
 
     for i, inc in enumerate(incs):
+        if i in ambiguous_added:
+            continue
         cs = cands(inc)
         if cs:
             via_alias, o = prefer(inc, cs)[0]
@@ -977,8 +1118,8 @@ def plan(card, paths, given_date, decisions=None, part=False, complete_parts=Fal
             match[i] = (o["id"], "alias" if via_alias else "exact", "")
 
     # 2. mechanical pairs of leftovers (same bonus, unique on both sides).
-    def left_incs():
-        return [i for i in range(len(incs)) if i not in match]
+    def left_incs(automatic=False):
+        return [i for i in range(len(incs)) if i not in match and (not automatic or i not in ambiguous_added)]
 
     def left_saved():
         return [o for o in mine if o["id"] not in claimed]
@@ -1019,7 +1160,7 @@ def plan(card, paths, given_date, decisions=None, part=False, complete_parts=Fal
     file_names = {nkey(inc.merchant) for inc in incs}
     for rname, fn in rules:
         found = {}
-        for i in left_incs():
+        for i in left_incs(automatic=True):
             if nkey(incs[i].merchant) in saved_names:
                 continue
             for o in left_saved():
@@ -1043,12 +1184,13 @@ def plan(card, paths, given_date, decisions=None, part=False, complete_parts=Fal
 
     # 3. same name, different bonus: a bonus change on the same offer (unique per name and channel).
     by_name_inc, by_name_saved = {}, {}
-    for i in left_incs():
+    for i in left_incs(automatic=True):
         by_name_inc.setdefault(nkey(incs[i].merchant), []).append(i)
     for o in left_saved():
         for n in names(o):
             by_name_saved.setdefault(nkey(n), []).append(o)
-    proposals = []
+    proposals = [(i, o, "unresolved Added to Card placement identity")
+                 for i, cs in added_candidates.items() if i not in match for o in cs if o["id"] not in claimed]
     for k, ii in by_name_inc.items():
         ss = by_name_saved.get(k, [])
         if not ss:
@@ -1130,6 +1272,17 @@ def plan(card, paths, given_date, decisions=None, part=False, complete_parts=Fal
         claimed.add(sid)
         match[i] = (sid, "decided", "accepted in the decisions file")
     open_pairs = [(i, o, why) for i, o, why in open_pairs if i not in match and o["id"] not in claimed]
+    inventory_issues = []
+    distinct_rewards = []
+    if isinstance(ad, CapitalOne):
+        inventory_issues, distinct_rewards = ad.reconcile_added(
+            incs, idx, {o["id"]: o for o in mine}, match, ambiguous_added, dec.get("distinct_rewards") or [])
+        for i, (sid, _, _) in match.items():
+            inc, saved = incs[i], raw_by_id[sid]
+            if "activation" in pending.get(sid, {}) and bonus_key(saved["bonus"]) != bonus_key(inc.bonus):
+                inventory_issues.append(f"{sid}: a pending activation edit must be resolved before repricing "
+                                        f"{saved['bonus']} to {inc.bonus}")
+            ad.reconcile_channel(inc, saved)
     # A decided pair whose location changes (CLAUDE.md, Automatic vs proposed) is the owner's call, not the session's.
     loc_decided = []
     for (sid, fname, bkey), acc in decided.items():
@@ -1148,6 +1301,10 @@ def plan(card, paths, given_date, decisions=None, part=False, complete_parts=Fal
            "new": [], "missing": [], "held": [], "stays_used": [], "still_absent": [], "returning": [],
            "proposals": [], "flags": [], "renames": [], "expired": [], "deleted": [], "skipped_redeemed": getattr(ad, "skipped", 0),
            "part": part}
+    if inventory_issues:
+        out["inventory_issues"] = inventory_issues
+    if distinct_rewards:
+        out["distinct_rewards"] = distinct_rewards
     for i, inc in enumerate(incs):
         for fl in inc.flags:
             out["flags"].append(f"{inc.label()} (line {', '.join(map(str, inc.lines))}): {fl}")
@@ -1174,8 +1331,6 @@ def plan(card, paths, given_date, decisions=None, part=False, complete_parts=Fal
         for t in inc.add_notes:
             if t not in notes:
                 notes.append(t)
-        if inc.promo_notes and not any(t.startswith("Promo text reads") for t in notes):
-            notes += inc.promo_notes
         notes = list(dict.fromkeys(notes))
         if count:
             changes["notes_added"] += len([t for t in notes if t not in before])
@@ -1244,13 +1399,19 @@ def plan(card, paths, given_date, decisions=None, part=False, complete_parts=Fal
             same = alias and not saved and compact(alias) == compact(merchant)
             rename["alias"] = "added" if saved else ("same_name" if same else ("base" if base_alias else "none"))
             rename["alias_added"] = bool(saved)
+        repriced = inc.bonus is not None and bonus_key(inc.bonus) != bonus_key(o["bonus"])
         if inc.bonus is not None and inc.bonus != o["bonus"]:
-            (out["bonus_changes"] if bonus_key(inc.bonus) != bonus_key(o["bonus"]) else out["wording_changes"]).append(
+            (out["bonus_changes"] if repriced else out["wording_changes"]).append(
                 {"id": sid, "merchant": merchant, "from": o["bonus"], "to": inc.bonus})
             touch(o, "bonus", inc.bonus)
         for f, val in inc.set.items():
             if f in pe:
                 continue  # a pending phone edit sets it
+            if "redemption" in inc.set and not repriced and o["last_read"] == read_date:
+                if f == "redemption":
+                    before = o.get(f, {})
+                    if before.get("evidence") == "offer_terms" and before.get("method") == val["method"]:
+                        continue
             touch(o, f, val)
         for f, val in inc.fill.items():
             if blank(o.get(f)):
@@ -1323,7 +1484,7 @@ def plan(card, paths, given_date, decisions=None, part=False, complete_parts=Fal
         set_aliases(o, name, aliases)
         notes_update(o, inc, count=False)
         o["status"] = "expired" if o["expires"] and o["expires"] < read_date else "active"
-        o = {k: o[k] for k in FIELDS[:3] + (["aliases"] if "aliases" in o else []) + FIELDS[3:]}
+        o = {k: o[k] for k in FIELDS[:3] + ["aliases"] + FIELDS[3:] if k in o}
         fresh.append(o)
         out["new"].append({"id": nid, "merchant": name, "bonus": o["bonus"], "category": cat, "category_source": source,
                            "file": inc.merchant, "lines": inc.lines})
@@ -1573,6 +1734,8 @@ def plan(card, paths, given_date, decisions=None, part=False, complete_parts=Fal
         blockers.append(f"{len(out['no_bonus'])} new offer(s) with no bonus in the file: " + ", ".join(out["no_bonus"][:5]))
     if out["clashes"]:
         blockers.append(f"{len(out['clashes'])} category clash(es) need a decision")
+    if inventory_issues:
+        blockers.append(f"{len(inventory_issues)} Capital One inventory reconciliation issue(s)")
     out["blockers"] = blockers
     out["card_warning"] = card_warning
 
@@ -1662,6 +1825,7 @@ def show(out, limit=40):
     lst("Other offers expired by date (cleanup)", out["expired"], lambda m: f"{m['id']} (expires {m['expires']})")
     lst("Deleted by the 30-day cleanup", out["deleted"], lambda m: f"{m['id']} ({m['status']} since {m['since']})")
     lst("Row notes", out["flags"], lambda m: m)
+    lst("Capital One inventory reconciliation", out.get("inventory_issues", []), lambda m: m)
     ch = out["changes"]
     p(f"\nField changes on saved offers: {json.dumps(ch['fields'], sort_keys=True) or '{}'}; "
       f"notes added {ch['notes_added']}, removed {ch['notes_removed']}")
@@ -1676,12 +1840,15 @@ def show(out, limit=40):
 
 
 def template(out):
-    return {"card": out["card"], "read_date": out["read_date"],
+    result = {"card": out["card"], "read_date": out["read_date"],
             "pairs": [{"saved": m["saved"], "file": m["file"], "bonus": m["bonus"], "accept": None, "why": m["why"]}
                       for m in out["proposals"]],
             "categories": {n: None for n in out["need_category"]},
             "clashes": {c["merchant"]: None for c in out["clashes"]},
             "new_names": {}, "owner_approved": []}
+    if out.get("distinct_rewards"):
+        result["distinct_rewards"] = out["distinct_rewards"]
+    return result
 
 
 def run(cmd):
