@@ -365,8 +365,10 @@ class Hub {
   console.log("-- 5b. Customized Cash choice");
   const CC = "bank-of-america-customized-cash/standing", q5 = "chevron";
   const B5b = JSON.parse(read("data/bonus-categories.json"));
-  B5b.entries.find(e => e.id === CC).choice = "online shopping";
-  await fresh({ token: "test-token-offline", over: { "data/bonus-categories.json": ser(B5b) } });
+  const initialChoice = "online shopping";
+  B5b.entries.find(e => e.id === CC).choice = initialChoice;
+  const choiceBonusText = ser(B5b);
+  await fresh({ token: "test-token-offline", over: { "data/bonus-categories.json": choiceBonusText } });
   const choiceRow = () => page.$eval("#cb li[data-eid='" + CC + "'] .cbst", e => e.textContent);
   await search(q5);
   const use0 = await page.$eval("#use", e => e.innerText);
@@ -454,6 +456,8 @@ class Hub {
   // 8. New page code reloads the page only when it comes back on screen and nothing would be lost. The page is
   // opened as the phone opens it: the search box autofocused and empty, and it is never blurred here.
   console.log("-- 8. code update");
+  // Seed the signed-in page, saved-copy version, and mock GitHub from the same Choice fixture as case 5b.
+  await fresh({ token: "test-token-offline", over: { "data/bonus-categories.json": choiceBonusText } });
   await open(true);
   const focusQ = () => page.evaluate(() => document.activeElement === document.getElementById("q"));
   const comeBack8 = () => page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
@@ -510,13 +514,22 @@ class Hub {
   await stays("in a Quick Pick detail");
   await page.click("#dtback");
   await page.waitForTimeout(450);
-  await page.click("#cb li[data-eid='bank-of-america-customized-cash/standing'] .cbgo");
+  await page.click("#cb li[data-eid='" + CC + "'] .cbgo");
   await page.waitForTimeout(450);
-  await page.selectOption("#dt .bfocus select", "dining");
+  const choicePicker = page.locator("#dt .bfocus select"), choiceSave = page.locator("#dt .bfocus button");
+  const choiceBefore = await choicePicker.inputValue(), draftChoice = "dining", headBeforeChoice = hub.head;
+  ok(choiceBefore === initialChoice && choiceBefore !== draftChoice && !(await choiceSave.isVisible()) &&
+    hub.files["site/data/bonus-categories.json"] === choiceBonusText &&
+    site.version.files["data/bonus-categories.json"] === sha256(Buffer.from(choiceBonusText)),
+    "Choice starts at the seeded value with Save hidden and matching mock GitHub and version bytes");
+  await choicePicker.selectOption(draftChoice);
+  ok(await choicePicker.inputValue() === draftChoice && await choiceSave.isVisible() && hub.head === headBeforeChoice,
+    "selecting Dining shows Save without committing the Choice");
   await page.focus("#dtback");
   await comeBack8();
   await stays("in a Card Bonus detail with an unsaved Choice pick");
-  ok(await page.$eval("#dt .bfocus select", s => s.value) === "dining" && await page.$eval("#dt .bfocus button", b => !b.hidden), "the unsaved pick and its Save are still there");
+  ok(await choicePicker.inputValue() === draftChoice && await choiceSave.isVisible() && hub.head === headBeforeChoice &&
+    hub.files["site/data/bonus-categories.json"] === choiceBonusText, "the unsaved pick and its Save are still there");
   await page.click("#dtback");
   await page.waitForTimeout(450);
   // In the Ending soon list (step 4D: its chip holds the view from before, put back when it is removed): no reload.

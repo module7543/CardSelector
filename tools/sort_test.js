@@ -613,14 +613,31 @@ function listRows(sel) {
     };
   });
   // Loads the page at 23:59:00 on the day, sets every piece of state, then pauses the clock at 23:59:50.
-  const dayCtx = async (y, m, d) => {
+  const dayCtx = async (y, m, d, bonusFixture) => {
     const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: "block" });
     page = await ctx.newPage();
     await page.clock.install({ time: new Date(y, m, d, 23, 59, 0) });
     await page.route("**/data/offers.json", dayOffers(y, m, d));
+    if (bonusFixture) await page.route("**/data/bonus-categories.json", r => r.fulfill({ json: bonusFixture }));
     await page.goto(base);
     await page.waitForFunction(() => /active offers loaded/.test(document.body.innerText));
+    if (bonusFixture) await page.waitForFunction(() => window.__bonusReady);
     return ctx;
+  };
+  const quarterEnd = "test/quarter-end", quarterSurvivor = "test/quarter-survivor";
+  const quarterBonuses = {
+    keyword_lists: {},
+    entries: [
+      { id: quarterEnd, card: "Freedom Flex", kind: "rotating", rate: 5, categories_text: "Test quarter",
+        start: "2026-10-01", end: "2026-12-31", activation: "activated", match: [] },
+      { id: quarterSurvivor, card: "Smartly", kind: "fixed", rate: 4, everyday: true, activation: "not_needed", match: [] }
+    ]
+  };
+  const quarterRows = () => page.$$eval("#cb li[data-eid]", ls => ls.map(l => l.dataset.eid));
+  const checkQuarterBefore = async label => {
+    const ids = await quarterRows();
+    ok(await page.isVisible("#cb") && ids.length === 2 && ids.includes(quarterEnd) && ids.includes(quarterSurvivor),
+      label + ": both the expiring row and the survivor are present before midnight (" + ids.join(", ") + ")");
   };
   const daySetup = async () => {
     await openFilters();
@@ -700,29 +717,34 @@ function listRows(sel) {
     await ctx.close();
   }
   {
-    // Dec 31 -> Jan 1: the quarter's entries leave Card bonuses at midnight (and its header follows).
-    const ctx = await dayCtx(2026, 11, 31);
+    // Dec 31 -> Jan 1: the expiring bonus leaves Card bonuses at midnight.
+    const ctx = await dayCtx(2026, 11, 31, quarterBonuses);
     await page.clock.pauseAt(new Date(2026, 11, 31, 23, 59, 50));
-    const strip = () => page.$$eval("#cb li[data-eid]", ls => ls.map(l => l.getAttribute("data-eid")));
-    const s0 = await strip();
+    await checkQuarterBefore("Dec 31 -> Jan 1 timer");
     await page.clock.runFor(15000);
-    const s1 = await strip();
-    ok(s0.includes("chase-freedom-flex/2026-q4") && !s1.some(id => /2026-q4$/.test(id)) && s1.length > 0 && await page.isVisible("#cb"),
-      "Dec 31 -> Jan 1: the 2026 Q4 entries leave Card bonuses (" + s0.length + " -> " + s1.length + " entries)");
+    const s1 = await quarterRows();
+    ok(s1.length === 1 && s1[0] === quarterSurvivor && await page.isVisible("#cb"),
+      "Dec 31 -> Jan 1: only the surviving bonus remains (" + s1.join(", ") + ")");
     await ctx.close();
   }
   {
     // Typing just after midnight, before the midnight timer: the results follow the new day at once, and the timer
     // still redraws Card bonuses (hidden under the search, shown again once it is cleared).
-    const ctx = await dayCtx(2026, 11, 31);
+    const ctx = await dayCtx(2026, 11, 31, quarterBonuses);
     await page.clock.pauseAt(new Date(2026, 11, 31, 23, 59, 59, 900));
+    await checkQuarterBefore("Dec 31 -> Jan 1 typing");
     await page.clock.runFor(300); // 00:00:00.2, the timer (00:00:00.5) not yet run
     await page.fill("#q", "pi");
     await page.clock.runFor(5000);
     const hid = await page.$eval("#cb", e => e.hidden);
+    const keptTyping = await page.$eval("#q", e => document.activeElement === e && e.value === "pi");
+    const whileTyping = await quarterRows();
     await page.fill("#q", "");
-    const s2 = await page.$$eval("#cb li[data-eid]", ls => ls.map(l => l.getAttribute("data-eid")));
-    ok(hid && await page.isVisible("#cb") && !s2.some(id => /2026-q4$/.test(id)) && s2.length > 0, "typed at 00:00:00.2 on Jan 1: the timer still takes the 2026 Q4 entries out of Card bonuses (" + s2.join(", ") + ")");
+    const s2 = await quarterRows();
+    ok(hid && keptTyping && whileTyping.length === 1 && whileTyping[0] === quarterSurvivor &&
+      await page.isVisible("#cb") && s2.length === 1 && s2[0] === quarterSurvivor,
+      "typed at 00:00:00.2 on Jan 1: search and focus stay intact, and only the surviving bonus remains before and after clearing (" +
+      whileTyping.join(", ") + " -> " + s2.join(", ") + ")");
     await ctx.close();
   }
   {

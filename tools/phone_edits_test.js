@@ -814,8 +814,11 @@ async function cardBonusChecks(br, base) {
 async function detailChecks(br, base) {
   console.log("-- Card Bonus details: reversal, Focus, Choice (real store.js, mock GitHub)");
   const FLEX = "test/flex-q4", FREE = "test/freedom-q4";
-  const text = bonusText([[FLEX, "Freedom Flex", "Flex", "activated"], [FREE, "Freedom", null, "activated"]]);
-  const entries0 = JSON.parse(text).entries, CC = entries0.find(e => e.kind === "top_category"), BOA = entries0.find(e => e.kind === "chosen");
+  const bonus = JSON.parse(bonusText([[FLEX, "Freedom Flex", "Flex", "activated"], [FREE, "Freedom", null, "activated"]]));
+  const CC = bonus.entries.find(e => e.kind === "top_category"), BOA = bonus.entries.find(e => e.kind === "chosen");
+  CC.planned = "restaurants";
+  BOA.choice = "online shopping";
+  const text = ser(bonus); // Feed the seeded preferences to both the page and mock GitHub.
   const hub = new Hub({ [OFFERS]: offersText, [BONUS]: text, [EDITS]: "{}\n" });
   const start = hub.head;
   let deployed = false;
@@ -913,10 +916,12 @@ async function detailChecks(br, base) {
   ok(v.sel === CC.planned && v.save === "hidden" && J(v.tags) === J([CC.planned + ":CardSelector focus"]) && /changes nothing at Citi/.test(v.focus) && !/set your Citi category|earns? 5%/i.test(v.focus),
     "detail focus: the stored focus picked and tagged, no Save, copy never claims a Citi election (" + J([v.sel, v.save, v.tags]) + ")");
   await page.selectOption("#dtbody .bfocus select", "grocery stores");
-  const sv1 = (await view()).save;
+  const draftFocus = await view();
   await page.selectOption("#dtbody .bfocus select", CC.planned);
-  const sv2 = (await view()).save;
-  ok(sv1 === "shown" && sv2 === "hidden" && hub.since(start).length === 4, "detail focus: Save shows once changed, hides when changed back, nothing saved (" + J([sv1, sv2]) + ")");
+  const resetFocus = await view();
+  ok(draftFocus.sel === "grocery stores" && draftFocus.sel !== CC.planned && draftFocus.save === "shown" &&
+    resetFocus.sel === CC.planned && resetFocus.save === "hidden" && hub.file(BONUS) === text && hub.since(start).length === 4,
+    "detail focus: changed selection shows Save; reverting hides it without a commit (" + J([draftFocus.sel, draftFocus.save, resetFocus.sel, resetFocus.save]) + ")");
   await page.selectOption("#dtbody .bfocus select", "grocery stores");
   await page.click("#dtbody .bfocus button");
   await page.waitForFunction(() => /Deploying/.test(document.getElementById("savemsg").textContent));
@@ -940,11 +945,14 @@ async function detailChecks(br, base) {
   v = await view();
   ok(v.sel === BOA.choice && v.save === "hidden" && J(v.tags) === J([BOA.choice + ":Your Choice"]) && /Change it at Bank of America first, then here\./.test(v.choice),
     "detail choice: the stored choice picked and tagged, no Save, \"Change it at Bank of America first, then here.\" (" + J([v.sel, v.tags]) + ")");
+  const beforeChoice = hub.head;
   await page.selectOption("#dtbody .bfocus select", "dining");
-  const sc1 = (await view()).save;
+  const draftChoice = await view();
   await page.selectOption("#dtbody .bfocus select", BOA.choice);
-  const sc2 = (await view()).save;
-  ok(sc1 === "shown" && sc2 === "hidden", "detail choice: Save shows once changed, hides when changed back (" + J([sc1, sc2]) + ")");
+  const resetChoice = await view();
+  ok(draftChoice.sel === "dining" && draftChoice.sel !== BOA.choice && draftChoice.save === "shown" &&
+    resetChoice.sel === BOA.choice && resetChoice.save === "hidden" && hub.file(BONUS) === text && hub.head === beforeChoice,
+    "detail choice: changed selection shows Save; reverting hides it without a commit (" + J([draftChoice.sel, draftChoice.save, resetChoice.sel, resetChoice.save]) + ")");
   await page.selectOption("#dtbody .bfocus select", "dining");
   await page.click("#dtbody .bfocus button");
   await page.waitForFunction(() => /Deploying/.test(document.getElementById("savemsg").textContent));
