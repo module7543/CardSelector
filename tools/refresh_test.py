@@ -1443,6 +1443,142 @@ class RefreshTest(unittest.TestCase):
         self.apply_ok(card, [capture], {**withhold, "pairs": [{**pair, "accept": False}]})
         self.assertEqual(self.t.offers()[sid]["status"], "missing")
 
+    def test_chase_prior_reward_clause_does_not_need_an_eligibility_keyword(self):
+        for card in ("Chase Freedom", "Chase Freedom Flex"):
+            with self.subTest(card=card):
+                previous = "Earn 10% back on the Pro model."
+                sid, capture = self.chase_review_fixture(card, saved=previous,
+                                                         reward_description="Earn 10% back on your purchase.")
+                self.apply_ok(card, [capture])
+                self.assertIn(previous, self.t.offers()[sid]["fine_print"])
+
+    def test_chase_coupon_continuation_and_unfamiliar_hostname_stay_private(self):
+        card = "Chase Freedom"
+        for line, marker in (
+            ("Your coupon is shown below:<br>fixture-private-coupon", "fixture-private-coupon"),
+            ("Shop at fixture-personal-host.merchant.de.", "fixture-personal-host"),
+        ):
+            with self.subTest(line=line):
+                sid, capture = self.chase_review_fixture(card, reward_description=(
+                    f"Earn 10% cash back on your purchase.<br>{line}<br>Gift cards are excluded."
+                ))
+                output, report = self.apply_ok(card, [capture])
+                offer = self.t.offers()[sid]
+                self.assertNotIn(marker, json.dumps([offer, output, report]))
+                self.assertIn("Gift cards are excluded.", offer["fine_print"])
+
+    def test_chase_private_wording_cannot_remove_or_conflate_eligibility(self):
+        card = "Chase Freedom"
+        for detail, message in (
+            ("Offer valid for first-time buyers only with membership ID: fixture-membership.",
+             "private text overlaps eligibility"),
+            ("Offer valid online only at checkout.merchant.com.<br>Offer not valid online at excluded.merchant.com.",
+             "destination restrictions need public evidence"),
+            ('Offer valid online only at <a href="https://checkout.merchant.com/">this link</a>.<br>'
+             'Offer not valid online at <a href="https://excluded.merchant.com/">this link</a>.',
+             "destination restrictions need public evidence"),
+            ('Offer valid online only at <a href="https://checkout.merchant.com/">this link</a> '
+             'and excluded at other.merchant.de.',
+             "destination restrictions need public evidence"),
+        ):
+            with self.subTest(message=message, detail=detail):
+                _, capture = self.chase_review_fixture(card, reward_description=(
+                    f"Earn 10% cash back on your purchase.<br>{detail}"
+                ))
+                self.assert_chase_review_conflict(card, capture, message)
+
+    def test_chase_only_before_purchase_channel_blocks_disagreement(self):
+        card = "Chase Freedom"
+        _, capture = self.chase_review_fixture(card, reward_description="Earn 10% cash back only on in-store purchases.")
+        self.assert_chase_review_conflict(card, capture, "current channel evidence disagrees")
+
+    def test_chase_online_exclusion_does_not_become_an_affirmative_channel(self):
+        card = "Chase Freedom Flex"
+        sid, capture = self.chase_review_fixture(card, channel="INSTORE", reward_description=(
+            "Earn 10% cash back on your purchase. Offer valid in-store only. Not valid on purchases made online."
+        ))
+        self.apply_ok(card, [capture])
+        offer = self.t.offers()[sid]
+        self.assertEqual(offer["channel"], "in_store")
+        self.assertIn("Not valid on purchases made online.", offer["fine_print"])
+
+    def test_chase_up_to_cashback_amount_checks_structured_cap(self):
+        card = "Chase Freedom"
+        _, capture = self.chase_review_fixture(card, reward_cap="25",
+                                             reward_description="Earn 10% cash back on your purchase, up to $15 cash back.")
+        self.assert_chase_review_conflict(card, capture, "structured cashback cap and current description disagree")
+
+    def test_chase_colon_expiration_label_cannot_bypass_timestamp_check(self):
+        card = "Chase Freedom"
+        for label, message in (
+            ("Expiration date: November 30, 2026", "current explicit deadline and timestamp"),
+            ("Expiration date: November 42, 2026", "cannot parse the explicit expiration"),
+        ):
+            with self.subTest(label=label):
+                _, capture = self.chase_review_fixture(card, expiration_text=label)
+                self.assert_chase_review_conflict(card, capture, message)
+        sid, capture = self.chase_review_fixture(card, expiration_text="Expiration date: November 23, 2026")
+        self.apply_ok(card, [capture])
+        self.assertEqual(self.t.offers()[sid]["expires"], "2026-11-23")
+
+    def test_chase_gift_promotion_dates_do_not_change_the_offer_deadline(self):
+        card = "Chase Freedom Flex"
+        sid, capture = self.chase_review_fixture(card, reward_description=(
+            "Earn 10% cash back on your purchase. Free gifts valid through 11/19. Offer expires 11/23/2026."
+        ))
+        self.apply_ok(card, [capture])
+        offer = self.t.offers()[sid]
+        self.assertEqual(offer["expires"], "2026-11-23")
+        self.assertIn("Free gifts valid through 11/19.", offer["fine_print"])
+
+    def test_chase_payment_clause_recognizes_explicit_replacement_after_legacy_line_break_loss(self):
+        card = "Chase Freedom Flex"
+        sid, capture = self.chase_review_fixture(
+            card, saved="Must make first recurring payment by 11/7/2026 Offer valid on first payment only.",
+            reward_description="Earn 10% cash back on your purchase. "
+                               "Must make first recurring payment by 12/7/2026. Offer valid on first payment only.")
+        self.apply_ok(card, [capture])
+        text = self.t.offers()[sid]["fine_print"]
+        self.assertNotIn("11/7/2026", text)
+        self.assertIn("Must make first recurring payment by 12/7/2026.", text)
+        self.assertIn("Offer valid on first payment only.", text)
+
+    def test_chase_prior_terms_decision_is_bound_to_capture_and_saved_clauses(self):
+        card = "Chase Freedom"
+        inputs = {"offer_id": "FIXTURE:prior-review", "saved": "Earn 10% cash back on the Pro model.",
+                  "reward_description": "Earn 10% cash back on the Basic model."}
+        sid, capture = self.chase_review_fixture(card, **inputs)
+        _, _, report = self.t.run("report", card, [capture])
+        choice = report["chase_prior_terms"]["FIXTURE:prior-review"]
+        self.assertTrue(report["blockers"])
+        decision = {"chase_prior_terms": {"FIXTURE:prior-review": {
+            **choice, "reason": "The issuer confirms the Basic model replaces the Pro model."}}}
+        self.apply_ok(card, [capture], decision)
+        self.assertEqual(self.t.offers()[sid]["fine_print"], inputs["reward_description"])
+
+        for changes in ({"reward_description": "Earn 10% cash back on the Starter model."},
+                        {"saved": "Earn 10% cash back on the Plus model."}):
+            with self.subTest(changes=changes):
+                _, capture = self.chase_review_fixture(card, **{**inputs, **changes})
+                before = self.t.read("offers.json")
+                code, text, _ = self.t.run("apply", card, [capture], decisions=decision)
+                self.assertEqual(code, 2, text)
+                self.assertIn("prior terms decision does not match current evidence", text)
+                self.assertEqual(self.t.read("offers.json"), before)
+
+        for detail, conflict in (
+            ("Offer valid in-store only.", "current channel evidence disagrees"),
+            ("Offer valid for first-time buyers only with membership ID: fixture-private.", "private text overlaps eligibility"),
+        ):
+            with self.subTest(conflict=conflict):
+                _, capture = self.chase_review_fixture(card, **{**inputs, "reward_description": (
+                    f"{inputs['reward_description']} {detail}"
+                )})
+                _, _, report = self.t.run("report", card, [capture])
+                decision["chase_prior_terms"]["FIXTURE:prior-review"] = {
+                    **report["chase_prior_terms"]["FIXTURE:prior-review"], "reason": "The issuer confirmed the model change."}
+                self.assert_chase_review_conflict(card, capture, conflict, decision)
+
     def test_chase_deadline_decision_is_bound_to_current_row_evidence(self):
         card = "Chase Freedom"
         timestamp = "2026-12-14T04:59:59Z"

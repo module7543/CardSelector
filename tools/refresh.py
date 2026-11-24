@@ -25,6 +25,7 @@ The tool encodes the mechanical rules. Judgment stays with the session, through 
    "distinct_rewards": [{"offers": [[merchant, domain, reward], [merchant, domain, reward]], "confirm": true}],
    "clear_minimums": {"<Capital One offer id>": true},   confirm clearing a saved minimum whose current terms are unknown
    "chase_deadlines": {"<source offer id>": {"timestamp": "...", "deadline": "YYYY-MM-DD", "reason": "..."}},
+   "chase_prior_terms": {"<source offer id>": {"evidence": "<digest>", "superseded": ["<clause digest>"], "reason": "..."}},
    "chase_withhold_new": {"<source offer id>": {"merchant": "...", "reason": "..."}},
    "owner_approved": ["size_check", "missing", "new_share", "card_check", "parts", "location_pairs",
                       "incomplete_coupon_scan"]}   only after the owner said go ahead
@@ -40,6 +41,7 @@ import argparse, copy, csv, difflib, html, json, re, subprocess, sys, unicodedat
 from collections import Counter
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
+from hashlib import sha256
 from pathlib import Path
 
 sys.dont_write_bytecode = True
@@ -442,24 +444,26 @@ class Chase(Adapter):
     def reconcile_terms(self, incs, match, prior, open_pairs, decisions, read_date, partial):
         deadlines = decisions.get("chase_deadlines", {})
         withholding = decisions.get("chase_withhold_new", {})
-        for values in (deadlines, withholding):
+        prior_reviews = decisions.get("chase_prior_terms", {})
+        for values in (deadlines, withholding, prior_reviews):
             if not isinstance(values, dict):
                 raise Refused("Chase decisions must be objects keyed by source offer ID")
         ids = Counter(inc.chase["id"] for inc in incs)
         if any(not re.fullmatch(r"[A-Za-z0-9:_-]{1,80}", key) or ids[key] != 1
-               for key in deadlines.keys() | withholding.keys()):
+               for key in deadlines.keys() | withholding.keys() | prior_reviews.keys()):
             raise Refused("each Chase decision must identify exactly one row in the source capture")
-        if (withholding and partial) or deadlines.keys() & withholding.keys():
-            raise Refused("Chase withholding requires a full snapshot and cannot also change the withheld offer's deadline")
+        if (withholding and partial) or withholding.keys() & (deadlines.keys() | prior_reviews.keys()):
+            raise Refused("Chase withholding requires a full snapshot and cannot be combined with a terms decision for that row")
         if withholding and any(not isinstance(v, dict) or set(v) != {"merchant", "reason"}
                                or not isinstance(v["reason"], str) or not v["reason"].strip()
                                for v in withholding.values()):
             raise Refused("each Chase withholding decision requires the source merchant and a reason")
         blocked_pairs = {i for i, _, _ in open_pairs}
-        report, pending_deadlines, withheld = [], {}, set()
+        report, pending_deadlines, pending_reviews, withheld = [], {}, {}, set()
         for i, inc in enumerate(incs):
             row = inc.chase
             key = row["id"]
+            captured_fields = dict(inc.set)
             title = inc.label()
             if key in withholding:
                 if i in match or i in blocked_pairs or withholding[key]["merchant"] != inc.merchant:
@@ -469,7 +473,7 @@ class Chase(Adapter):
             label_dates = chase_terms.explicit_days(chase_terms.EXPIRY, label, read_date)
             dates = set(label_dates)
             plain = chase_terms.Description(row["description"] or "").text
-            dates |= chase_terms.explicit_days(chase_terms.EXPIRY, plain, read_date)
+            dates |= chase_terms.description_expiries(chase_terms.PART.split(plain), read_date)
             timestamp_date = inc.set.get("expires")
             required = chase_terms.explicit_days(chase_terms.REQUIRED_PAYMENT, plain, read_date)
             early = {day for day in required if timestamp_date and day < timestamp_date}
@@ -497,10 +501,28 @@ class Chase(Adapter):
             elif not timestamp_date and len(dates) == 1:
                 inc.set["expires"] = next(iter(dates))
             saved = prior[match[i][0]] if i in match else None
-            fine_print, coverage, conflicts, qualifications = chase_terms.reconcile(
+            fine_print, coverage, conflicts, qualifications, prior_exceptions = chase_terms.reconcile(
                 row["description"], saved, inc.set, inc.bonus, row["reward_type"], row["reward_amount"],
                 row["cap"], read_date, self.codes)
             inc.set["fine_print"] = fine_print
+            if prior_exceptions or key in prior_reviews:
+                # Bind to what was captured, the paired saved offer, and the
+                # exact clauses the owner confirms have been replaced.
+                evidence = json.dumps([self.card, read_date, inc.merchant, inc.bonus, row, captured_fields, saved],
+                                      sort_keys=True, ensure_ascii=False)
+                expected = {"evidence": sha256(evidence.encode("utf-8")).hexdigest(),
+                            "superseded": sorted(prior_exceptions), "reason": None}
+                if key in prior_reviews:
+                    choice = prior_reviews[key]
+                    if (not prior_exceptions or not isinstance(choice, dict) or set(choice) != set(expected)
+                            or any(choice[k] != expected[k] for k in ("evidence", "superseded"))
+                            or not isinstance(choice["reason"], str) or not choice["reason"].strip()):
+                        raise Refused(f"{title}: Chase prior terms decision does not match current evidence and unresolved clauses")
+                    notes.append("owner confirmed the listed prior clauses were superseded for this evidence")
+                else:
+                    issues.extend(dict.fromkeys(prior_exceptions.values()))
+                    if re.fullmatch(r"[A-Za-z0-9:_-]{1,80}", key) and ids[key] == 1:
+                        pending_reviews[key] = expected
             payments = chase_terms.explicit_days(chase_terms.PAYMENT, plain, read_date)
             end = inc.set.get("expires")
             if end and (different_days := payments - {end}):
@@ -508,7 +530,7 @@ class Chase(Adapter):
             report.append({"offer": title, "line": inc.lines[0], "coverage": coverage, "withheld": i in withheld,
                            "fine_print_changed": (saved or {}).get("fine_print") != fine_print,
                            "conflicts": [] if i in withheld else issues + conflicts, "notes": notes + qualifications})
-        return report, pending_deadlines, withheld
+        return report, pending_deadlines, pending_reviews, withheld
 
     def pair_name(self, saved, inc, rule):
         if rule == "extends" and len(compact(inc.merchant)) > len(compact(saved["merchant"])):
@@ -1215,13 +1237,13 @@ def plan(card, paths, given_date, decisions=None, part=False, complete_parts=Fal
     if decisions is not None:
         unknown = set(dec) - {"card", "read_date", "pairs", "categories", "clashes", "new_names",
                               "distinct_rewards", "clear_minimums", "owner_approved", "notes",
-                              "chase_deadlines", "chase_withhold_new"}
+                              "chase_deadlines", "chase_prior_terms", "chase_withhold_new"}
         if unknown:
             raise Refused(f"decisions file: unknown keys {sorted(unknown)}")
         if dec.get("card") != card or dec.get("read_date") != read_date:
             raise Refused(f"decisions file is for {dec.get('card')!r} read {dec.get('read_date')!r}, "
                           f"not {card!r} read {read_date}")
-        if not isinstance(ad, Chase) and {"chase_deadlines", "chase_withhold_new"} & dec.keys():
+        if not isinstance(ad, Chase) and {"chase_deadlines", "chase_prior_terms", "chase_withhold_new"} & dec.keys():
             raise Refused("Chase term decisions are only supported for Chase Freedom and Freedom Flex")
     batches = [b["read_date"] for b in data["batches"] if b.get("card") == card]
     if batches and read_date < max(batches):
@@ -1503,9 +1525,9 @@ def plan(card, paths, given_date, decisions=None, part=False, complete_parts=Fal
            "part": part}
     withheld_new = set()
     if isinstance(ad, Chase):
-        review, deadline_choices, withheld_new = ad.reconcile_terms(
+        review, deadline_choices, term_choices, withheld_new = ad.reconcile_terms(
             incs, match, raw_by_id, open_pairs, dec, read_date, part or complete_parts)
-        out.update(chase_terms=review, chase_deadlines=deadline_choices,
+        out.update(chase_terms=review, chase_deadlines=deadline_choices, chase_prior_terms=term_choices,
                    chase_withheld=[{"merchant": incs[i].merchant, "lines": incs[i].lines} for i in sorted(withheld_new)])
     if inventory_issues:
         out["inventory_issues"] = inventory_issues
@@ -2138,6 +2160,8 @@ def template(out):
         result["clear_minimums"] = dict.fromkeys(out["ambiguous_minimums"])
     if out.get("chase_deadlines"):
         result["chase_deadlines"] = out["chase_deadlines"]
+    if out.get("chase_prior_terms"):
+        result["chase_prior_terms"] = out["chase_prior_terms"]
     return result
 
 
