@@ -170,6 +170,13 @@ class RefreshTest(unittest.TestCase):
                             b["redemption"] = {"method": "via_shop_link", "evidence": "offer_type"}
                         if i in {"chase-freedom-flex/at-home", "chase-freedom-flex/away"}:
                             b["channel"] = "in_store_and_online"
+                        chase_hosts = {
+                            "chase-freedom/whisker": "Whisker.com",
+                            "chase-freedom-flex/babbel": "babbel.com",
+                            "chase-freedom-flex/carparts-com": "CarParts.com",
+                        }
+                        if i in chase_hosts:
+                            b["fine_print"] = b["fine_print"].replace(chase_hosts[i], "the issuer-specified site")
                     self.assertEqual(o, b, i)
                 bt = [x for x in self.t.load()["batches"] if x["card"] == card]
                 self.assertEqual(bt[-1], {"card": card, "read_date": READ, "offers_found": sum(1 for o in after.values() if o["card"] == card)})
@@ -1181,7 +1188,11 @@ class RefreshTest(unittest.TestCase):
         for card, merchant, bonus_column, timestamp_column in cases:
             with self.subTest(card=card):
                 old = next(o for o in self.t.offers().values() if o["card"] == card and o["merchant"] == merchant)
-                self.t.change_offers(lambda by, _: by[old["id"]].update(activation="already_activated"))
+                self.t.change_offers(lambda by, _: by[old["id"]].update(
+                    activation="already_activated",
+                    fine_print=f"Earn {old['bonus']} on your first two payments when you spend $50 or more. "
+                               "Offer valid on first two payments only. Gift cards are excluded.",
+                ))
 
                 def rows_with_new_terms(rows):
                     row = next(r for r in rows if r["merchant"] == merchant)
@@ -1274,6 +1285,164 @@ class RefreshTest(unittest.TestCase):
         self.assertEqual(self.t.run("apply", card, [capture], decisions={})[0], 2)
         self.assertEqual(self.t.read("offers.json"), before)
 
+    def chase_review_fixture(self, card="Chase Freedom", *, saved=None, **updates):
+        """A fresh synthetic offer, with the same field layout as the selected Chase format."""
+        self.t.close()
+        self.t = Tree()
+        if card == "Chase Freedom":
+            sid, merchant, bonus, end = "chase-freedom/whisker", "Whisker", "bonus_as_shown", "end_timestamp"
+        else:
+            sid, merchant, bonus, end = "chase-freedom-flex/babbel", "Babbel", "bonus", "offer_end_timestamp"
+        self.t.change_offers(lambda by, _: by[sid].update(
+            bonus="10% cash back", minimum_spend=None, channel="online", fine_print=saved))
+
+        def update(rows):
+            row = next(r for r in rows if r["merchant"] == merchant)
+            row.update({bonus: "10% cash back", end: "2026-11-24T04:59:59Z", "channel": "ONLINE",
+                        "reward_type": "PERCENTAGE", "reward_amount": "10", "min_spend": "0", "reward_cap": "0",
+                        "expiration_text": "Offer expires 11/23/2026.",
+                        "reward_description": "Earn 10% cash back on your purchase.", **updates})
+            return rows
+
+        return sid, self.t.csv(card, update)
+
+    def assert_chase_review_conflict(self, card, capture, message, decisions=None):
+        before = self.t.read("offers.json")
+        code, text, report = self.t.run("report", card, [capture], decisions=decisions)
+        self.assertEqual(code, 0, text)
+        self.assertTrue(report["blockers"], text)
+        self.assertIn(message, text)
+        code, text, _ = self.t.run("apply", card, [capture], decisions=decisions or {})
+        self.assertEqual(code, 2, text)
+        self.assertIn(message, text)
+        self.assertEqual(self.t.read("offers.json"), before)
+
+    def test_chase_review_abbreviated_reward_keeps_unknown_historical_eligibility(self):
+        for card in ("Chase Freedom", "Chase Freedom Flex"):
+            for qualifier in ("on the Pro model only", "for first-time buyers only", "on your initial payment only",
+                              "after three separate purchases", "excluding gift cards"):
+                with self.subTest(card=card, qualifier=qualifier):
+                    prior = f"Earn 10% cash back {qualifier}."
+                    sid, capture = self.chase_review_fixture(card, saved=prior)
+                    self.apply_ok(card, [capture])
+                    self.assertIn(prior, self.t.offers()[sid]["fine_print"])
+            with self.subTest(card=card, qualifier="incompatible replacement"):
+                _, capture = self.chase_review_fixture(card, saved="Earn 10% cash back on the Pro model only.",
+                                                       reward_description="Earn 10% cash back on the Basic model only.")
+                self.assert_chase_review_conflict(card, capture, "prior reward eligibility unresolved")
+
+    def test_chase_review_explicitly_incomplete_detail_keeps_prior_product_restriction(self):
+        for card in ("Chase Freedom", "Chase Freedom Flex"):
+            footer = "Offer redemption awarded as statement credit on the first qualifying transaction."
+            pointer = "Additional eligibility restrictions apply; see full terms."
+            for suffix, coverage in ((pointer, "abbreviated"), (f"{footer} {pointer}", "abbreviated"), (footer, "expanded")):
+                with self.subTest(card=card, suffix=suffix):
+                    sid, capture = self.chase_review_fixture(
+                        card, saved="Only the Pro model is eligible.", reward_description=(
+                            "Earn 10% cash back on your purchase. Offer expires 11/23/2026. "
+                            f"Buy directly with the merchant. Third-party gift cards excluded. {suffix}"
+                        ))
+                    _, report = self.apply_ok(card, [capture])
+                    offer = self.t.offers()[sid]
+                    row = next(r for r in report["chase_terms"] if r["offer"].startswith(offer["merchant"]))
+                    self.assertEqual(row["coverage"], coverage)
+                    self.assertIn("Only the Pro model is eligible.", offer["fine_print"])
+
+    def test_chase_review_private_values_are_absent_from_entire_written_record(self):
+        card = "Chase Freedom"
+        cases = [
+            ("Your coupon: fixture-coupon-value", "fixture-coupon-value"),
+            ("Your coupon code is shown below.<br><b>fixture-next-line-value</b>", "fixture-next-line-value"),
+            ("Membership ID: fixture-member-value", "fixture-member-value"),
+            ("Your access token is fixture-access-value", "fixture-access-value"),
+            ("Shop at https://fixture-shop-value.shop.example.com/ref", "fixture-shop-value"),
+            ("Shop at fixture-bare-value.shop.example.com", "fixture-bare-value"),
+        ]
+        for phrase, marker in cases:
+            with self.subTest(phrase=phrase):
+                sid, capture = self.chase_review_fixture(card, reward_description=(
+                    f"<b>Earn 10% cash back on your purchase.</b><br>{phrase}<br>Gift cards are excluded."
+                ))
+                output, report = self.apply_ok(card, [capture])
+                record = self.t.offers()[sid]
+                self.assertNotIn(marker, json.dumps(record))
+                self.assertNotIn(marker, output + json.dumps(report))
+                self.assertIn("Gift cards are excluded.", record["fine_print"])
+        marker = "fixture-cross-field-value"
+        sid, capture = self.chase_review_fixture(card, reward_description=f"Your coupon: {marker}")
+        self.t.change_offers(lambda by, _: by[sid].update(other_details=[marker]))
+        self.assert_chase_review_conflict(card, capture, "projected offer records have unsafe public text")
+
+    def test_chase_review_structured_reward_minimum_and_channel_conflicts(self):
+        card = "Chase Freedom"
+        cases = [
+            ({"reward_amount": "20"}, "structured reward and displayed reward disagree"),
+            ({"reward_type": "DOLLAR"}, "structured reward and displayed reward disagree"),
+            ({"min_spend": "25", "reward_description": "Earn 10% cash back on purchases of at least $75."},
+             "current cashback minimum evidence disagrees"),
+            ({"reward_description": "Earn 10% cash back on in-store purchases only."},
+             "current channel evidence disagrees"),
+        ]
+        for updates, conflict in cases:
+            with self.subTest(updates=updates):
+                _, capture = self.chase_review_fixture(card, **updates)
+                self.assert_chase_review_conflict(card, capture, conflict)
+
+    def test_chase_review_superseded_cashback_cap_and_distinct_purchase_ceiling(self):
+        card = "Chase Freedom"
+        sid, capture = self.chase_review_fixture(card, saved="Cash back maximum: $15.", reward_cap="25")
+        self.apply_ok(card, [capture])
+        offer = self.t.offers()[sid]
+        self.assertNotIn("$15", offer["fine_print"])
+        self.assertIn("Cash back maximum: $25.", offer["fine_print"])
+        self.assertIsNone(offer["spend_cap"])
+        sid, capture = self.chase_review_fixture(card, reward_cap="20",
+                                                reward_description="Earn 10% cash back on up to $200 in purchases.")
+        self.apply_ok(card, [capture])
+        offer = self.t.offers()[sid]
+        self.assertIn("up to $200 in purchases", offer["fine_print"])
+        self.assertIn("Cash back maximum: $20.", offer["fine_print"])
+        self.assertIsNone(offer["spend_cap"])
+        sid, capture = self.chase_review_fixture(card, reward_cap="60", reward_description=(
+            "Earn 10% cash back on your first two purchases, with a $30 cash back maximum. "
+            "Limit of $30 per statement credit (up to $60 total cashback)."
+        ))
+        self.apply_ok(card, [capture])
+        offer = self.t.offers()[sid]
+        self.assertIn("$30 per statement credit", offer["fine_print"])
+        self.assertIn("$60 total cashback", offer["fine_print"])
+        _, capture = self.chase_review_fixture(card, reward_cap="25", reward_description=(
+            "Earn 10% cash back on your purchase, with a $15 cash back maximum. Cash back maximum: $25."
+        ))
+        self.assert_chase_review_conflict(card, capture, "structured cashback cap and current description disagree")
+
+    def test_chase_review_expiry_month_name_conflict_and_unparseable_explicit_label(self):
+        card = "Chase Freedom"
+        for label, conflict in (("Expires November 30, 2026.", "current explicit deadline and timestamp"),
+                                ("Expires on November 42, 2026.", "cannot parse the explicit expiration")):
+            with self.subTest(label=label):
+                _, capture = self.chase_review_fixture(card, expiration_text=label)
+                self.assert_chase_review_conflict(card, capture, conflict)
+        sid, capture = self.chase_review_fixture(card, expiration_text="Expires Nov. 23, 2026.")
+        self.apply_ok(card, [capture])
+        self.assertEqual(self.t.offers()[sid]["expires_text"], "Expires Nov. 23, 2026")
+
+    def test_chase_review_malformed_and_open_pairs_cannot_enable_withholding(self):
+        card = "Chase Freedom"
+        sid, capture = self.chase_review_fixture(card, merchant="Whiskerr", offer_id="FIXTURE:unresolved-pair")
+        withhold = {"chase_withhold_new": {"FIXTURE:unresolved-pair": {"merchant": "Whiskerr", "reason": "Synthetic"}}}
+        pair = {"saved": sid, "file": "Whiskerr", "bonus": "10% cash back"}
+        before = self.t.read("offers.json")
+        for accept in ("unresolved", "false", 0, 1, [], {}, None, True):
+            with self.subTest(accept=accept):
+                decisions = {**withhold, "pairs": [{**pair, "accept": accept}]}
+                code, text, _ = self.t.run("apply", card, [capture], decisions=decisions)
+                self.assertEqual(code, 2, text)
+                self.assertIn("no pending pair" if accept is None or accept is True else "boolean or null", text)
+                self.assertEqual(self.t.read("offers.json"), before)
+        self.apply_ok(card, [capture], {**withhold, "pairs": [{**pair, "accept": False}]})
+        self.assertEqual(self.t.offers()[sid]["status"], "missing")
+
     def test_chase_deadline_decision_is_bound_to_current_row_evidence(self):
         card = "Chase Freedom"
         timestamp = "2026-12-14T04:59:59Z"
@@ -1324,7 +1493,7 @@ class RefreshTest(unittest.TestCase):
         self.assertEqual(offer["expires_text"], "Offer expires 12/31/2026")
         self.assertEqual(report["flags"], [])
         self.assertIn("Gift cards are excluded", offer["fine_print"])
-        self.assertIn("Offer valid online only at shop.example", offer["fine_print"])
+        self.assertIn("Offer valid online only at the issuer-specified site", offer["fine_print"])
         self.assertIn("promotional coupon required", offer["fine_print"])
         for forbidden in ("MOCKSAVE", "ANCHORSECRET", "PATHSECRET", "X81Z239Q", "MOCKSESSION", "SCRAPEDTOKEN", "<b>"):
             self.assertNotIn(forbidden, out)

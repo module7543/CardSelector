@@ -393,7 +393,7 @@ class Chase(Adapter):
     def check_columns(self, cols):
         self.fmt = self.FORMATS["flex" if "offer_end_timestamp" in cols else "freedom"]
         self.required = self.required | {self.fmt["bonus"], self.fmt["end"]}
-        self.used = self.required | {"offer_id"}
+        self.used = self.required | {"offer_id", "reward_type", "reward_amount", "reward_cap"}
         return super().check_columns(cols)
 
     def parse(self, rows, read_date, app):
@@ -427,6 +427,8 @@ class Chase(Adapter):
                 raise Refused(f"Chase source line {line} has a nonnumeric minimum spend")
             inc.set["spend_cap"] = None  # reward_cap caps the cash back, already in the reward text
             inc.chase = {"id": (r.get("offer_id") or "").strip(), "timestamp": timestamp,
+                         "reward_type": (r.get("reward_type") or "").strip().upper(),
+                         "reward_amount": (r.get("reward_amount") or "").strip(),
                          "description": r["reward_description"], "cap": (r.get("reward_cap") or "").strip()}
             # added_state / tile buttons say nothing about activation: the saved value is never changed.
             inc.new.update(channel="none_shown", activation="needs_activation")
@@ -463,7 +465,9 @@ class Chase(Adapter):
                 if i in match or i in blocked_pairs or withholding[key]["merchant"] != inc.merchant:
                     raise Refused("Chase withholding can only name a new offer with no pending pair")
                 withheld.add(i)
-            dates = chase_terms.explicit_days(chase_terms.EXPIRY, inc.set["expires_text"], read_date)
+            label = inc.set["expires_text"] or ""
+            label_dates = chase_terms.explicit_days(chase_terms.EXPIRY, label, read_date)
+            dates = set(label_dates)
             plain = chase_terms.Description(row["description"] or "").text
             dates |= chase_terms.explicit_days(chase_terms.EXPIRY, plain, read_date)
             timestamp_date = inc.set.get("expires")
@@ -473,6 +477,9 @@ class Chase(Adapter):
             candidate = (next(iter(mismatched)) if timestamp_date and len(dates) <= 1 and len(mismatched) == 1
                          and all(day < timestamp_date for day in mismatched) else None)
             issues, notes = [], []
+            if (i not in withheld and chase_terms.EXPIRY_LABEL.match(label) and not label_dates
+                    and not chase_terms.RELATIVE_EXPIRY.fullmatch(label)):
+                issues.append("cannot parse the explicit expiration label")
             if key in deadlines:
                 choice = deadlines[key]
                 if (not candidate or not isinstance(choice, dict) or set(choice) != {"timestamp", "deadline", "reason"}
@@ -491,7 +498,8 @@ class Chase(Adapter):
                 inc.set["expires"] = next(iter(dates))
             saved = prior[match[i][0]] if i in match else None
             fine_print, coverage, conflicts, qualifications = chase_terms.reconcile(
-                row["description"], saved, inc.set, inc.bonus, row["cap"], read_date, self.codes)
+                row["description"], saved, inc.set, inc.bonus, row["reward_type"], row["reward_amount"],
+                row["cap"], read_date, self.codes)
             inc.set["fine_print"] = fine_print
             payments = chase_terms.explicit_days(chase_terms.PAYMENT, plain, read_date)
             end = inc.set.get("expires")
@@ -1428,10 +1436,20 @@ def plan(card, paths, given_date, decisions=None, part=False, complete_parts=Fal
         return {"saved": o["id"], "file": incs[i].merchant, "bonus": incs[i].bonus}
 
     decided = {}
-    for p in dec.get("pairs", []) or []:
-        if not (isinstance(p, dict) and {"saved", "file", "accept"} <= set(p)):
-            raise Refused(f"decisions file: each pair needs saved, file, bonus and accept: {p!r}")
-        decided[(p["saved"], compact(p["file"]), bonus_key(p.get("bonus")))] = p["accept"]
+    pair_decisions = dec.get("pairs")
+    if pair_decisions is not None and not isinstance(pair_decisions, list):
+        raise Refused("decisions file: pairs must be an array")
+    for p in pair_decisions or []:
+        if not (isinstance(p, dict) and {"saved", "file", "accept"} <= set(p)
+                and all(isinstance(p[k], str) and p[k].strip() for k in ("saved", "file"))
+                and (p.get("bonus") is None or isinstance(p["bonus"], str))):
+            raise Refused("decisions file: each pair needs a saved ID, file merchant, optional bonus and accept")
+        if p["accept"] is not None and type(p["accept"]) is not bool:
+            raise Refused("decisions file: accept must be a boolean or null")
+        key = (p["saved"], compact(p["file"]), bonus_key(p.get("bonus")))
+        if key in decided:
+            raise Refused("decisions file: duplicate pair decision")
+        decided[key] = p["accept"]
     open_pairs = []
     for i, o, why in proposals:
         acc = decided.get((o["id"], compact(incs[i].merchant), bonus_key(incs[i].bonus)))
@@ -1984,10 +2002,17 @@ def plan(card, paths, given_date, decisions=None, part=False, complete_parts=Fal
             if re.search(r"(?<!\d)" + re.escape(s) + r"(?!\d)", blob):
                 leaks.append(o["id"])
     if isinstance(ad, Chase):
+        projected = {offer["id"]: offer for offer in new["offers"] if offer["card"] == card}
+        private_lines = []
         for i, sid in resolved_ids.items():
             # Keep the account-number stop even when the description sanitizer withheld it.
             if any(re.search(r"(?<!\d)" + re.escape(s) + r"(?!\d)", incs[i].chase["description"]) for s in secrets):
                 leaks.append(sid)
+            if sid in projected and chase_terms.unsafe_record(projected[sid], ad.codes):
+                private_lines.append(incs[i].lines[0])
+        if private_lines:
+            lines = ", ".join(map(str, sorted(private_lines)))
+            blockers.append(f"Chase projected offer records have unsafe public text (source lines {lines})")
     out["leaks"] = sorted(set(leaks))
     if leaks:
         blockers.append(f"{len(set(leaks))} offer(s) would contain digits from a card number column or the file name: "
