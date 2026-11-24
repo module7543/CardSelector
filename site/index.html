@@ -427,6 +427,7 @@
   .oterms > span { white-space: nowrap; }
   .oterms > span.long { white-space: normal; }
   .oterms .nochan { font-style: italic; }
+  .coupon-indicator { font-weight: 650; color: var(--text); }
   /* Ends within 7 days: a clock and "Ends in N days". */
   .oterms .soon { font-weight: 650; color: var(--soon); white-space: nowrap; }
   .oterms .soon .bico { width: 12px; height: 12px; margin-right: 3px; vertical-align: -1px; }
@@ -470,6 +471,10 @@
   .details[hidden] { display: none; }
   .details dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 6px 12px; margin: 0; align-items: baseline; }
   .details dl + dl { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); }
+  .coupon-details { margin: 10px 0; padding: 9px 0; border-block: 1px solid var(--line); overflow-wrap: anywhere; }
+  .coupon-details h4 { margin: 0 0 6px; }
+  .coupon-detail + .coupon-detail { margin-top: 10px; }
+  .coupon-detail p { margin: 3px 0; }
   dt { font-size: 11.5px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
   dd { margin: 0; overflow-wrap: anywhere; }
   dd.fine { font-size: 14px; line-height: 1.4; }

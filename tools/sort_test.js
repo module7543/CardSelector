@@ -4291,6 +4291,90 @@ function listRows(sel) {
     page = mainPage;
   }
 
+  // Coupons are display-only and follow the Pacific day even when the phone uses another time zone.
+  {
+    const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, timezoneId: "UTC", serviceWorkers: "block" });
+    page = await ctx.newPage();
+    const errors = [];
+    page.on("pageerror", error => errors.push(error.message));
+    await page.clock.install({ time: new Date("2026-11-24T00:00:00Z") });
+    let hidePromotions = false;
+    await page.route("**/data/offers.json", async route => {
+      if (!hidePromotions) return route.continue();
+      const d = await (await route.fetch()).json();
+      for (const o of d.offers) delete o.promotions;
+      await route.fulfill({ json: d });
+    });
+    const read = async (name, id) => {
+      await page.fill("#q", name);
+      const row = page.locator('#main .offer[data-oid="capital-one/' + id + '"]');
+      await row.waitFor();
+      return row;
+    };
+    const open = async row => {
+      const button = row.locator("xpath=ancestor::li[contains(@class,'mc')]").locator(".mchead");
+      if (await button.getAttribute("aria-expanded") === "false") await button.click();
+      return row.locator(".coupon-details").innerText();
+    };
+    const load = async () => {
+      await page.goto(base);
+      await page.waitForFunction(() => window.__cardsReady && window.__bonusReady);
+    };
+    await load();
+    let row = await read("jcpenney", "jcpenney");
+    let details = await open(row);
+    ok(/20% or 10% off/.test(details) && /Conflicting end dates/.test(details) &&
+      /2027-01-30/.test(details) && /Feb 1.*year unstated/.test(details) && /Cash back terms/.test(details),
+      "coupons JCPenney: two tiers, conflicting dates and separate cash back conditions");
+    row = await read("ray-ban", "ray-ban");
+    details = await open(row);
+    ok(/5% off.*Verified in issuer panel/s.test(details) && /Up to 50% off.*Listing only/s.test(details) &&
+      /restricts combining offers/.test(details) && await row.locator(".coupon-indicator").count() === 1,
+      "coupons Ray-Ban: verified coupon and listing promotion remain separate");
+    row = await read("eufy", "eufy");
+    ok(/Reveal the coupon at Capital One Offers/.test(await open(row)), "coupons eufy: reveal at issuer");
+    row = await read("rvshare", "rvshare");
+    ok(/85% off \$700/.test(await open(row)) && /Checkout and the role/.test(await row.locator(".coupon-details").innerText()),
+      "coupons RVshare: the unusual headline is displayed as unverified at checkout");
+    row = await read("shutterfly", "shutterfly");
+    ok(/30% off/.test(await open(row)) && /9% Capital One offer/.test(await row.locator(".obreak").innerText()),
+      "coupons Shutterfly: 30% coupon and 9% cashback have separate display");
+
+    const rankings = async () => {
+      await page.fill("#q", "ray");
+      return page.evaluate(() => ({
+        headline: document.getElementById("use").innerText,
+        rows: [...document.querySelectorAll("#main li.offer[data-oid]")].map(r => [r.dataset.oid, r.querySelector(".obig").innerText])
+      }));
+    };
+    const withCoupons = await rankings();
+    hidePromotions = true;
+    await load();
+    ok(JSON.stringify(await rankings()) === JSON.stringify(withCoupons), "coupons leave sort order, offer totals and recommendation text unchanged");
+    hidePromotions = false;
+
+    await page.clock.setSystemTime(new Date("2026-11-28T07:59:45Z"));
+    await load();
+    row = await read("little spoon", "little-spoon");
+    details = await open(row);
+    ok(/62% off/.test(details) && /Maximum coupon discount \$35/.test(details) && /after the listed coupon/.test(details),
+      "coupons Little Spoon: separate cap and qualifying subtotal");
+    const cashback = await row.locator(".obig").innerText();
+    await page.clock.runFor(16000);
+    ok(await row.count() === 1 && await row.locator(".obig").innerText() === cashback &&
+      await row.locator(".coupon-indicator, .coupon-details").count() === 0,
+      "coupon expires at Pacific midnight while its cashback offer stays live");
+    await page.clock.setSystemTime(new Date("2026-11-30T12:00:00Z"));
+    await load();
+    row = await read("ray-ban", "ray-ban");
+    details = await open(row);
+    ok(/5% off/.test(details) && !/50% off/.test(details) && !errors.length &&
+      await page.evaluate(() => document.documentElement.scrollWidth === innerWidth),
+      "coupon freshness hides the listing-only promotion after seven Pacific days with no phone overflow or script errors");
+    await ctx.close();
+    page = mainPage;
+  }
+
   // Search box shadow: off at the top, on once scrolled, off again back at the top.
   await setup("pizza");
   await page.evaluate(() => document.activeElement && document.activeElement.blur());

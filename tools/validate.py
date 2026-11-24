@@ -4,6 +4,8 @@ import json, re, sys, unicodedata
 from datetime import date
 from pathlib import Path
 
+from coupon_promotions import valid_promotion
+
 PATH = Path(__file__).resolve().parent.parent / "site/data/offers.json"
 DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 STATUS = {"active", "missing", "expired", "used"}
@@ -77,6 +79,11 @@ for o in data["offers"]:
         elif o.get("channel") != ("none_shown" if terms.get("conflicted") else terms["channel"]):
             bad("channel must agree with the current verified terms or be unknown while they conflict")
     if o.get("status") not in STATUS: bad("bad status")
+    if "promotions" in o:
+        promotions = o["promotions"]
+        if (o.get("card") != "Capital One" or not isinstance(promotions, list) or not promotions
+                or not all(valid_promotion(p) and p["observed_on"] <= str(o.get("last_read")) for p in promotions)):
+            bad("bad public coupon promotion")
     if not isinstance(o.get("other_details"), list): bad("other_details must be a list")
     # aliases: optional extra names the search matches (earlier names, alternate spellings); omitted when none.
     if "aliases" in o:

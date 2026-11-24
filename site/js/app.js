@@ -152,6 +152,68 @@
     var d = new Date(), p = function (n) { return String(n).padStart(2, "0"); };
     return d.getFullYear() + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate());
   }
+  var couponClock = new Intl.DateTimeFormat("sv-SE", { timeZone: "America/Los_Angeles", year: "numeric", month: "2-digit", day: "2-digit" });
+  function couponDay(when) { return couponClock.format(when === undefined ? new Date() : when); }
+  function currentPromotions(o, gone) {
+    if (gone || !o.promotions) return [];
+    var day = couponDay();
+    return o.promotions.filter(function (p) { return p.observed_on <= day && day <= p.visible_through; });
+  }
+
+  function couponDetails(o, gone) {
+    var promotions = currentPromotions(o, gone);
+    if (!promotions.length) return null;
+    var box = el("section", "coupon-details");
+    box.appendChild(el("h4", null, "Capital One promotions"));
+    promotions.forEach(function (p) {
+      var item = el("div", "coupon-detail");
+      if (p.source === "unverified_listing") {
+        item.appendChild(el("p", null, "Coupon listed. Check Capital One Offers for current terms."));
+        box.appendChild(item);
+        return;
+      }
+      var d = p.discount;
+      var discounts = [d.value].concat(d.tiers || []).map(function (n) {
+        return d.kind === "percentage_off" ? pct(n) + "%" : money(n);
+      }).join(" or ");
+      var heading = (d.up_to ? "Up to " : "") + discounts + " off";
+      if (p.headline_threshold) heading += " " + money(p.headline_threshold);
+      item.appendChild(el("strong", null, heading));
+      var info = p.source === "listing_only" ? "Listing only · check issuer terms" : "Verified in issuer panel";
+      item.appendChild(el("p", null, info + " · checked " + fmtDate(p.observed_on)));
+      if (p.minimum_purchase) item.appendChild(el("p", null, "Coupon minimum " + money(p.minimum_purchase)));
+      if (p.minimum_unspecified) item.appendChild(el("p", null, "A coupon minimum may apply. Check the issuer."));
+      if (p.headline_threshold) item.appendChild(el("p", null, "Checkout and the role of this headline amount are unverified."));
+      if (p.discount_cap) item.appendChild(el("p", null, "Maximum coupon discount " + money(p.discount_cap)));
+      var expiry = p.expiry;
+      if (expiry.basis === "confirmed") item.appendChild(el("p", null, "Coupon ends " + fmtDate(expiry.date)));
+      else if (expiry.basis === "estimated") item.appendChild(el("p", null, "Estimated coupon end " + fmtDate(expiry.date) + " · issuer omitted the year"));
+      else {
+        var endText = expiry.basis === "conflict" ? "Conflicting end dates" : "Coupon expiration unconfirmed";
+        if (expiry.observations.length) endText += " · " + expiry.observations.join(" / ");
+        item.appendChild(el("p", null, endText + ". Check the issuer."));
+      }
+      if (p.eligibility) p.eligibility.forEach(function (line) { item.appendChild(el("p", null, line)); });
+      if (p.exclusions) item.appendChild(el("p", null, "Excludes " + p.exclusions.join(" ")));
+      if (p.conditions) p.conditions.forEach(function (line) { item.appendChild(el("p", null, line)); });
+      if (p.stacking && p.stacking !== "unknown") {
+        item.appendChild(el("p", null, "Eligible cash back is calculated on the qualifying subtotal after the listed coupon, excluding taxes, shipping, credits, and fees."));
+        if (p.stacking === "eligibility_overlap") item.appendChild(el("p", null, "Coupon and cash back have different eligibility. Both sets of terms apply."));
+        if (p.stacking === "check_issuer") item.appendChild(el("p", null, "The merchant restricts combining offers. Check which restrictions apply with this cash back."));
+      } else {
+        item.appendChild(el("p", null, "Cash back combination unconfirmed."));
+      }
+      if (p.cashback_exclusions) item.appendChild(el("p", null, "Cash back terms · " + p.cashback_exclusions));
+      if (p.source === "listing_only") item.appendChild(el("p", null, "Check this promotion at Capital One Offers."));
+      else {
+        item.appendChild(el("p", null, p.reveal_at_issuer ? "Reveal the coupon at Capital One Offers." : "Get the listed coupon at Capital One Offers."));
+        item.appendChild(el("p", null, "Start the qualifying online purchase from the issuer’s Shop now link and apply the listed coupon."));
+      }
+      if (p.same_session_24h) item.appendChild(el("p", null, "Complete the eligible purchase within 24 hours in the same browser session."));
+      box.appendChild(item);
+    });
+    return box;
+  }
   // "Dec 14"; the year only when it isn't this year ("Jan 3, 2027").
   function fmtDate(iso) {
     var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || "");
@@ -610,6 +672,8 @@
     // Signed in, an activation switch at the top already shows the status next to its control.
     if (gone && !hasActControl(o)) field(dl, "Activation", activation(o)[0]);
     if (dl.children.length) box.appendChild(dl);
+    var couponSection = couponDetails(o, gone);
+    if (couponSection) box.appendChild(couponSection);
     var dl2 = el("dl");
     // A shared offer list names its cards and says it is one list ("Quicksilver / Discover it (Capital One offers, shared)").
     if (rowCard(o.card) !== o.card) field(dl2, "Cards", rowCard(o.card) + " (" + o.card + " offers, shared)");
@@ -957,6 +1021,12 @@
       t.push({ text: "Min " + tidy(num ? "$" + o.minimum_spend : o.minimum_spend), cls: num ? null : "long" });
     }
     if (actOf(o) === "via_shop_link") t.push({ text: "Shop now link only" });
+    var promotions = currentPromotions(o, gone);
+    if (promotions.some(function (p) { return p.source === "verified_panel" && p.expiry.date; })) {
+      t.push({ text: "Coupon", cls: "coupon-indicator" });
+    } else if (promotions.some(function (p) { return p.source === "unverified_listing"; })) {
+      t.push({ text: "Coupon · check issuer", cls: "coupon-indicator" });
+    }
     return t;
   }
 
@@ -4091,6 +4161,7 @@
     var query = input.value;
     var today = todayISO();
     lastDay = today; // the date this render used (the day redraw compares it)
+    lastCouponDay = data && data.offers.some(function (o) { return o.promotions; }) ? couponDay() : null;
     window.__renders = (window.__renders || 0) + 1; // for the tests
     main.textContent = "";
     liveNames = null; // the Still on index follows the offers as they are now
@@ -4390,6 +4461,11 @@
   function scheduleFreshness() {
     clearTimeout(freshTimer);
     var n = new Date(), next = new Date(n.getFullYear(), n.getMonth(), n.getDate() + 1, 0, 0, 0, 500);
+    if (data && data.offers.some(function (o) { return o.promotions; })) {
+      var day = couponDay(n), hour = 3600000, tick = Math.floor(+n / hour) * hour + hour;
+      while (couponDay(tick) === day) tick += hour;
+      next = Math.min(next, tick + 500);
+    }
     freshTimer = setTimeout(function () { renderFreshness(); scheduleFreshness(); checkDay(); }, Math.max(1000, next - n));
   }
   function refreshFreshness() { renderFreshness(); scheduleFreshness(); }
@@ -4402,7 +4478,7 @@
   // list, the Ends badges, Card bonuses and the headline follow today. Never during a save or while an edit
   // control has focus (then dayPending, redrawn when the save ends or the focus leaves). Everything the owner
   // has open or picked stays, and focus and scroll stay where they are.
-  var lastDay = null, bonusDay = null, dayPending = false, tapping = false, tapTimer = 0;
+  var lastDay = null, lastCouponDay = null, bonusDay = null, dayPending = false, tapping = false, tapTimer = 0;
   function dayBlocked() {
     if (saving || tapping) return true;
     var f = document.activeElement;
@@ -4410,7 +4486,10 @@
   }
   // Is t a day the results or Card bonuses weren't drawn for yet? (Card bonuses not drawn yet, e.g. its file didn't load: only
   // the results count.)
-  function newDay(t) { return lastDay !== null && (t !== lastDay || (bonusDay !== null && t !== bonusDay)); }
+  function newDay(t) {
+    return lastDay !== null && (t !== lastDay || (bonusDay !== null && t !== bonusDay) ||
+      (lastCouponDay !== null && lastCouponDay !== couponDay()));
+  }
   function checkDay() {
     var t = todayISO();
     if (!data || lastDay === null || (!dayPending && !newDay(t))) return;

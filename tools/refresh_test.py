@@ -30,7 +30,7 @@ class Tree:
         (self.root / "tools").mkdir()
         data = self.root / "site/data"
         data.mkdir(parents=True)
-        for f in ("refresh.py", "validate.py", "cuisines.py", "fold_phone_edits.py"):
+        for f in ("refresh.py", "validate.py", "cuisines.py", "fold_phone_edits.py", "coupon_promotions.py"):
             shutil.copy(REPO / "tools" / f, self.root / "tools" / f)
         for f in ("offers.json", "cuisines.json"):
             shutil.copy(FIX / f, data / f)
@@ -408,6 +408,151 @@ class RefreshTest(unittest.TestCase):
             self.assertIn("legacy Capital One CSV is retired", output)
             self.assertIn("including the Added to Card placements", output)
             self.assertEqual([self.t.read(f) for f in files], before)
+
+    def coupon_inventory(self, day, reward="10% back", candidate=True):
+        return dict(extraction_date=day, layout_variant="current_layout", tile_kind="standard", merchant="7-Eleven",
+                    domain="7-eleven.com", reward=reward, channel="In-App", offer_type="cardLinked|coupon" if candidate else "cardLinked",
+                    offer_type_basis="Encoded tile offer-type labels", activation_status="", grid_position="1",
+                    badge="EXCLUSIVE COUPON" if candidate else "")
+
+    def coupon_evidence(self, row, *, value=20, cap=None, through="2026-12-05", complete=True, include=True):
+        records = [{
+            "evidence_status": "verified_detail_panel", "capture_date": row["extraction_date"],
+            "merchant": {"name": row["merchant"], "domain": row["domain"]},
+            "cashback": {"listing_text_exact": row["reward"], "text_exact": row["reward"]},
+            "evidence": {"listing": {"source": "standard"},
+                         "detail_panel": {"coupon_details_read": True, "expanded_cashback_terms_read": True}},
+            "coupon": {
+                "discount": {"kind": "percentage_off", "advertised_value": value, "up_to": False},
+                "expiration": {"observations": [{"iso_date": through}]},
+                "minimum_purchase": {"status": "not_stated"},
+                "discount_cap": {"status": "stated", "amount": cap, "currency": "USD"},
+                "conditions": ["Keep the item in its original packaging."],
+                "additional_conditions_summary": ["Selected styles only.", "Details include PRIVATE-COUPON-SENTINEL.",
+                                                  "Use code OMITTHIS123."],
+                "code": {"value": "PRIVATE-COUPON-SENTINEL"},
+            },
+            "stacking": {"outcome_status": "permitted_for_qualifying_purchase_subject_to_terms",
+                         "issuer_evidence": {"cashback_based_on_eligible_subtotal_after_coupon": True}},
+        }] if include else []
+        p = self.t.root / "coupons.json"
+        p.write_text(json.dumps({"schema_version": 1, "capture_date": row["extraction_date"],
+                                 "capture_timezone": "America/Los_Angeles", "verified_coupon_offers": records,
+                                 "listing_only_promotions": [], "source": {"platform": "Capital One Offers",
+                                 "surface": "Unfiltered main offer feed",
+                                 "inventory_scan": {"available_feed_exhausted": True, "loaded_grid_entries": 1,
+                                                    "coupon_scan_complete": complete}}}))
+        return str(p)
+
+    def test_coupon_replacement_disappearance_and_expiry_leave_rebate_intact(self):
+        _, saved, _ = self.seven_eleven_inventory()
+        oid = saved["id"]
+        self.t.change_offers(lambda by, _: by[oid]["other_details"].append('Promo text reads "PRIVATE-COUPON-SENTINEL"'))
+        first = self.coupon_inventory("2026-11-24")
+        p = self.write_inventory([first])
+        output, report = self.apply_ok("Capital One", [p], read_date=first["extraction_date"],
+                                       extra=("--coupons", self.coupon_evidence(first, cap=35)))
+        offer = self.t.offers()[oid]
+        self.assertTrue(report["coupons"]["complete"])
+        self.assertEqual(offer["promotions"][0]["discount_cap"], 35)
+        self.assertEqual(offer["promotions"][0]["conditions"], ["Selected styles only."])
+        for secret in ("PRIVATE-COUPON-SENTINEL", "OMITTHIS123"):
+            self.assertNotIn(secret, output + self.t.read("offers.json") + json.dumps(report))
+
+        later = self.coupon_inventory("2026-11-25")
+        p = self.write_inventory([later])
+        self.apply_ok("Capital One", [p], read_date=later["extraction_date"],
+                      extra=("--coupons", self.coupon_evidence(later, value=10, through="2026-11-24")))
+        offer = self.t.offers()[oid]
+        self.assertEqual(len(offer["promotions"]), 1)
+        self.assertEqual(offer["promotions"][0]["discount"]["value"], 10)
+        self.assertNotIn("discount_cap", offer["promotions"][0])
+        self.assertLess(offer["promotions"][0]["visible_through"], later["extraction_date"])
+        self.assertEqual((offer["status"], offer["bonus"], offer["expires"]), ("active", "10% back", None))
+
+        gone = self.coupon_inventory("2026-11-26", candidate=False)
+        p = self.write_inventory([gone])
+        _, report = self.apply_ok("Capital One", [p], read_date=gone["extraction_date"],
+                                  extra=("--coupons", self.coupon_evidence(gone, include=False)))
+        self.assertEqual(report["coupons"]["withdrawn"], 1)
+        self.assertNotIn("promotions", self.t.offers()[oid])
+        self.assertEqual(self.t.offers()[oid]["status"], "active")
+
+    def test_coupon_incomplete_scan_withholds_unconfirmed_terms(self):
+        _, saved, _ = self.seven_eleven_inventory()
+        first = self.coupon_inventory("2026-11-24")
+        self.apply_ok("Capital One", [self.write_inventory([first])], read_date=first["extraction_date"],
+                      extra=("--coupons", self.coupon_evidence(first)))
+        later = self.coupon_inventory("2026-11-25")
+        _, report = self.apply_ok("Capital One", [self.write_inventory([later])], read_date=later["extraction_date"],
+                                  extra=("--coupons", self.coupon_evidence(later, include=False)))
+        self.assertFalse(report["coupons"]["complete"])
+        self.assertEqual((report["coupons"]["withheld"], report["coupons"]["withdrawn"]), (1, 0))
+        self.assertEqual(self.t.offers()[saved["id"]]["promotions"], [{
+            "source": "unverified_listing", "placement": "standard", "observed_on": "2026-11-25",
+            "visible_through": "2026-12-01",
+        }])
+        partial_panel = self.coupon_inventory("2026-11-26")
+        companion = Path(self.coupon_evidence(partial_panel, value=50))
+        data = json.loads(companion.read_text())
+        del data["verified_coupon_offers"][0]["evidence"]["detail_panel"]["expanded_cashback_terms_read"]
+        companion.write_text(json.dumps(data))
+        _, report = self.apply_ok("Capital One", [self.write_inventory([partial_panel])],
+                                  read_date=partial_panel["extraction_date"], extra=("--coupons", str(companion)))
+        self.assertEqual((report["coupons"]["verified"], report["coupons"]["unverified"]), (0, 1))
+        self.assertNotIn("discount", self.t.offers()[saved["id"]]["promotions"][0])
+        next_day = self.coupon_inventory("2026-11-27", candidate=False)
+        _, report = self.apply_ok("Capital One", [self.write_inventory([next_day])], read_date=next_day["extraction_date"])
+        self.assertEqual((report["coupons"]["withheld"], report["coupons"]["withdrawn"]), (1, 0))
+        self.assertNotIn("promotions", self.t.offers()[saved["id"]])
+
+    def test_coupon_repricing_requires_evidence_of_the_new_reward(self):
+        _, saved, _ = self.seven_eleven_inventory()
+        initial = self.coupon_inventory("2026-11-24")
+        self.apply_ok("Capital One", [self.write_inventory([initial])], read_date=initial["extraction_date"],
+                      extra=("--coupons", self.coupon_evidence(initial)))
+        changed = self.coupon_inventory("2026-11-25", reward="12% back")
+        p = self.write_inventory([changed])
+        stale = dict(initial, extraction_date=changed["extraction_date"])
+        before = self.t.read("offers.json")
+        code, _, _ = self.t.run("apply", "Capital One", [p], read_date=changed["extraction_date"], decisions={},
+                                 extra=("--coupons", self.coupon_evidence(stale)))
+        self.assertEqual(code, 2)
+        self.assertEqual(self.t.read("offers.json"), before)
+        self.apply_ok("Capital One", [p], read_date=changed["extraction_date"],
+                      extra=("--coupons", self.coupon_evidence(changed, value=5)))
+        offer = self.t.offers()[saved["id"]]
+        self.assertEqual((offer["bonus"], offer["promotions"][0]["discount"]["value"]), ("12% back", 5))
+
+    def test_coupon_ambiguous_placement_or_offer_blocks_apply(self):
+        snapshot, saved, _ = self.seven_eleven_inventory()
+        row = self.coupon_inventory("2026-11-24")
+        for duplicate_placement in (True, False):
+            with self.subTest(duplicate_placement=duplicate_placement):
+                if not duplicate_placement:
+                    snapshot["offers"].append(dict(saved, id="capital-one/7-eleven-2"))
+                    self.t.write_json("offers.json", snapshot)
+                p = self.write_inventory([row, row] if duplicate_placement else [row])
+                before = self.t.read("offers.json")
+                code, output, _ = self.t.run("apply", "Capital One", [p], read_date=row["extraction_date"], decisions={},
+                                             extra=("--coupons", self.coupon_evidence(row)))
+                self.assertEqual(code, 2, output)
+                self.assertIn("does not match a unique current placement and offer reward", output)
+                self.assertEqual(self.t.read("offers.json"), before)
+
+    def test_coupon_yearless_end_is_fixed_and_conflicting_dates_are_only_freshness(self):
+        from datetime import date
+        from coupon_promotions import expiration
+        read = date(2026, 11, 23)
+        yearless = {"observations": [{"month": 11, "day": 27, "weekday": "Friday"}]}
+        expiry, through = expiration(yearless, read, None)
+        self.assertEqual((expiry["basis"], through), ("estimated", "2026-11-27"))
+        _, later = expiration(yearless, date(2027, 11, 22), {"expiry": expiry})
+        self.assertEqual(later, "2026-11-27")
+        conflicting = {"has_conflict": True, "observations": [{"iso_date": "2027-01-30"},
+                                                               {"month": 2, "day": 1, "weekday": "Monday"}]}
+        expiry, visible = expiration(conflicting, read, None)
+        self.assertEqual((expiry["basis"], expiry["date"], visible), ("conflict", None, "2026-11-29"))
 
     def test_used_offer_in_batch_stays_used(self):
         self.t.change_offers(lambda by, d: by["chase-freedom/whisker"].update(status="used", status_since="2026-10-20"))

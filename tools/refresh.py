@@ -42,6 +42,7 @@ DATA = ROOT / "site/data"
 OFFERS, CUISINES, LOCATIONS = DATA / "offers.json", DATA / "cuisines.json", DATA / "merchant-locations.json"
 sys.path.insert(0, str(ROOT / "tools"))
 from fold_phone_edits import load_pending, with_pending  # noqa: E402
+from coupon_promotions import CouponEvidenceError, reconcile as reconcile_coupons  # noqa: E402
 
 DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 FIELDS = ["id", "card", "merchant", "category", "bonus", "expires", "expires_text", "activation", "redemption", "channel",
@@ -1038,10 +1039,12 @@ def pick_read_date(rows, cols, given, column="read_date"):
 
 # ---------- the plan (report and apply share it) ----------
 
-def plan(card, paths, given_date, decisions=None, part=False, complete_parts=False):
+def plan(card, paths, given_date, decisions=None, part=False, complete_parts=False, coupons=None):
     if card not in ADAPTERS:
         raise Refused(f"unknown card {card!r}; one of: {', '.join(ADAPTERS)}")
     ad = ADAPTERS[card]()
+    if coupons and not isinstance(ad, CapitalOne):
+        raise Refused("--coupons is only supported with the Capital One inventory")
     if isinstance(ad, CapitalOne) and (part or complete_parts):
         raise Refused("refresh Capital One with the full inventory in one run, including all Added to Card evidence")
     text = OFFERS.read_text()
@@ -1439,6 +1442,7 @@ def plan(card, paths, given_date, decisions=None, part=False, complete_parts=Fal
     taken = {o["id"] for o in new["offers"]}
     insert_at = max((k for k, o in enumerate(new["offers"]) if o["card"] == card), default=len(new["offers"]) - 1) + 1
     fresh = []
+    resolved_ids = {i: sid for i, (sid, _, _) in match.items()}
     for i, inc in enumerate(incs):
         if i in match:
             continue
@@ -1486,6 +1490,7 @@ def plan(card, paths, given_date, decisions=None, part=False, complete_parts=Fal
         o["status"] = "expired" if o["expires"] and o["expires"] < read_date else "active"
         o = {k: o[k] for k in FIELDS[:3] + ["aliases"] + FIELDS[3:] if k in o}
         fresh.append(o)
+        resolved_ids[i] = nid
         out["new"].append({"id": nid, "merchant": name, "bonus": o["bonus"], "category": cat, "category_source": source,
                            "file": inc.merchant, "lines": inc.lines})
     new["offers"][insert_at:insert_at] = fresh
@@ -1739,6 +1744,25 @@ def plan(card, paths, given_date, decisions=None, part=False, complete_parts=Fal
     out["blockers"] = blockers
     out["card_warning"] = card_warning
 
+    if isinstance(ad, CapitalOne):
+        current = {o["id"]: o for o in new["offers"]}
+        resolved = {}
+        for i, sid in resolved_ids.items():
+            if sid in current:
+                inc = incs[i]
+                key = (nkey(inc.merchant), inc.tld or "", bonus_key(inc.bonus))
+                peers = ad.placement_identities(inc, idx)
+                ambiguous = [current[peer] for peer, saved in peers.items()
+                             if peer != sid and peer in current and bonus_key(saved["bonus"]) == key[2]]
+                resolved.setdefault(key, []).extend([current[sid], *ambiguous])
+        try:
+            out["coupons"], issues = reconcile_coupons(new, rows, resolved, coupons, read_date, nkey, bonus_key)
+        except CouponEvidenceError as exc:
+            raise Refused(str(exc)) from None
+        if issues:
+            out["coupon_issues"] = issues
+            blockers.append(f"{len(issues)} unresolved coupon placement(s)")
+
     # card numbers: nothing written may carry the digits of a card/account column or of the file name
     secrets = secret_digits(paths, rows, guarded, read_date)
     SECRETS.update(secrets)
@@ -1836,6 +1860,13 @@ def show(out, limit=40):
         p(f"  {'approved by the owner' if st['owner_approved'] else 'STOP, ask the owner'}: {st['text']}")
     if out["proposals"]:
         p("  decide the proposed pairs (web lookups as CLAUDE.md says; still doubtful after lookups = STOP, ask the owner)")
+    if "coupons" in out:
+        c = out["coupons"]
+        p(f"\nCoupons ({'complete scan' if c['complete'] else 'incomplete scan'}): "
+          f"{c['verified']} verified, {c['listing']} listing only, {c['unverified']} check issuer, "
+          f"{c['unresolved']} unresolved listings, {c['withdrawn']} withdrawn, {c['withheld']} withheld, "
+          f"{c['scrubbed_notes']} old notes removed")
+        lst("Coupon reconciliation", out.get("coupon_issues", []), lambda m: m)
     p("\nApply: " + ("ready" if not out["blockers"] else "blocked: " + "; ".join(out["blockers"])))
 
 
@@ -1856,8 +1887,8 @@ def run(cmd):
     return r.returncode, (r.stdout + r.stderr).strip()
 
 
-def apply(card, paths, given_date, decisions, part, complete_parts=False):
-    new, out, moves = plan(card, paths, given_date, decisions, part, complete_parts)
+def apply(card, paths, given_date, decisions, part, complete_parts=False, coupons=None):
+    new, out, moves = plan(card, paths, given_date, decisions, part, complete_parts, coupons)
     show(out)
     if out["blockers"]:
         raise Refused("not applied: " + "; ".join(out["blockers"]))
@@ -1910,6 +1941,7 @@ def main(argv=None):
     ap.add_argument("--card", required=True, choices=list(ADAPTERS))
     ap.add_argument("--read-date")
     ap.add_argument("--decisions")
+    ap.add_argument("--coupons", help="private Capital One coupon evidence JSON for this inventory")
     ap.add_argument("--template")
     ap.add_argument("--json")
     ap.add_argument("--part", action="store_true", help="save one part of a multi-part batch")
@@ -1924,14 +1956,14 @@ def main(argv=None):
                 decisions = None
             if a.part and a.complete_parts:
                 raise Refused("--part and --complete-parts do not go together")
-            _, out, _ = plan(a.card, a.csv, a.read_date, decisions, a.part, a.complete_parts)
+            _, out, _ = plan(a.card, a.csv, a.read_date, decisions, a.part, a.complete_parts, a.coupons)
             show(out)
         else:
             if not a.decisions:
                 raise Refused("apply needs --decisions (write one with report --template; an empty plan still needs card and read_date)")
             if a.part and a.complete_parts:
                 raise Refused("--part and --complete-parts do not go together")
-            out = apply(a.card, a.csv, a.read_date, json.loads(Path(a.decisions).read_text()), a.part, a.complete_parts)
+            out = apply(a.card, a.csv, a.read_date, json.loads(Path(a.decisions).read_text()), a.part, a.complete_parts, a.coupons)
         if a.json:
             Path(a.json).write_text(mask(json.dumps(out, indent=2, ensure_ascii=False)) + "\n")
         if a.template and a.mode == "report":
