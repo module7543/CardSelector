@@ -124647,12 +124647,18 @@
         "evidence": "offer_type"
       },
       "channel": "online_and_app",
+      "channel_terms": {
+        "channel": "online_and_app",
+        "domain": "7-eleven.com",
+        "method": "card_linked",
+        "read_date": "2026-11-23",
+        "note": "Order through 7Now or 7-Eleven. Physical in-store and fuel purchases are excluded."
+      },
       "spend_cap": null,
       "minimum_spend": null,
       "fine_print": null,
       "other_details": [
-        "Tile label reads 'BONUS'",
-        "Order through 7Now or 7-Eleven. Physical in-store and fuel purchases are excluded."
+        "Tile label reads 'BONUS'"
       ],
       "last_read": "2026-11-23",
       "first_seen": "2026-11-10",

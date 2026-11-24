@@ -591,6 +591,9 @@
     add("Spending cap", tidy(o.spend_cap), "spending cap");
     add("Max reward", maxReward(o), "max reward");
     add("Channel", channel(o), "channel");
+    if (o.channel_terms && o.channel_terms.conflicted) {
+      field(dl, "Channel evidence", "Check current purchase eligibility in Capital One Offers.");
+    }
     // Some cards store the minimum as a bare number ("20").
     add("Minimum spend", tidy(/^\d+(\.\d+)?$/.test(o.minimum_spend || "") ? "$" + o.minimum_spend : o.minimum_spend), "minimum spend");
     add("Fine print", tidy(o.fine_print), "fine print", "fine");
@@ -614,6 +617,7 @@
     if (o.aliases && o.aliases.length) field(dl2, "Also known as", o.aliases.join(", "));
     // Issuer tags, conditions and "Used on" stay in view; notes on how the screen was read go to Source notes.
     var shown = (o.other_details || []).filter(function (t) { return !isSourceNote(t); });
+    if (o.channel_terms && !o.channel_terms.conflicted && o.channel_terms.channel === o.channel) shown.push(o.channel_terms.note);
     var src = (o.other_details || []).filter(isSourceNote);
     if (shown.length) {
       dl2.appendChild(el("dt", null, "Other details"));

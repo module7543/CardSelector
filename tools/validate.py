@@ -62,6 +62,20 @@ for o in data["offers"]:
         if (o.get("card") != "Capital One" or not isinstance(r, dict) or set(r) != {"method", "evidence"}
                 or not isinstance(r["method"], str) or r["evidence"] not in REDEMPTION.get(r["method"], ())):
             bad("bad Capital One redemption or evidence")
+    terms = o.get("channel_terms")
+    if terms is not None:
+        if (o.get("card") != "Capital One" or not isinstance(terms, dict)
+                or not {"channel", "domain", "method", "read_date", "note"} <= set(terms)
+                or set(terms) - {"channel", "domain", "method", "read_date", "note", "conflicted"}
+                or not isinstance(terms["channel"], str) or terms["channel"] not in CHANNEL - {"none_shown"}
+                or not re.fullmatch(r"[a-z0-9][a-z0-9.-]*\.[a-z]{2,}", str(terms["domain"]))
+                or terms["method"] not in ("via_shop_link", "card_linked", "mixed")
+                or not DATE.fullmatch(str(terms["read_date"])) or str(terms["read_date"]) > str(o.get("last_read"))
+                or not isinstance(terms["note"], str) or not terms["note"].strip()
+                or ("conflicted" in terms and terms["conflicted"] is not True)):
+            bad("bad verified Capital One channel terms")
+        elif o.get("channel") != ("none_shown" if terms.get("conflicted") else terms["channel"]):
+            bad("channel must agree with the current verified terms or be unknown while they conflict")
     if o.get("status") not in STATUS: bad("bad status")
     if not isinstance(o.get("other_details"), list): bad("other_details must be a list")
     # aliases: optional extra names the search matches (earlier names, alternate spellings); omitted when none.
