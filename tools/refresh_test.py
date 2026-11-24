@@ -492,7 +492,16 @@ class RefreshTest(unittest.TestCase):
             "source": "unverified_listing", "placement": "standard", "observed_on": "2026-11-25",
             "visible_through": "2026-12-01",
         }])
-        next_day = self.coupon_inventory("2026-11-26", candidate=False)
+        partial_panel = self.coupon_inventory("2026-11-26")
+        companion = Path(self.coupon_evidence(partial_panel, value=50))
+        data = json.loads(companion.read_text())
+        del data["verified_coupon_offers"][0]["evidence"]["detail_panel"]["expanded_cashback_terms_read"]
+        companion.write_text(json.dumps(data))
+        _, report = self.apply_ok("Capital One", [self.write_inventory([partial_panel])],
+                                  read_date=partial_panel["extraction_date"], extra=("--coupons", str(companion)))
+        self.assertEqual((report["coupons"]["verified"], report["coupons"]["unverified"]), (0, 1))
+        self.assertNotIn("discount", self.t.offers()[saved["id"]]["promotions"][0])
+        next_day = self.coupon_inventory("2026-11-27", candidate=False)
         _, report = self.apply_ok("Capital One", [self.write_inventory([next_day])], read_date=next_day["extraction_date"])
         self.assertEqual((report["coupons"]["withheld"], report["coupons"]["withdrawn"]), (1, 0))
         self.assertNotIn("promotions", self.t.offers()[saved["id"]])

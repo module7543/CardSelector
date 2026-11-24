@@ -17,7 +17,7 @@ FRESH_DAYS = 7
 ESTIMATE_WINDOW = 60
 
 # Generated listing notes can contain codes even when the browser could not reveal one in the panel.
-CODE_COPY = re.compile(r"\b(?:code|coupon code|promo code)\b|\b(?:use|enter|apply)\s+[A-Z0-9_-]{4,}\b", re.I)
+CODE_COPY = re.compile(r"\bcode\b|\b(?:use|enter|apply)\s+[A-Z0-9_-]{4,}\b", re.I)
 UNSAFE_TEXT = re.compile(r"https?://|www\.|[\x00-\x1f]|[\u200b-\u200f\u202a-\u202e\u2060-\u206f]", re.I)
 
 
@@ -87,10 +87,10 @@ def find_records(path, read_date):
         if any(record["evidence_status"] != "verified_detail_panel" for record in panels) or any(
                 record["evidence_status"] != "listing_only" for record in listings):
             raise CouponEvidenceError("coupon evidence status does not match its record array")
-        scan = data["source"]["inventory_scan"]
-        complete = (scan["available_feed_exhausted"] is True and scan.get("coupon_scan_complete", True) is True
+        scan = data["source"].get("inventory_scan") or {}
+        complete = (scan.get("available_feed_exhausted") is True and scan.get("coupon_scan_complete", True) is True
                     and data["source"].get("surface") == "Unfiltered main offer feed")
-        grid = scan["loaded_grid_entries"]
+        grid = scan.get("loaded_grid_entries")
         return panels + listings, complete, grid
     except (OSError, ValueError, KeyError, TypeError, AttributeError) as exc:
         if isinstance(exc, CouponEvidenceError):
@@ -258,10 +258,11 @@ def reconcile(data, rows, resolved, path, read_date, nkey, bonus_key):
                     or (not panel and seen[0][1])):
                 issues.append(f"coupon record {number} does not match a unique current placement and offer reward")
                 continue
+            detail = evidence.get("detail_panel") or {}
             if panel and not (
-                    evidence["detail_panel"]["coupon_details_read"] is True
-                    and evidence["detail_panel"]["expanded_cashback_terms_read"] is True
-                    and bonus_key(record["cashback"]["text_exact"]) == key[2]):
+                    detail.get("coupon_details_read") is True
+                    and detail.get("expanded_cashback_terms_read") is True
+                    and bonus_key(record["cashback"].get("text_exact")) == key[2]):
                 # Keep the listing reference, and withhold unconfirmed terms.
                 continue
             used.add(key)
