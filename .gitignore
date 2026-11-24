@@ -3,6 +3,8 @@ screenshots/
 # Issuer CSVs (offer reads) are never committed; the only CSVs in the repo are the test fixtures.
 *.csv
 !tools/fixtures/*.csv
+# Private coupon-panel exports use the companion filename and stay outside the repo.
+capital_one_exclusive_coupons_*.json
 # Written by the deploy workflows only (tools/write_version.py); never committed.
 site/version.json
 # Python bytecode caches.

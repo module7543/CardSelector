@@ -10540,13 +10540,43 @@
       "minimum_spend": null,
       "fine_print": null,
       "other_details": [
-        "Tile label reads 'EXCLUSIVE COUPON'",
         "Promo text reads \"Free Assembly & Delivery for Members Free Assembly & Delivery for Ace Rewards Members with purchase of Grills and Accessories $399 & Up\""
       ],
       "last_read": "2026-11-23",
       "first_seen": "2026-10-18",
       "status": "active",
-      "status_since": "2026-10-18"
+      "status_since": "2026-10-18",
+      "promotions": [
+        {
+          "source": "verified_panel",
+          "placement": "standard",
+          "observed_on": "2026-11-23",
+          "discount": {
+            "kind": "percentage_off",
+            "value": 10,
+            "up_to": false
+          },
+          "expiry": {
+            "basis": "estimated",
+            "date": "2027-01-01",
+            "observations": [
+              "Friday, Jan 1 (year unstated)"
+            ]
+          },
+          "visible_through": "2027-01-01",
+          "headline_threshold": 75,
+          "eligibility": [
+            "Select products."
+          ],
+          "exclusions": [
+            "Generators.",
+            "Gift cards.",
+            "Delivery and assembly costs."
+          ],
+          "stacking": "eligible_subtotal",
+          "same_session_24h": true
+        }
+      ]
     },
     {
       "id": "capital-one/booking-com",
@@ -11202,7 +11232,6 @@
       "fine_print": null,
       "other_details": [
         "Tile label reads 'BONUS'",
-        "Promo text reads \"Get an All About Clean Rinse-Off Cleanser w/ $105. Use code FALLGIFT\"",
         "2 tiles listed"
       ],
       "last_read": "2026-11-23",
@@ -11433,13 +11462,37 @@
       "minimum_spend": null,
       "fine_print": null,
       "other_details": [
-        "Tile label reads 'BONUS'",
-        "Tile label reads 'EXCLUSIVE COUPON'"
+        "Tile label reads 'BONUS'"
       ],
       "last_read": "2026-11-23",
       "first_seen": "2026-10-18",
       "status": "active",
-      "status_since": "2026-10-18"
+      "status_since": "2026-10-18",
+      "promotions": [
+        {
+          "source": "verified_panel",
+          "placement": "standard",
+          "observed_on": "2026-11-23",
+          "discount": {
+            "kind": "percentage_off",
+            "value": 30,
+            "up_to": false
+          },
+          "expiry": {
+            "basis": "estimated",
+            "date": "2027-01-01",
+            "observations": [
+              "Friday, Jan 1 (year unstated)"
+            ]
+          },
+          "visible_through": "2027-01-01",
+          "exclusions": [
+            "Purchase or redemption of gift cards and e-gift cards."
+          ],
+          "stacking": "eligible_subtotal",
+          "same_session_24h": true
+        }
+      ]
     },
     {
       "id": "capital-one/disney-store",
@@ -11460,7 +11513,6 @@
       "fine_print": null,
       "other_details": [
         "Tile label reads 'BONUS'",
-        "Promo text reads \"Limited Time Offer! Take 25% Off Orders of $125+ & Free Shipping - code SAVEMORE\"",
         "2 tiles listed"
       ],
       "last_read": "2026-11-23",
@@ -11569,7 +11621,6 @@
       "fine_print": null,
       "other_details": [
         "Tile label reads 'BONUS'",
-        "Promo text reads \"Save 10% off eyewear & sunglasses. Use code CAPITALONE for 10% off eyewear and sunglasses at Zenni Optical!\"",
         "Top-offer tile shows a 'Get This Offer' button"
       ],
       "last_read": "2026-11-23",
@@ -11662,8 +11713,7 @@
       "minimum_spend": "20",
       "fine_print": null,
       "other_details": [
-        "Tile label reads 'BONUS'",
-        "Promo text reads \"Extra 20% Off on Festive Fits, Gifts & More with code FESTIVE20\""
+        "Tile label reads 'BONUS'"
       ],
       "last_read": "2026-10-27",
       "first_seen": "2026-10-18",
@@ -11861,14 +11911,49 @@
       "minimum_spend": null,
       "fine_print": null,
       "other_details": [
-        "Tile label reads 'BONUS'",
-        "Promo text reads \"Save up to 20% with code CAPONE20. Save an extra 20% off select items at JCPenney with code CAPONE20. Exclusions apply.\"",
-        "Tile label reads 'EXCLUSIVE COUPON'"
+        "Tile label reads 'BONUS'"
       ],
       "last_read": "2026-11-23",
       "first_seen": "2026-10-18",
       "status": "active",
-      "status_since": "2026-10-18"
+      "status_since": "2026-10-18",
+      "promotions": [
+        {
+          "source": "verified_panel",
+          "placement": "standard",
+          "observed_on": "2026-11-23",
+          "discount": {
+            "kind": "percentage_off",
+            "value": 20,
+            "up_to": false,
+            "tiers": [
+              10
+            ]
+          },
+          "expiry": {
+            "basis": "conflict",
+            "date": null,
+            "observations": [
+              "Monday, Feb 1 (year unstated)",
+              "2027-01-30"
+            ]
+          },
+          "visible_through": "2026-11-29",
+          "eligibility": [
+            "Extra 20% off select original, regular and sale-priced apparel, shoes, accessories, fine jewelry, bedding, bath and curtains.",
+            "Extra 10% off select home, furniture, mattresses, watches, salon products, JCPenney Beauty, Clearance, Deal Edit, Limited-Time Deals and Specials."
+          ],
+          "exclusions": [
+            "Taxes and shipping charges."
+          ],
+          "conditions": [
+            "The merchant coupon copy says in store or at jcp.com. The affiliate cashback terms require the online Capital One Offers route."
+          ],
+          "stacking": "eligibility_overlap",
+          "same_session_24h": true,
+          "cashback_exclusions": "Review exclusions: Not eligible on purchases of televisions, game consoles, smart home devices, electronic accessories, appliances, furniture, mattresses, and the purchase or redemption of gift cards. Use of promotional codes not provided by Capital One may invalidate your offer."
+        }
+      ]
     },
     {
       "id": "capital-one/hsn",
@@ -12909,9 +12994,7 @@
       "spend_cap": null,
       "minimum_spend": null,
       "fine_print": null,
-      "other_details": [
-        "Promo text reads \"$15 off of your first Uber Eats order! Use code caponeeats6j4h for $15 off your first order when you spend at least $20! Terms apply.\""
-      ],
+      "other_details": [],
       "last_read": "2026-11-23",
       "first_seen": "2026-10-18",
       "status": "active",
@@ -13432,8 +13515,7 @@
       "minimum_spend": null,
       "fine_print": null,
       "other_details": [
-        "Tile label reads 'BONUS'",
-        "Promo text reads \"Up to 50% Off with code MBMEM50. Plus Free Economy Shipping on $79\""
+        "Tile label reads 'BONUS'"
       ],
       "last_read": "2026-11-23",
       "first_seen": "2026-10-18",
@@ -13665,9 +13747,7 @@
       "spend_cap": null,
       "minimum_spend": null,
       "fine_print": null,
-      "other_details": [
-        "Promo text reads \"Choose 1 Skincare trial size with $30 merchandise purchase. Use code HISKINLOVE.\""
-      ],
+      "other_details": [],
       "last_read": "2026-11-23",
       "first_seen": "2026-10-18",
       "status": "active",
@@ -14003,9 +14083,7 @@
       "spend_cap": null,
       "minimum_spend": null,
       "fine_print": null,
-      "other_details": [
-        "Tile label reads 'EXCLUSIVE COUPON'"
-      ],
+      "other_details": [],
       "last_read": "2026-11-23",
       "first_seen": "2026-10-18",
       "status": "active",
@@ -14771,9 +14849,7 @@
       "spend_cap": null,
       "minimum_spend": null,
       "fine_print": null,
-      "other_details": [
-        "Promo text reads \"Get $20 off today! Get $20 off the Bark Phone or Bark Phone Pro with code: CP20phone\""
-      ],
+      "other_details": [],
       "last_read": "2026-11-23",
       "first_seen": "2026-10-18",
       "status": "active",
@@ -15085,13 +15161,40 @@
       "minimum_spend": null,
       "fine_print": null,
       "other_details": [
-        "Tile label reads 'BONUS'",
-        "Tile label reads 'EXCLUSIVE COUPON'"
+        "Tile label reads 'BONUS'"
       ],
       "last_read": "2026-11-23",
       "first_seen": "2026-10-18",
       "status": "active",
-      "status_since": "2026-10-18"
+      "status_since": "2026-10-18",
+      "promotions": [
+        {
+          "source": "verified_panel",
+          "placement": "standard",
+          "observed_on": "2026-11-23",
+          "discount": {
+            "kind": "percentage_off",
+            "value": 22,
+            "up_to": false
+          },
+          "expiry": {
+            "basis": "conflict",
+            "date": null,
+            "observations": [
+              "Friday, Jan 1 (year unstated)",
+              "End of July 2027"
+            ]
+          },
+          "visible_through": "2026-11-29",
+          "conditions": [
+            "Online, one-time use."
+          ],
+          "stacking": "check_issuer",
+          "same_session_24h": true,
+          "cashback_exclusions": "Review exclusions: Use of promotional codes not provided by Capital One may invalidate your offer.",
+          "reveal_at_issuer": true
+        }
+      ]
     },
     {
       "id": "capital-one/cosori",
@@ -15662,13 +15765,36 @@
       "spend_cap": null,
       "minimum_spend": null,
       "fine_print": null,
-      "other_details": [
-        "Tile label reads 'EXCLUSIVE COUPON'"
-      ],
+      "other_details": [],
       "last_read": "2026-11-23",
       "first_seen": "2026-10-18",
       "status": "active",
-      "status_since": "2026-10-18"
+      "status_since": "2026-10-18",
+      "promotions": [
+        {
+          "source": "verified_panel",
+          "placement": "standard",
+          "observed_on": "2026-11-23",
+          "discount": {
+            "kind": "percentage_off",
+            "value": 25,
+            "up_to": false
+          },
+          "expiry": {
+            "basis": "estimated",
+            "date": "2027-01-01",
+            "observations": [
+              "Friday, Jan 1 (year unstated)"
+            ]
+          },
+          "visible_through": "2027-01-01",
+          "exclusions": [
+            "Gift cards."
+          ],
+          "stacking": "eligible_subtotal",
+          "same_session_24h": true
+        }
+      ]
     },
     {
       "id": "capital-one/ftd",
@@ -16893,7 +17019,6 @@
       "minimum_spend": null,
       "fine_print": null,
       "other_details": [
-        "Promo text reads \"20% Off New Prescription Skin, Hair, HRT & Longevity Treatments with Code: ONE20\"",
         "2 tiles listed"
       ],
       "last_read": "2026-11-23",
@@ -17649,7 +17774,6 @@
       "fine_print": null,
       "other_details": [
         "Tile label reads 'BONUS'",
-        "Promo text reads \"Use code CAPITALONE15 to shop 15% off Terms apply. Discount excludes sale items, pre-orders & gift cards\"",
         "2 tiles listed"
       ],
       "last_read": "2026-11-23",
@@ -17722,13 +17846,48 @@
       "spend_cap": null,
       "minimum_spend": null,
       "fine_print": null,
-      "other_details": [
-        "Tile label reads 'EXCLUSIVE COUPON'"
-      ],
+      "other_details": [],
       "last_read": "2026-11-23",
       "first_seen": "2026-10-18",
       "status": "active",
-      "status_since": "2026-10-18"
+      "status_since": "2026-10-18",
+      "promotions": [
+        {
+          "source": "verified_panel",
+          "placement": "standard",
+          "observed_on": "2026-11-23",
+          "discount": {
+            "kind": "percentage_off",
+            "value": 15,
+            "up_to": false
+          },
+          "expiry": {
+            "basis": "estimated",
+            "date": "2026-12-01",
+            "observations": [
+              "Tuesday, Dec 1 (year unstated)"
+            ]
+          },
+          "visible_through": "2026-12-01",
+          "discount_cap": 500,
+          "minimum_unspecified": true,
+          "exclusions": [
+            "Orders deemed to be for resale.",
+            "Gift cards and gift certificates.",
+            "Some brands, products and categories may be excluded."
+          ],
+          "conditions": [
+            "One use per customer and intended recipient only.",
+            "Quantity limits and product availability may apply.",
+            "Promo codes cannot be redeemed for cash.",
+            "Return refunds use the net amount paid after allocation of savings.",
+            "Additional restrictions may appear on individual product pages."
+          ],
+          "stacking": "eligible_subtotal",
+          "same_session_24h": true,
+          "reveal_at_issuer": true
+        }
+      ]
     },
     {
       "id": "capital-one/goat",
@@ -18799,13 +18958,39 @@
       "spend_cap": null,
       "minimum_spend": null,
       "fine_print": null,
-      "other_details": [
-        "Tile label reads 'EXCLUSIVE COUPON'"
-      ],
+      "other_details": [],
       "last_read": "2026-11-23",
       "first_seen": "2026-10-18",
       "status": "active",
-      "status_since": "2026-10-18"
+      "status_since": "2026-10-18",
+      "promotions": [
+        {
+          "source": "verified_panel",
+          "placement": "standard",
+          "observed_on": "2026-11-23",
+          "discount": {
+            "kind": "percentage_off",
+            "value": 15,
+            "up_to": false
+          },
+          "expiry": {
+            "basis": "estimated",
+            "date": "2027-01-01",
+            "observations": [
+              "Friday, Jan 1 (year unstated)"
+            ]
+          },
+          "visible_through": "2027-01-01",
+          "eligibility": [
+            "Advertised sitewide."
+          ],
+          "exclusions": [
+            "Gift-card purchases or redemptions."
+          ],
+          "stacking": "eligible_subtotal",
+          "same_session_24h": true
+        }
+      ]
     },
     {
       "id": "capital-one/asos",
@@ -19390,13 +19575,41 @@
       "fine_print": null,
       "other_details": [
         "Tile label reads 'BONUS'",
-        "Tile label reads 'EXCLUSIVE COUPON'",
         "2 tiles listed"
       ],
       "last_read": "2026-11-23",
       "first_seen": "2026-10-18",
       "status": "active",
-      "status_since": "2026-10-18"
+      "status_since": "2026-10-18",
+      "promotions": [
+        {
+          "source": "verified_panel",
+          "placement": "standard",
+          "observed_on": "2026-11-23",
+          "discount": {
+            "kind": "percentage_off",
+            "value": 20,
+            "up_to": false
+          },
+          "expiry": {
+            "basis": "estimated",
+            "date": "2027-01-01",
+            "observations": [
+              "Friday, Jan 1 (year unstated)"
+            ]
+          },
+          "visible_through": "2027-01-01",
+          "exclusions": [
+            "Free trials.",
+            "Gift cards."
+          ],
+          "conditions": [
+            "Additional terms and exclusions apply."
+          ],
+          "stacking": "eligible_subtotal",
+          "same_session_24h": true
+        }
+      ]
     },
     {
       "id": "capital-one/dermstreet",
@@ -20289,14 +20502,63 @@
       "fine_print": null,
       "other_details": [
         "Tile label reads 'BONUS'",
-        "3 tiles listed",
-        "Tile label reads 'EXCLUSIVE COUPON'",
-        "Promo text reads \"Cyber Week! Up to 50% Off Sitewide Ray-Ban.com. Use Code: CYBER50\""
+        "3 tiles listed"
       ],
       "last_read": "2026-11-23",
       "first_seen": "2026-10-18",
       "status": "active",
-      "status_since": "2026-10-18"
+      "status_since": "2026-10-18",
+      "promotions": [
+        {
+          "source": "verified_panel",
+          "placement": "standard",
+          "observed_on": "2026-11-23",
+          "discount": {
+            "kind": "percentage_off",
+            "value": 5,
+            "up_to": false
+          },
+          "expiry": {
+            "basis": "estimated",
+            "date": "2026-12-01",
+            "observations": [
+              "Tuesday, Dec 1 (year unstated)"
+            ]
+          },
+          "visible_through": "2026-12-01",
+          "eligibility": [
+            "Extra 5% on qualifying products, plus free shipping."
+          ],
+          "exclusions": [
+            "Gen 3 models.",
+            "Standard non-Meta Ray-Ban products.",
+            "Gift cards."
+          ],
+          "conditions": [
+            "Online, one-time use."
+          ],
+          "stacking": "check_issuer",
+          "same_session_24h": true,
+          "cashback_exclusions": "Review exclusions: Not eligible for purchases or redemption of gift cards; not eligible for prescription orders which are canceled due to expired prescription, or because prescription was not provided. Use of promotional codes not provided by Capital One may invalidate your offer.",
+          "reveal_at_issuer": true
+        },
+        {
+          "source": "listing_only",
+          "placement": "hero",
+          "observed_on": "2026-11-23",
+          "discount": {
+            "kind": "percentage_off",
+            "value": 50,
+            "up_to": true
+          },
+          "expiry": {
+            "basis": "unknown",
+            "date": null,
+            "observations": []
+          },
+          "visible_through": "2026-11-29"
+        }
+      ]
     },
     {
       "id": "capital-one/quill",
@@ -20877,13 +21139,40 @@
       "minimum_spend": null,
       "fine_print": null,
       "other_details": [
-        "Tile label reads 'BONUS'",
-        "Tile label reads 'EXCLUSIVE COUPON'"
+        "Tile label reads 'BONUS'"
       ],
       "last_read": "2026-11-23",
       "first_seen": "2026-10-18",
       "status": "active",
-      "status_since": "2026-10-18"
+      "status_since": "2026-10-18",
+      "promotions": [
+        {
+          "source": "verified_panel",
+          "placement": "standard",
+          "observed_on": "2026-11-23",
+          "discount": {
+            "kind": "percentage_off",
+            "value": 15,
+            "up_to": false
+          },
+          "expiry": {
+            "basis": "estimated",
+            "date": "2027-01-01",
+            "observations": [
+              "Friday, Jan 1 (year unstated)"
+            ]
+          },
+          "visible_through": "2027-01-01",
+          "exclusions": [
+            "Gift-card purchases or redemptions."
+          ],
+          "conditions": [
+            "Additional exclusions apply."
+          ],
+          "stacking": "eligible_subtotal",
+          "same_session_24h": true
+        }
+      ]
     },
     {
       "id": "capital-one/azuna",
@@ -21197,8 +21486,7 @@
       "minimum_spend": null,
       "fine_print": null,
       "other_details": [
-        "Tile label reads 'BONUS'",
-        "Tile label reads 'EXCLUSIVE COUPON'"
+        "Tile label reads 'BONUS'"
       ],
       "last_read": "2026-11-23",
       "first_seen": "2026-10-18",
@@ -25363,13 +25651,42 @@
       "spend_cap": null,
       "minimum_spend": null,
       "fine_print": null,
-      "other_details": [
-        "Tile label reads 'EXCLUSIVE COUPON'"
-      ],
+      "other_details": [],
       "last_read": "2026-11-23",
       "first_seen": "2026-10-18",
       "status": "active",
-      "status_since": "2026-10-18"
+      "status_since": "2026-10-18",
+      "promotions": [
+        {
+          "source": "verified_panel",
+          "placement": "standard",
+          "observed_on": "2026-11-23",
+          "discount": {
+            "kind": "percentage_off",
+            "value": 15,
+            "up_to": false
+          },
+          "expiry": {
+            "basis": "estimated",
+            "date": "2027-01-01",
+            "observations": [
+              "Friday, Jan 1 (year unstated)"
+            ]
+          },
+          "visible_through": "2027-01-01",
+          "exclusions": [
+            "Charitable donations.",
+            "Gift-card purchases or redemptions.",
+            "Sponsored riders and others already receiving a MotoSport discount."
+          ],
+          "conditions": [
+            "Online, one-time use."
+          ],
+          "stacking": "eligible_subtotal",
+          "same_session_24h": true,
+          "reveal_at_issuer": true
+        }
+      ]
     },
     {
       "id": "capital-one/ecco",
@@ -25797,13 +26114,40 @@
       "minimum_spend": null,
       "fine_print": null,
       "other_details": [
-        "Tile label reads 'BONUS'",
-        "Tile label reads 'EXCLUSIVE COUPON'"
+        "Tile label reads 'BONUS'"
       ],
       "last_read": "2026-11-23",
       "first_seen": "2026-10-18",
       "status": "active",
-      "status_since": "2026-10-18"
+      "status_since": "2026-10-18",
+      "promotions": [
+        {
+          "source": "verified_panel",
+          "placement": "standard",
+          "observed_on": "2026-11-23",
+          "discount": {
+            "kind": "percentage_off",
+            "value": 20,
+            "up_to": false
+          },
+          "expiry": {
+            "basis": "estimated",
+            "date": "2027-01-01",
+            "observations": [
+              "Friday, Jan 1 (year unstated)"
+            ]
+          },
+          "visible_through": "2027-01-01",
+          "eligibility": [
+            "Fashion and Color Bar."
+          ],
+          "exclusions": [
+            "Gift card purchases."
+          ],
+          "stacking": "eligible_subtotal",
+          "same_session_24h": true
+        }
+      ]
     },
     {
       "id": "capital-one/alibris",
@@ -25970,13 +26314,37 @@
       "minimum_spend": null,
       "fine_print": null,
       "other_details": [
-        "Tile label reads 'BONUS'",
-        "Tile label reads 'EXCLUSIVE COUPON'"
+        "Tile label reads 'BONUS'"
       ],
       "last_read": "2026-11-23",
       "first_seen": "2026-10-18",
       "status": "active",
-      "status_since": "2026-10-18"
+      "status_since": "2026-10-18",
+      "promotions": [
+        {
+          "source": "verified_panel",
+          "placement": "standard",
+          "observed_on": "2026-11-23",
+          "discount": {
+            "kind": "percentage_off",
+            "value": 30,
+            "up_to": false
+          },
+          "expiry": {
+            "basis": "estimated",
+            "date": "2027-01-01",
+            "observations": [
+              "Friday, Jan 1 (year unstated)"
+            ]
+          },
+          "visible_through": "2027-01-01",
+          "exclusions": [
+            "Gift cards."
+          ],
+          "stacking": "eligible_subtotal",
+          "same_session_24h": true
+        }
+      ]
     },
     {
       "id": "capital-one/prettylitter",
@@ -27383,13 +27751,45 @@
       "minimum_spend": null,
       "fine_print": null,
       "other_details": [
-        "Tile label reads 'EXCLUSIVE COUPON'",
         "2 tiles listed"
       ],
       "last_read": "2026-11-23",
       "first_seen": "2026-10-18",
       "status": "active",
-      "status_since": "2026-10-18"
+      "status_since": "2026-10-18",
+      "promotions": [
+        {
+          "source": "verified_panel",
+          "placement": "standard",
+          "observed_on": "2026-11-23",
+          "discount": {
+            "kind": "fixed_dollar_off",
+            "value": 20,
+            "up_to": false
+          },
+          "expiry": {
+            "basis": "estimated",
+            "date": "2027-01-01",
+            "observations": [
+              "Friday, Jan 1 (year unstated)"
+            ]
+          },
+          "visible_through": "2027-01-01",
+          "exclusions": [
+            "Mystery Boxes.",
+            "DigitalSets.",
+            "Direct-to-Film items.",
+            "Gift cards."
+          ],
+          "conditions": [
+            "Online, one-time use, non-transferable and no cash value."
+          ],
+          "stacking": "check_issuer",
+          "same_session_24h": true,
+          "cashback_exclusions": "Review exclusions: Not eligible for Mystery Boxes, DigitalSets, Direct-to-Film items or purchases of gift cards. Use of promotional codes not provided by Capital One may invalidate your offer.",
+          "reveal_at_issuer": true
+        }
+      ]
     },
     {
       "id": "capital-one/paka",
@@ -28293,13 +28693,36 @@
       "spend_cap": null,
       "minimum_spend": null,
       "fine_print": null,
-      "other_details": [
-        "Tile label reads 'EXCLUSIVE COUPON'"
-      ],
+      "other_details": [],
       "last_read": "2026-11-23",
       "first_seen": "2026-10-18",
       "status": "active",
-      "status_since": "2026-10-18"
+      "status_since": "2026-10-18",
+      "promotions": [
+        {
+          "source": "verified_panel",
+          "placement": "standard",
+          "observed_on": "2026-11-23",
+          "discount": {
+            "kind": "percentage_off",
+            "value": 20,
+            "up_to": false
+          },
+          "expiry": {
+            "basis": "estimated",
+            "date": "2027-01-01",
+            "observations": [
+              "Friday, Jan 1 (year unstated)"
+            ]
+          },
+          "visible_through": "2027-01-01",
+          "exclusions": [
+            "Gift cards."
+          ],
+          "stacking": "eligible_subtotal",
+          "same_session_24h": true
+        }
+      ]
     },
     {
       "id": "capital-one/godiva",
@@ -28839,13 +29262,36 @@
       "spend_cap": null,
       "minimum_spend": null,
       "fine_print": null,
-      "other_details": [
-        "Tile label reads 'EXCLUSIVE COUPON'"
-      ],
+      "other_details": [],
       "last_read": "2026-11-23",
       "first_seen": "2026-10-18",
       "status": "active",
-      "status_since": "2026-10-18"
+      "status_since": "2026-10-18",
+      "promotions": [
+        {
+          "source": "verified_panel",
+          "placement": "standard",
+          "observed_on": "2026-11-23",
+          "discount": {
+            "kind": "percentage_off",
+            "value": 25,
+            "up_to": false
+          },
+          "expiry": {
+            "basis": "estimated",
+            "date": "2026-11-27",
+            "observations": [
+              "Friday, Nov 27 (year unstated)"
+            ]
+          },
+          "visible_through": "2026-11-27",
+          "conditions": [
+            "Terms may apply."
+          ],
+          "stacking": "eligible_subtotal",
+          "same_session_24h": true
+        }
+      ]
     },
     {
       "id": "capital-one/josie-maran",
@@ -31699,13 +32145,45 @@
       "spend_cap": null,
       "minimum_spend": null,
       "fine_print": null,
-      "other_details": [
-        "Tile label reads 'EXCLUSIVE COUPON'"
-      ],
+      "other_details": [],
       "last_read": "2026-11-23",
       "first_seen": "2026-10-18",
       "status": "active",
-      "status_since": "2026-10-18"
+      "status_since": "2026-10-18",
+      "promotions": [
+        {
+          "source": "verified_panel",
+          "placement": "standard",
+          "observed_on": "2026-11-23",
+          "discount": {
+            "kind": "percentage_off",
+            "value": 30,
+            "up_to": false
+          },
+          "expiry": {
+            "basis": "estimated",
+            "date": "2026-11-30",
+            "observations": [
+              "Monday, Nov 30 (year unstated)"
+            ]
+          },
+          "visible_through": "2026-11-30",
+          "exclusions": [
+            "eufy Robot Vacuum Omni S2 Pro.",
+            "eufy Cam S4.",
+            "Wearable Breast Pump S2 Pro.",
+            "Baby accessories.",
+            "Edge 5.0 line, including Solo Cam E50, eufy Cam E52, Tracklight S1, Doorbell S4 and Window Cam E10.",
+            "Virtual products such as gift cards and membership cards."
+          ],
+          "conditions": [
+            "Online, one-time use."
+          ],
+          "stacking": "eligible_subtotal",
+          "same_session_24h": true,
+          "reveal_at_issuer": true
+        }
+      ]
     },
     {
       "id": "capital-one/tata-harper",
@@ -33710,9 +34188,7 @@
       "spend_cap": null,
       "minimum_spend": null,
       "fine_print": null,
-      "other_details": [
-        "Tile label reads 'EXCLUSIVE COUPON'"
-      ],
+      "other_details": [],
       "last_read": "2026-11-23",
       "first_seen": "2026-10-18",
       "status": "active",
@@ -34802,9 +35278,7 @@
       "spend_cap": null,
       "minimum_spend": null,
       "fine_print": null,
-      "other_details": [
-        "Promo text reads \"Earn up to 5000 reward points with code EZ5K!\""
-      ],
+      "other_details": [],
       "last_read": "2026-11-23",
       "first_seen": "2026-10-18",
       "status": "active",
@@ -35896,13 +36370,44 @@
       "minimum_spend": null,
       "fine_print": null,
       "other_details": [
-        "Tile label reads 'NEW OFFER'",
-        "Tile label reads 'EXCLUSIVE COUPON'"
+        "Tile label reads 'NEW OFFER'"
       ],
       "last_read": "2026-11-23",
       "first_seen": "2026-10-18",
       "status": "active",
-      "status_since": "2026-10-18"
+      "status_since": "2026-10-18",
+      "promotions": [
+        {
+          "source": "verified_panel",
+          "placement": "standard",
+          "observed_on": "2026-11-23",
+          "discount": {
+            "kind": "percentage_off",
+            "value": 5,
+            "up_to": false
+          },
+          "expiry": {
+            "basis": "estimated",
+            "date": "2027-01-01",
+            "observations": [
+              "Friday, Jan 1 (year unstated)"
+            ]
+          },
+          "visible_through": "2027-01-01",
+          "eligibility": [
+            "U.S. orders on rest.com."
+          ],
+          "exclusions": [
+            "Gift cards.",
+            "Past orders."
+          ],
+          "conditions": [
+            "Limited number of uses. May be changed, ended or withdrawn early."
+          ],
+          "stacking": "eligible_subtotal",
+          "same_session_24h": true
+        }
+      ]
     },
     {
       "id": "capital-one/nisolo",
@@ -36236,13 +36741,50 @@
       "minimum_spend": null,
       "fine_print": null,
       "other_details": [
-        "Tile label reads 'BONUS'",
-        "Tile label reads 'EXCLUSIVE COUPON'"
+        "Tile label reads 'BONUS'"
       ],
       "last_read": "2026-11-23",
       "first_seen": "2026-10-18",
       "status": "active",
-      "status_since": "2026-10-18"
+      "status_since": "2026-10-18",
+      "promotions": [
+        {
+          "source": "verified_panel",
+          "placement": "standard",
+          "observed_on": "2026-11-23",
+          "discount": {
+            "kind": "percentage_off",
+            "value": 15,
+            "up_to": false
+          },
+          "expiry": {
+            "basis": "estimated",
+            "date": "2027-01-01",
+            "observations": [
+              "Friday, Jan 1 (year unstated)"
+            ]
+          },
+          "visible_through": "2027-01-01",
+          "eligibility": [
+            "Merchant coupon copy specifies bundles."
+          ],
+          "exclusions": [
+            "P.band.",
+            "Body Bands Set.",
+            "Booty Bands Set.",
+            "Training Gloves.",
+            "Heavy Ankle Band.",
+            "Third-party brands.",
+            "Gift cards."
+          ],
+          "conditions": [
+            "The coupon panel repeats the requirement for a first paid subscription, with an active subscription and payment validated after the free trial."
+          ],
+          "stacking": "eligibility_overlap",
+          "same_session_24h": true,
+          "cashback_exclusions": "Review exclusions: Not eligible for P.band, Body Bands Set, Booty Bands Set, Training Gloves, and Heavy Ankle Band. Not eligible for Third-Party Brands. Only eligible on first paid subscription. Active subscription and payment validation required after the free trial period. Not eligible for purchases of gift cards. Use of promotional codes not provided by Capital One may invalidate your offer."
+        }
+      ]
     },
     {
       "id": "capital-one/bogner",
@@ -37285,8 +37827,7 @@
       "fine_print": null,
       "other_details": [
         "Tile label reads 'BONUS'",
-        "2 tiles listed",
-        "Promo text reads \"Explore top fall styles and get $15 off $150 with code JDS15\""
+        "2 tiles listed"
       ],
       "last_read": "2026-11-23",
       "first_seen": "2026-10-18",
@@ -38333,13 +38874,43 @@
       "minimum_spend": null,
       "fine_print": null,
       "other_details": [
-        "Tile label reads 'BONUS'",
-        "Tile label reads 'EXCLUSIVE COUPON'"
+        "Tile label reads 'BONUS'"
       ],
       "last_read": "2026-11-23",
       "first_seen": "2026-10-18",
       "status": "active",
-      "status_since": "2026-10-18"
+      "status_since": "2026-10-18",
+      "promotions": [
+        {
+          "source": "verified_panel",
+          "placement": "standard",
+          "observed_on": "2026-11-23",
+          "discount": {
+            "kind": "percentage_off",
+            "value": 20,
+            "up_to": false
+          },
+          "expiry": {
+            "basis": "estimated",
+            "date": "2027-01-01",
+            "observations": [
+              "Friday, Jan 1 (year unstated)"
+            ]
+          },
+          "visible_through": "2027-01-01",
+          "eligibility": [
+            "Infrared Sauna Blankets.",
+            "PEMF Pro Mat.",
+            "PEMF Go Mats."
+          ],
+          "conditions": [
+            "Once per customer."
+          ],
+          "stacking": "eligibility_overlap",
+          "same_session_24h": true,
+          "cashback_exclusions": "Review exclusions: Not eligible for Sauna Products. Use of promotional codes not provided by Capital One may invalidate your offer."
+        }
+      ]
     },
     {
       "id": "capital-one/wild-oak-boutique",
@@ -39161,8 +39732,7 @@
       "minimum_spend": null,
       "fine_print": null,
       "other_details": [
-        "Tile label reads 'BONUS'",
-        "Promo text reads \"Exclusive! Get Up to 40% off with code UP40\""
+        "Tile label reads 'BONUS'"
       ],
       "last_read": "2026-11-23",
       "first_seen": "2026-10-18",
@@ -39770,13 +40340,38 @@
       "spend_cap": null,
       "minimum_spend": null,
       "fine_print": null,
-      "other_details": [
-        "Tile label reads 'EXCLUSIVE COUPON'"
-      ],
+      "other_details": [],
       "last_read": "2026-11-23",
       "first_seen": "2026-10-18",
       "status": "active",
-      "status_since": "2026-10-18"
+      "status_since": "2026-10-18",
+      "promotions": [
+        {
+          "source": "verified_panel",
+          "placement": "standard",
+          "observed_on": "2026-11-23",
+          "discount": {
+            "kind": "percentage_off",
+            "value": 62,
+            "up_to": false
+          },
+          "expiry": {
+            "basis": "estimated",
+            "date": "2026-11-27",
+            "observations": [
+              "Friday, Nov 27 (year unstated)"
+            ]
+          },
+          "visible_through": "2026-11-27",
+          "discount_cap": 35,
+          "exclusions": [
+            "Email signup.",
+            "Gift-card or e-gift-card purchases or redemptions."
+          ],
+          "stacking": "eligible_subtotal",
+          "same_session_24h": true
+        }
+      ]
     },
     {
       "id": "capital-one/minted",
@@ -39797,8 +40392,7 @@
       "fine_print": null,
       "other_details": [
         "Tile label reads 'BONUS'",
-        "2 tiles listed",
-        "Promo text reads \"20% off holiday cards & gifts on orders $250+with code: GREETINGS26\""
+        "2 tiles listed"
       ],
       "last_read": "2026-11-23",
       "first_seen": "2026-10-18",
@@ -41131,13 +41725,40 @@
       "minimum_spend": null,
       "fine_print": null,
       "other_details": [
-        "Tile label reads 'BONUS'",
-        "Tile label reads 'EXCLUSIVE COUPON'"
+        "Tile label reads 'BONUS'"
       ],
       "last_read": "2026-11-23",
       "first_seen": "2026-10-18",
       "status": "active",
-      "status_since": "2026-10-18"
+      "status_since": "2026-10-18",
+      "promotions": [
+        {
+          "source": "verified_panel",
+          "placement": "standard",
+          "observed_on": "2026-11-23",
+          "discount": {
+            "kind": "percentage_off",
+            "value": 35,
+            "up_to": false
+          },
+          "expiry": {
+            "basis": "estimated",
+            "date": "2026-12-01",
+            "observations": [
+              "Tuesday, Dec 1 (year unstated)"
+            ]
+          },
+          "visible_through": "2026-12-01",
+          "eligibility": [
+            "For subscriptions, only the first paid subscription, with active subscription and payment validated."
+          ],
+          "conditions": [
+            "Additional terms apply."
+          ],
+          "stacking": "eligible_subtotal",
+          "same_session_24h": true
+        }
+      ]
     },
     {
       "id": "capital-one/alpha-industries",
@@ -44210,13 +44831,36 @@
       "spend_cap": null,
       "minimum_spend": null,
       "fine_print": null,
-      "other_details": [
-        "Tile label reads 'EXCLUSIVE COUPON'"
-      ],
+      "other_details": [],
       "last_read": "2026-11-23",
       "first_seen": "2026-10-18",
       "status": "active",
-      "status_since": "2026-10-18"
+      "status_since": "2026-10-18",
+      "promotions": [
+        {
+          "source": "verified_panel",
+          "placement": "standard",
+          "observed_on": "2026-11-23",
+          "discount": {
+            "kind": "percentage_off",
+            "value": 10,
+            "up_to": false
+          },
+          "expiry": {
+            "basis": "estimated",
+            "date": "2026-12-01",
+            "observations": [
+              "Tuesday, Dec 1 (year unstated)"
+            ]
+          },
+          "visible_through": "2026-12-01",
+          "conditions": [
+            "Terms apply."
+          ],
+          "stacking": "eligible_subtotal",
+          "same_session_24h": true
+        }
+      ]
     },
     {
       "id": "capital-one/123inkjets",
@@ -44864,8 +45508,7 @@
       "minimum_spend": null,
       "fine_print": null,
       "other_details": [
-        "Tile label reads 'BONUS'",
-        "Promo text reads \"Take 10% Off Your First Order Use Code MMAFFILIATE10. Terms May Apply.\""
+        "Tile label reads 'BONUS'"
       ],
       "last_read": "2026-11-23",
       "first_seen": "2026-10-18",
@@ -46191,7 +46834,6 @@
       "minimum_spend": null,
       "fine_print": null,
       "other_details": [
-        "Tile label reads 'EXCLUSIVE COUPON'",
         "Tile label reads 'BONUS'"
       ],
       "last_read": "2026-11-23",
@@ -47686,9 +48328,7 @@
       "spend_cap": null,
       "minimum_spend": null,
       "fine_print": null,
-      "other_details": [
-        "Tile label reads 'EXCLUSIVE COUPON'"
-      ],
+      "other_details": [],
       "last_read": "2026-11-23",
       "first_seen": "2026-10-18",
       "status": "active",
@@ -50471,13 +51111,39 @@
       "spend_cap": null,
       "minimum_spend": null,
       "fine_print": null,
-      "other_details": [
-        "Tile label reads 'EXCLUSIVE COUPON'"
-      ],
+      "other_details": [],
       "last_read": "2026-11-23",
       "first_seen": "2026-10-18",
       "status": "active",
-      "status_since": "2026-10-18"
+      "status_since": "2026-10-18",
+      "promotions": [
+        {
+          "source": "verified_panel",
+          "placement": "standard",
+          "observed_on": "2026-11-23",
+          "discount": {
+            "kind": "percentage_off",
+            "value": 10,
+            "up_to": false
+          },
+          "expiry": {
+            "basis": "estimated",
+            "date": "2027-01-01",
+            "observations": [
+              "Friday, Jan 1 (year unstated)"
+            ]
+          },
+          "visible_through": "2027-01-01",
+          "eligibility": [
+            "Advertised sitewide."
+          ],
+          "exclusions": [
+            "Gift cards."
+          ],
+          "stacking": "eligible_subtotal",
+          "same_session_24h": true
+        }
+      ]
     },
     {
       "id": "capital-one/roxy",
@@ -51082,13 +51748,46 @@
       "spend_cap": null,
       "minimum_spend": null,
       "fine_print": null,
-      "other_details": [
-        "Tile label reads 'EXCLUSIVE COUPON'"
-      ],
+      "other_details": [],
       "last_read": "2026-11-23",
       "first_seen": "2026-10-18",
       "status": "active",
-      "status_since": "2026-10-18"
+      "status_since": "2026-10-18",
+      "promotions": [
+        {
+          "source": "verified_panel",
+          "placement": "standard",
+          "observed_on": "2026-11-23",
+          "discount": {
+            "kind": "percentage_off",
+            "value": 85,
+            "up_to": false
+          },
+          "expiry": {
+            "basis": "estimated",
+            "date": "2026-12-01",
+            "observations": [
+              "Tuesday, Dec 1 (year unstated)"
+            ]
+          },
+          "visible_through": "2026-12-01",
+          "headline_threshold": 700,
+          "eligibility": [
+            "Rental price only."
+          ],
+          "exclusions": [
+            "Taxes.",
+            "Fees.",
+            "Upgrades.",
+            "Insurance."
+          ],
+          "conditions": [
+            "The coupon panel also repeats cashback eligibility for completed stays and newly listed owner vehicles."
+          ],
+          "stacking": "eligible_subtotal",
+          "same_session_24h": true
+        }
+      ]
     },
     {
       "id": "capital-one/solgaard",
@@ -53704,13 +54403,37 @@
       "spend_cap": null,
       "minimum_spend": null,
       "fine_print": null,
-      "other_details": [
-        "Tile label reads 'EXCLUSIVE COUPON'"
-      ],
+      "other_details": [],
       "last_read": "2026-11-23",
       "first_seen": "2026-10-18",
       "status": "active",
-      "status_since": "2026-10-18"
+      "status_since": "2026-10-18",
+      "promotions": [
+        {
+          "source": "verified_panel",
+          "placement": "standard",
+          "observed_on": "2026-11-23",
+          "discount": {
+            "kind": "percentage_off",
+            "value": 10,
+            "up_to": false
+          },
+          "expiry": {
+            "basis": "estimated",
+            "date": "2027-01-01",
+            "observations": [
+              "Friday, Jan 1 (year unstated)"
+            ]
+          },
+          "visible_through": "2027-01-01",
+          "exclusions": [
+            "Gift cards."
+          ],
+          "stacking": "check_issuer",
+          "same_session_24h": true,
+          "cashback_exclusions": "Review exclusions: Not eligible for purchases of gift cards. Use of promotional codes not provided by Capital One may invalidate your offer."
+        }
+      ]
     },
     {
       "id": "capital-one/camilla",
@@ -72366,13 +73089,46 @@
       "spend_cap": null,
       "minimum_spend": null,
       "fine_print": null,
-      "other_details": [
-        "Tile label reads 'EXCLUSIVE COUPON'"
-      ],
+      "other_details": [],
       "last_read": "2026-11-23",
       "first_seen": "2026-10-18",
       "status": "active",
-      "status_since": "2026-10-18"
+      "status_since": "2026-10-18",
+      "promotions": [
+        {
+          "source": "verified_panel",
+          "placement": "standard",
+          "observed_on": "2026-11-23",
+          "discount": {
+            "kind": "percentage_off",
+            "value": 15,
+            "up_to": false
+          },
+          "expiry": {
+            "basis": "estimated",
+            "date": "2027-01-01",
+            "observations": [
+              "Friday, Jan 1 (year unstated)"
+            ]
+          },
+          "visible_through": "2027-01-01",
+          "exclusions": [
+            "Gift cards.",
+            "Gaming PCs or AI workstations.",
+            "Bundles.",
+            "Refurbished products.",
+            "Revival Series.",
+            "Products with special pricing."
+          ],
+          "conditions": [
+            "Online, one-time use."
+          ],
+          "stacking": "check_issuer",
+          "same_session_24h": true,
+          "cashback_exclusions": "Review exclusions: Not eligible for purchases of gift cards. Not eligible for purchases of Gaming PCs or AI workstations.",
+          "reveal_at_issuer": true
+        }
+      ]
     },
     {
       "id": "capital-one/nordik-recovery",
