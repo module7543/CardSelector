@@ -432,14 +432,20 @@ class USBank(Adapter):
     card, slugp = "U.S. Bank", "us-bank"
     required = {"merchant", "bonus_as_shown", "min_spend", "channel", "activation_state", "activation_model",
                 "promo_text", "reward_copy", "end_date", "days_left_badge"}
-    used = required | {"deal_id"}
+    used = required | {"deal_id", "is_activated_prop", "start_date"}
     CHANNEL = {"online|in store": "in_store_and_online", "in store|online": "in_store_and_online",
                "online": "online", "in store": "in_store", "pay at pump": "pay_at_pump"}
     LOCATION = "Offer only applies to the following location:"
+    BONUS_DAYS_ID = "1000405330"
 
     def parse(self, rows, read_date, app):
         out = []
+        self.issuer_promotions = []
         for line, r in rows:
+            if (r.get("deal_id") or "").strip() == self.BONUS_DAYS_ID and r["merchant"].strip() == "Bonus Days":
+                self.issuer_promotions.append({k: r.get(k) for k in (
+                    "deal_id", "merchant", "bonus_as_shown", "start_date", "end_date", "reward_copy", "promo_text")})
+                continue
             inc = Inc(r["merchant"], r["bonus_as_shown"], [line])
             if not blank(r["end_date"]):
                 inc.set["expires"] = end_date(r["end_date"], f"line {line}")
@@ -447,9 +453,15 @@ class USBank(Adapter):
             ch = r["channel"].strip().lower()
             if ch and ch not in self.CHANNEL:
                 raise Refused(f"unknown U.S. Bank channel {r['channel']!r} (line {line})")
-            inc.set["channel"] = self.CHANNEL[ch] if ch else "none_shown"  # blank -> none_shown
+            if ch:
+                inc.set["channel"] = self.CHANNEL[ch]
             model, state = r["activation_model"].strip().upper(), r["activation_state"].strip().upper()
-            if model == "AUTO_ACTIVATED":
+            if state == "NEW":
+                activated = (r.get("is_activated_prop") or "").strip().lower()
+                if model != "ACTIVATABLE" or activated != "false":
+                    raise Refused(f"U.S. Bank NEW requires activation_model ACTIVATABLE and is_activated_prop false (line {line})")
+                inc.set["activation"] = "needs_activation"
+            elif model == "AUTO_ACTIVATED":
                 inc.set["activation"] = "auto_enrolled"
             elif state in ("ACTIVATED", "SERVED"):
                 inc.set["activation"] = "already_activated" if state == "ACTIVATED" else "needs_activation"
@@ -1560,6 +1572,14 @@ def plan(card, paths, given_date, decisions=None, part=False, complete_parts=Fal
                            "file": inc.merchant, "lines": inc.lines})
     new["offers"][insert_at:insert_at] = fresh
     nby = {o["id"]: o for o in new["offers"]}
+    if isinstance(ad, USBank):
+        source_rows = dict(rows)
+        out["issuer_promotions"] = ad.issuer_promotions
+        out["blank_channels"] = [
+            {"id": sid, "merchant": incs[i].merchant, "deal_id": source_rows[incs[i].lines[0]].get("deal_id"),
+             "saved_channel": raw_by_id.get(sid, {}).get("channel"), "channel": nby[sid]["channel"]}
+            for i, sid in sorted(resolved_ids.items()) if incs[i].channel is None
+        ]
 
     # absent from the batch: the snapshot rule. With --complete-parts ("batch complete" after --part runs), an offer
     # already read on this date (an earlier part, or an earlier run of this batch) is in it: missing = active with
@@ -1877,6 +1897,10 @@ def show(out, limit=40):
          if out["skipped_redeemed"] else ""))
     if out["card_columns"]:
         p(f"Card detail columns ignored, never stored: {', '.join(out['card_columns'])}")
+    lst("Issuer-wide promotions excluded from merchant reconciliation", out.get("issuer_promotions", []),
+        lambda m: f"{m['merchant']} ({m['deal_id']}): {m['bonus_as_shown']}\n"
+                  f"    {m['reward_copy']}\n    {m['promo_text']}\n"
+                  f"    Source window: {m['start_date']} to {m['end_date']}")
     p(f"Prior active offers (with pending phone edits, not ended by the read date): {out['prior_active']}"
       + (f" (and {out['prior_ended']} that ended before it)" if out.get("prior_ended") else ""))
     if out.get("card_warning"):
@@ -1924,6 +1948,8 @@ def show(out, limit=40):
     lst("Other offers expired by date (cleanup)", out["expired"], lambda m: f"{m['id']} (expires {m['expires']})")
     lst("Deleted by the 30-day cleanup", out["deleted"], lambda m: f"{m['id']} ({m['status']} since {m['since']})")
     lst("Row notes", out["flags"], lambda m: m)
+    lst("Blank U.S. Bank source channels", out.get("blank_channels", []),
+        lambda m: f"{m['id']} ({m['deal_id']}): {m['saved_channel'] or '(new offer)'} -> {m['channel']}")
     lst("Capital One inventory reconciliation", out.get("inventory_issues", []), lambda m: m)
     lst("Capital One minimums needing a decision", out.get("ambiguous_minimums", []), lambda m: m)
     ch = out["changes"]
