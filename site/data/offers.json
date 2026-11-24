@@ -8217,9 +8217,7 @@
       "spend_cap": null,
       "minimum_spend": null,
       "fine_print": "Earn 10% cash back on your Amazon Business purchase or subscription, with a $20 cash back maximum.",
-      "other_details": [
-        "Logo shows 'Subscription Only'"
-      ],
+      "other_details": [],
       "last_read": "2026-11-23",
       "first_seen": "2026-10-18",
       "status": "active",
@@ -8332,7 +8330,7 @@
       "channel": "in_store_and_online",
       "spend_cap": null,
       "minimum_spend": "100",
-      "fine_print": "Earn 10% cash back on your Hilton stay, with a $65 cash back maximum, when you spend $100 or more.",
+      "fine_print": "Earn 10% cash back on all of your Hilton stays, with a $65.00 maximum, when you spend $100 or more.",
       "other_details": [],
       "last_read": "2026-11-23",
       "first_seen": "2026-10-18",

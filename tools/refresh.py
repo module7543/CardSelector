@@ -35,6 +35,7 @@ Never touched: site/data/phone-edits.json (not written, never folded), any field
 and cleanup of offers with a pending edit.
 """
 import argparse, copy, csv, difflib, html, json, re, subprocess, sys, unicodedata
+from collections import Counter
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from pathlib import Path
@@ -1178,14 +1179,35 @@ def plan(card, paths, given_date, decisions=None, part=False, complete_parts=Fal
         return sorted(cs, key=lambda x: (inc.channel is not None and x[1]["channel"] != inc.channel, x[0],
                                          x[1]["status"] != "active", x[1]["id"]))
 
-    for i, inc in enumerate(incs):
-        if i in ambiguous_added:
-            continue
-        cs = cands(inc)
-        if cs:
-            via_alias, o = prefer(inc, cs)[0]
-            claimed.add(o["id"])
-            match[i] = (o["id"], "alias" if via_alias else "exact", "")
+    def claim_exact(i, candidate):
+        via_alias, offer = candidate
+        claimed.add(offer["id"])
+        match[i] = (offer["id"], "alias" if via_alias else "exact", "")
+
+    if isinstance(ad, USBank):
+        # A channel match must be unique on both sides. Settle those first, then check the remaining identities.
+        for same_channel in (True, False):
+            choices = {i: [(alias, o) for alias, o in cands(inc)
+                           if not same_channel or (inc.channel is not None and inc.channel == o["channel"])]
+                       for i, inc in enumerate(incs) if i not in match}
+            contenders = Counter(o["id"] for cs in choices.values() for _, o in cs)
+            for i, cs in choices.items():
+                if len(cs) == 1 and contenders[cs[0][1]["id"]] == 1:
+                    claim_exact(i, cs[0])
+
+        conflicts = []
+        for i, inc in enumerate(incs):
+            if i not in match and (cs := cands(inc)):
+                saved = ", ".join(f"{o['id']} ({o['channel']})" for _, o in cs)
+                conflicts.append(f"line {inc.lines[0]} (source channel: {inc.channel or 'blank'}) has candidates: {saved}")
+        if conflicts:
+            # Generic pair decisions identify an incoming row by name and bonus, which the competing rows share.
+            raise Refused("ambiguous U.S. Bank offer identities; verify the source channels before applying:\n  "
+                          + "\n  ".join(conflicts))
+    else:
+        for i, inc in enumerate(incs):
+            if i not in ambiguous_added and (cs := cands(inc)):
+                claim_exact(i, prefer(inc, cs)[0])
 
     # 2. mechanical pairs of leftovers (same bonus, unique on both sides).
     def left_incs(automatic=False):

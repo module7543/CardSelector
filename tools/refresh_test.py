@@ -1257,6 +1257,54 @@ class RefreshTest(unittest.TestCase):
             self.assertEqual(by[sid]["expires"], "2026-11-30")
             self.assertIn(terms, by[sid]["fine_print"])
 
+    def test_us_bank_explicit_channel_matches_before_blank(self):
+        store_id, online_id = "us-bank/la-colombe", "us-bank/la-colombe-2"
+        self.t.write_json("phone-edits.json", {online_id: {"activation": "needs_activation"}})
+        edits = self.t.read("phone-edits.json")
+        before = self.t.load()
+        other_issuers = [o for o in before["offers"] if o["card"] != "U.S. Bank"]
+        for reverse in (False, True):
+            with self.subTest(reverse=reverse):
+                self.t.write_json("offers.json", before)
+
+                def changed(rows):
+                    rows[0].update(end_date="2026-12-02T04:59:59Z")
+                    rows[1].update(channel="", end_date="2026-12-04T04:59:59Z", activation_state="SERVED")
+                    return list(reversed(rows)) if reverse else rows
+
+                p = self.t.csv("U.S. Bank", changed)
+                _, report = self.apply_ok("U.S. Bank", [p])
+                by = self.t.offers()
+                self.assertEqual((by[store_id]["channel"], by[store_id]["expires"]), ("in_store", "2026-12-01"))
+                self.assertEqual((by[online_id]["channel"], by[online_id]["expires"]), ("online", "2026-12-03"))
+                self.assertEqual(by[online_id]["activation"], "already_activated")
+                self.assertEqual(self.t.read("phone-edits.json"), edits)
+                self.assertEqual([o for o in by.values() if o["card"] != "U.S. Bank"], other_issuers)
+                blank_channels = {row["id"]: row["channel"] for row in report["blank_channels"]}
+                self.assertEqual(blank_channels[online_id], "online")
+                self.assertEqual((report["new"], report["missing"]), ([], []))
+
+    def test_us_bank_competing_channel_matches_refuse_before_writing(self):
+        before = self.data_bytes()
+        generic_pair = {"saved": "us-bank/la-colombe", "file": "La Colombe", "bonus": "15% cash back", "accept": True}
+        for channel, reverse in product(("", "Online"), (False, True)):
+            with self.subTest(channel=channel, reverse=reverse):
+                def competing(rows):
+                    rows[0].update(channel=channel, end_date="2026-12-02T04:59:59Z")
+                    rows[1].update(channel=channel, end_date="2026-12-04T04:59:59Z")
+                    return list(reversed(rows)) if reverse else rows
+
+                p = self.t.csv("U.S. Bank", competing)
+                for mode in ("report", "apply"):
+                    decisions = {"pairs": [generic_pair], "owner_approved": ["missing"]} if mode == "apply" else None
+                    code, out, _ = self.t.run(mode, "U.S. Bank", [p], decisions=decisions)
+                    self.assertEqual(code, 2, out)
+                    self.assertIn("ambiguous U.S. Bank offer identities", out)
+                    self.assertEqual(out.count(f"(source channel: {channel.lower() or 'blank'}) has candidates"), 2, out)
+                    self.assertIn("us-bank/la-colombe (in_store)", out)
+                    self.assertIn("us-bank/la-colombe-2 (online)", out)
+                    self.assertEqual(self.data_bytes(), before)
+
     # --- checks that stop the run -------------------------------------------------------------------------------
 
     def test_size_check_refuses(self):
