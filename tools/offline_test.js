@@ -6,6 +6,7 @@
 // tools/write_version.py does. The GitHub API is a mock in the browser. Nothing is written to the data files.
 const http = require("http"), fs = require("fs"), path = require("path"), crypto = require("crypto");
 const pw = require("playwright");
+const { offer, offlineOffers, savedCopyOffers } = require("./fixtures/browser-offers");
 const SITE = path.join(__dirname, "../site");
 const TYPES = { ".html": "text/html; charset=utf-8", ".js": "application/javascript; charset=utf-8", ".json": "application/json; charset=utf-8" };
 const read = p => fs.readFileSync(path.join(SITE, p));
@@ -16,26 +17,10 @@ const sha256 = b => crypto.createHash("sha256").update(b).digest("hex");
 const gitSha = b => crypto.createHash("sha1").update(Buffer.concat([Buffer.from("blob " + b.length + "\0"), b])).digest("hex");
 const ser = o => JSON.stringify(o, null, 2) + "\n";
 
-// Test offers from today's data (as tools/phone_edits_test.js picks them): live, one offer per merchant on that
-// card, not expiring within two days, not in the real pending edits.
-const offersText = read("data/offers.json").toString(), offersData = JSON.parse(offersText);
-const realEdits = JSON.parse(read("data/phone-edits.json"));
+// The same fixture bytes feed the Pages-like server, version hashes, and GitHub's blob hash.
+const offersText = ser(savedCopyOffers(JSON.parse(read("data/offers.json")).categories));
+const { used: U, restore: U2, conflict: U3, remembered: U4, held: U5, activate: C, retry: C2 } = offlineOffers;
 const ROW_CARD = (() => { const l = JSON.parse(read("data/cards.json")).offer_lists || {}; return c => (l[c] && l[c].row_name) || c; })();
-const safeDate = new Date(Date.now() + 2 * 864e5).toISOString().slice(0, 10);
-const perCard = {};
-offersData.offers.forEach(o => { const k = o.card + "|" + o.merchant; perCard[k] = (perCard[k] || 0) + 1; });
-const taken = [];
-const pick = pred => {
-  const o = offersData.offers.filter(o => o.status === "active" && !(o.expires && o.expires <= safeDate) && perCard[o.card + "|" + o.merchant] === 1 &&
-    !(o.id in realEdits) && !taken.includes(o.id) && !taken.some(t => offersData.offers.find(x => x.id === t).merchant === o.merchant) && pred(o))
-    .sort((a, b) => b.merchant.length - a.merchant.length || (a.id < b.id ? -1 : 1))[0];
-  taken.push(o.id);
-  return o;
-};
-const usb = o => o.card === "U.S. Bank" && o.activation === "already_activated" && /^\s*\d+(\.\d+)?\s*%/.test(o.bonus);
-const U = pick(usb), U2 = pick(usb), U3 = pick(usb), U4 = pick(usb), U5 = pick(usb);
-const C = pick(o => /^(Chase|Citi) /.test(o.card) && o.activation === "needs_activation");
-const C2 = pick(o => /^(Chase|Citi) /.test(o.card) && o.activation === "needs_activation");
 const today = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Los_Angeles" }).format(new Date());
 console.log("test offers: " + [U, U2, U3, U4, U5, C, C2].map(o => o.id).join(", "));
 
@@ -43,8 +28,7 @@ console.log("test offers: " + [U, U2, U3, U4, U5, C, C2].map(o => o.id).join(", 
 function offersWith(change = {}, add = []) {
   const d = JSON.parse(offersText);
   d.offers.forEach(o => { if (change[o.id]) Object.assign(o, change[o.id](o)); });
-  add.forEach(a => d.offers.push(Object.assign({ expires: null, expires_text: null, activation: "already_activated", spend_cap: null, minimum_spend: null,
-    fine_print: null, other_details: [], last_read: "2026-10-18", first_seen: "2026-10-18", status: "active", status_since: "2026-10-18" }, a)));
+  add.forEach(a => d.offers.push(offer(a.id, a.card, a.merchant, a)));
   return ser(d);
 }
 const usedOn = card => o => ({ status: "used", status_since: today, other_details: (o.other_details || []).filter(t => !/^Used on /.test(t)).concat(["Used on " + card]) });
@@ -167,7 +151,8 @@ class Hub {
   };
   const fresh = async (opts = {}) => {
     if (ctx) await ctx.close();
-    site.over = Object.assign({ "data/phone-edits.json": opts.edits || "{}\n" }, opts.over || {}); site.fail = {}; site.delay = {}; site.hook = null;
+    site.over = { "data/offers.json": offersText, "data/phone-edits.json": opts.edits || "{}\n", ...opts.over };
+    site.fail = {}; site.delay = {}; site.hook = null;
     site.publish();
     hub = new Hub(site);
     ctx = await browser.newContext({ viewport: { width: 390, height: 844 } }); // service workers allowed
@@ -378,8 +363,10 @@ class Hub {
   // 5b. Customized Cash choice, saved from its Card Bonus detail page's Choice picker: survives a reload during the
   // deploy, and the headline and Card bonuses use it.
   console.log("-- 5b. Customized Cash choice");
-  await fresh({ token: "test-token-offline" });
   const CC = "bank-of-america-customized-cash/standing", q5 = "chevron";
+  const B5b = JSON.parse(read("data/bonus-categories.json"));
+  B5b.entries.find(e => e.id === CC).choice = "online shopping";
+  await fresh({ token: "test-token-offline", over: { "data/bonus-categories.json": ser(B5b) } });
   const choiceRow = () => page.$eval("#cb li[data-eid='" + CC + "'] .cbst", e => e.textContent);
   await search(q5);
   const use0 = await page.$eval("#use", e => e.innerText);

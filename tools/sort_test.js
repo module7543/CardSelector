@@ -6,6 +6,7 @@
 // Nothing is written to the data files.
 const http = require("http"), fs = require("fs"), path = require("path"), { execFileSync } = require("child_process");
 const { chromium } = require("playwright");
+const { offer, offerBook } = require("./fixtures/browser-offers");
 const SITE = path.join(__dirname, "../site");
 const TYPES = { ".html": "text/html", ".js": "text/javascript", ".json": "application/json", ".css": "text/css", ".svg": "image/svg+xml", ".png": "image/png" };
 
@@ -360,31 +361,86 @@ function listRows(sel) {
   });
   ok(!fitNarrow.cut && fitNarrow.more === "+" + (fitNarrow.total - fitNarrow.shown), "round table, row squeezed to 150px: refits on resize, no cut name (" + fitNarrow.shown + " shown, " + fitNarrow.more + ")");
 
-  // Headline: one issuer dot before every bold total, for the card it names first; the "Likely" tag ends the last
-  // headline line where the old "Likely, not certain" note was, and that sentence is no longer a visible note.
+  // A category rate gets the Likely hedge, while a base rate alone doesn't. Round Table and Jamba can have
+  // different winners by channel: Any puts the hedge on the applicable compact row, before its spoken action.
+  // An explicit channel uses the full headline, where the tag ends its last line.
+  const headlineOffers = ["Round Table Pizza", "Jamba"].flatMap((merchant, i) => [
+    offer("test/headline-store-" + i, "Chase Freedom Flex", merchant, { category: "Dining" }),
+    offer("test/headline-online-" + i, "U.S. Bank", merchant, { category: "Dining", channel: "online" })
+  ]);
+  for (const name of ["Ash", "Birch", "Cedar", "Elm"]) {
+    headlineOffers.push(offer("test/headline-" + name.toLowerCase(), "U.S. Bank", "Zqx " + name + " Pizza", { category: "Dining" }));
+  }
+  headlineOffers.push(offer("test/headline-shell", "U.S. Bank", "Shell", { category: "Auto & Gas", channel: "in_store_and_online" }));
+  const headlineCards = {
+    cards: [
+      { name: "Smartly", base_rate: 4 },
+      { name: "Freedom Flex", base_rate: 1, bonus_card: "Freedom Flex" },
+      { name: "Costco Visa", base_rate: 1, bonus_card: "Costco Visa" }
+    ],
+    offer_lists: {
+      "U.S. Bank": { cards: ["Smartly"], activation: "stored", label: "U.S. Bank offer" },
+      "Chase Freedom Flex": { cards: ["Freedom Flex"], activation: "stored", label: "Chase offer" }
+    }
+  };
+  const headlineBonus = {
+    keyword_lists: { pizza: { keywords: ["pizza"] }, costco_gas: { keywords: ["Costco Gas"], full_name: true } },
+    entries: [
+      { card: "Smartly", kind: "fixed", rate: 4, everyday: true, activation: "not_needed" },
+      { card: "Freedom Flex", kind: "fixed", rate: 5, activation: "not_needed", search: true,
+        match: [{ name: "dining", list: "pizza", app_categories: ["Dining"] }] },
+      { card: "Costco Visa", kind: "fixed", rate: 5, activation: "not_needed", search: true,
+        match: [{ name: "Costco gas", list: "costco_gas" }] }
+    ]
+  };
+  const headlineData = {
+    "offers.json": offerBook(["Dining", "Auto & Gas"], headlineOffers),
+    "cards.json": headlineCards,
+    "bonus-categories.json": headlineBonus,
+    "phone-edits.json": {},
+    "merchant-locations.json": { groups: {} }
+  };
+  for (const [name, json] of Object.entries(headlineData)) {
+    await page.route("**/data/" + name, r => r.fulfill({ json }));
+  }
   const headDots = () => page.$$eval("#use .usehead strong", ss => ss.map(s => {
     const d = s.previousElementSibling, m = /^(.*?) (?:\+|up to |\d)/.exec(s.textContent);
-    return { text: s.textContent, dot: d && d.classList.contains("idot") ? [...d.classList].find(c => /^i-/.test(c)).slice(2) : null,
+    return { text: s.textContent, dot: d && d.classList.contains("idot") ? [...d.classList].find(c => /^i-/.test(c))?.slice(2) : null,
       want: m ? window.__issuerOf(m[1]) : "?", dots: s.parentNode.querySelectorAll(".idot").length, strongs: s.parentNode.querySelectorAll("strong").length };
   }));
   const likelyAt = () => page.evaluate(() => {
     const tags = [...document.querySelectorAll("#use .likely")], heads = [...document.querySelectorAll("#use .usehead")];
-    const last = heads[heads.length - 1];
-    return { n: tags.length, atEnd: !tags.length || (tags[0].parentNode === last && last.lastElementChild === tags[0]),
-      visible: tags.length ? tags[0].firstChild.textContent : null, sr: tags.length ? tags[0].querySelector(".sr").textContent : null,
+    const tag = tags[0], parent = tag?.parentElement;
+    return { n: tags.length, channel: parent?.dataset.ch, atEnd: parent === heads.at(-1) && parent?.lastElementChild === tag,
+      beforeAction: !!tag?.nextElementSibling?.matches(".sr-only:last-child"),
+      visible: tag?.firstChild?.textContent, sr: tag?.querySelector(".sr")?.textContent,
       oldNote: [...document.querySelectorAll("#use .usenote, #use .usesub")].some(e => /^Likely, not certain|^Totals add/.test(e.textContent)) };
   });
-  await setup("round table");
-  const rtDots = await headDots();
-  ok(rtDots.length >= 1 && rtDots.every(x => x.dot && x.dot === x.want && x.dots === x.strongs),
-    "round table: exactly one dot per bold total, matching its first card (" + rtDots.map(x => x.text + " -> " + x.dot).join("; ") + ")");
-  for (const [q, want] of [["round table", true], ["pizza", true], ["costco gas", true], ["jamba", true], ["shell", false], ["zzqx", false]]) {
-    await setup(q);
+  const checkHeadline = async (label, placement, totals) => {
     const la = await likelyAt(), hd = await headDots();
-    ok(la.n === (want ? 1 : 0) && la.atEnd && !la.oldNote && (!want || (la.visible === "Likely" && /^, not certain: how the merchant codes/.test(la.sr))),
-      q + ": " + (want ? "one \"Likely\" tag at the end of the last headline line" : "no \"Likely\" tag") + ", no old note (" + JSON.stringify(la) + ")");
-    ok(hd.every(x => x.dot === x.want && x.dots === x.strongs), q + ": one matching dot per bold total (" + hd.map(x => x.text + " -> " + x.dot).join("; ") + ")");
+    const tag = la.n === 1 && la.visible === "Likely" && /^, not certain: how the merchant codes/.test(la.sr);
+    const placed = placement === "store" ? tag && la.channel === "store" && la.beforeAction :
+      placement === "end" ? tag && la.atEnd : la.n === 0;
+    ok(placed && !la.oldNote, label + ": Likely placement and accessible text (" + JSON.stringify(la) + ")");
+    ok(JSON.stringify(hd.map(x => x.text)) === JSON.stringify(totals) && hd.every(x => x.dot && x.dot === x.want && x.dots === x.strongs),
+      label + ": expected totals and one matching dot per bold total (" + hd.map(x => x.text + " -> " + x.dot).join("; ") + ")");
+  };
+  for (const q of ["round table", "jamba"]) {
+    await setup(q);
+    await checkHeadline(q + " / Any", "store", ["Freedom Flex 15%", "Smartly 14%"]);
+    await page.click("#use .chansel button[data-ch=store]");
+    await checkHeadline(q + " / In store", "end", ["Freedom Flex 15%"]);
+    await page.click("#use .chansel button[data-ch=online]");
+    await checkHeadline(q + " / Online", "none", ["Smartly 14%"]);
   }
+  for (const [q, placement, totals] of [
+    ["pizza", "end", ["Freedom Flex 5%"]], ["costco gas", "end", ["Costco Visa 5%"]],
+    ["shell", "none", ["Smartly 14%"]], ["zzqx", "none", ["Smartly 4%"]]
+  ]) {
+    await setup(q);
+    await checkHeadline(q, placement, totals);
+  }
+  for (const name of Object.keys(headlineData)) await page.unroute("**/data/" + name);
 
   // Issuer dots: issuerOf() gives the right issuer for every card and offer-list name in cards.json
   // (card names, offer-list keys, their row names and card lists), and null for a name it doesn't know.
@@ -4325,19 +4381,46 @@ function listRows(sel) {
     page = mainPage;
   }
 
-  // Coupons are display-only and follow the Pacific day even when the phone uses another time zone.
+  // Coupon records are synthetic so refreshing the Capital One inventory cannot remove a display or clock case.
+  // Coupons follow the Pacific day even when the phone uses another time zone.
   {
     const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, timezoneId: "UTC", serviceWorkers: "block" });
     page = await ctx.newPage();
     const errors = [];
     page.on("pageerror", error => errors.push(error.message));
     await page.clock.install({ time: new Date("2026-11-24T00:00:00Z") });
+    const promo = (value, end, extra = {}) => ({
+      source: "verified_panel", placement: "standard", observed_on: "2026-11-23",
+      discount: { kind: "percentage_off", value, up_to: false },
+      expiry: { basis: "confirmed", date: end, observations: [] }, visible_through: end, ...extra
+    });
+    const couponOffer = (id, merchant, bonus, promotions) => offer("capital-one/" + id, "Capital One", merchant, {
+      bonus, promotions, activation: "none_shown", channel: "online", last_read: "2026-11-23"
+    });
+    const coupons = [
+      couponOffer("zqx-department", "Zqx Department", "9% back", [promo(20, "2026-11-29", {
+        discount: { kind: "percentage_off", value: 20, up_to: false, tiers: [10] },
+        expiry: { basis: "conflict", date: null, observations: ["Feb 1 (year unstated)", "2027-01-30"] },
+        stacking: "eligibility_overlap", cashback_exclusions: "Gift cards are excluded."
+      })]),
+      couponOffer("zqx-optics", "Zqx Optics", "Up to 17% back", [
+        promo(5, "2026-12-01", { stacking: "check_issuer" }),
+        promo(50, "2026-11-29", {
+          source: "listing_only", placement: "hero", discount: { kind: "percentage_off", value: 50, up_to: true },
+          expiry: { basis: "unknown", date: null, observations: [] }
+        })
+      ]),
+      couponOffer("zqx-optics-supply", "Zqx Optics Supply", "3% back", []),
+      couponOffer("zqx-camera", "Zqx Camera", "17% back", [promo(30, "2026-11-30", { reveal_at_issuer: true })]),
+      couponOffer("zqx-rentals", "Zqx Rentals", "11% back", [promo(85, "2026-12-01", { headline_threshold: 700 })]),
+      couponOffer("zqx-prints", "Zqx Prints", "9% back", [promo(30, "2027-01-01", { stacking: "eligible_subtotal" })]),
+      couponOffer("zqx-meals", "Zqx Meals", "30% back", [promo(62, "2026-11-27", { discount_cap: 35, stacking: "eligible_subtotal" })])
+    ];
     let hidePromotions = false;
-    await page.route("**/data/offers.json", async route => {
-      if (!hidePromotions) return route.continue();
-      const d = await (await route.fetch()).json();
-      for (const o of d.offers) delete o.promotions;
-      await route.fulfill({ json: d });
+    await page.route("**/data/phone-edits.json", route => route.fulfill({ json: {} }));
+    await page.route("**/data/offers.json", route => {
+      const records = coupons.map(({ promotions, ...o }) => hidePromotions || !promotions.length ? o : { ...o, promotions });
+      return route.fulfill({ json: offerBook(["Clothing & Jewelry"], records) });
     });
     const read = async (name, id) => {
       await page.fill("#q", name);
@@ -4355,27 +4438,27 @@ function listRows(sel) {
       await page.waitForFunction(() => window.__cardsReady && window.__bonusReady);
     };
     await load();
-    let row = await read("jcpenney", "jcpenney");
+    let row = await read("zqx department", "zqx-department");
     let details = await open(row);
     ok(/20% or 10% off/.test(details) && /Conflicting end dates/.test(details) &&
       /2027-01-30/.test(details) && /Feb 1.*year unstated/.test(details) && /Cash back terms/.test(details),
-      "coupons JCPenney: two tiers, conflicting dates and separate cash back conditions");
-    row = await read("ray-ban", "ray-ban");
+      "coupons: two tiers, conflicting dates and separate cash back conditions");
+    row = await read("zqx optics", "zqx-optics");
     details = await open(row);
     ok(/5% off.*Verified in issuer panel/s.test(details) && /Up to 50% off.*Listing only/s.test(details) &&
       /restricts combining offers/.test(details) && await row.locator(".coupon-indicator").count() === 1,
-      "coupons Ray-Ban: verified coupon and listing promotion remain separate");
-    row = await read("eufy", "eufy");
-    ok(/Reveal the coupon at Capital One Offers/.test(await open(row)), "coupons eufy: reveal at issuer");
-    row = await read("rvshare", "rvshare");
+      "coupons: verified coupon and listing promotion remain separate");
+    row = await read("zqx camera", "zqx-camera");
+    ok(/Reveal the coupon at Capital One Offers/.test(await open(row)), "coupons: reveal at issuer");
+    row = await read("zqx rentals", "zqx-rentals");
     ok(/85% off \$700/.test(await open(row)) && /Checkout and the role/.test(await row.locator(".coupon-details").innerText()),
-      "coupons RVshare: the unusual headline is displayed as unverified at checkout");
-    row = await read("shutterfly", "shutterfly");
+      "coupons: the unusual headline is displayed as unverified at checkout");
+    row = await read("zqx prints", "zqx-prints");
     ok(/30% off/.test(await open(row)) && /9% Capital One offer/.test(await row.locator(".obreak").innerText()),
-      "coupons Shutterfly: 30% coupon and 9% cashback have separate display");
+      "coupons: 30% coupon and 9% cashback have separate display");
 
     const rankings = async () => {
-      await page.fill("#q", "ray");
+      await page.fill("#q", "zqx optics");
       return page.evaluate(() => ({
         headline: document.getElementById("use").innerText,
         rows: [...document.querySelectorAll("#main li.offer[data-oid]")].map(r => [r.dataset.oid, r.querySelector(".obig").innerText])
@@ -4384,15 +4467,16 @@ function listRows(sel) {
     const withCoupons = await rankings();
     hidePromotions = true;
     await load();
-    ok(JSON.stringify(await rankings()) === JSON.stringify(withCoupons), "coupons leave sort order, offer totals and recommendation text unchanged");
+    ok(withCoupons.rows.length === 2 && JSON.stringify(await rankings()) === JSON.stringify(withCoupons),
+      "coupons leave sort order, offer totals and recommendation text unchanged");
     hidePromotions = false;
 
     await page.clock.setSystemTime(new Date("2026-11-28T07:59:45Z"));
     await load();
-    row = await read("little spoon", "little-spoon");
+    row = await read("zqx meals", "zqx-meals");
     details = await open(row);
     ok(/62% off/.test(details) && /Maximum coupon discount \$35/.test(details) && /after the listed coupon/.test(details),
-      "coupons Little Spoon: separate cap and qualifying subtotal");
+      "coupons: separate cap and qualifying subtotal");
     const cashback = await row.locator(".obig").innerText();
     await page.clock.runFor(16000);
     ok(await row.count() === 1 && await row.locator(".obig").innerText() === cashback &&
@@ -4400,7 +4484,7 @@ function listRows(sel) {
       "coupon expires at Pacific midnight while its cashback offer stays live");
     await page.clock.setSystemTime(new Date("2026-11-30T12:00:00Z"));
     await load();
-    row = await read("ray-ban", "ray-ban");
+    row = await read("zqx optics", "zqx-optics");
     details = await open(row);
     ok(/5% off/.test(details) && !/50% off/.test(details) && !errors.length &&
       await page.evaluate(() => document.documentElement.scrollWidth === innerWidth),
