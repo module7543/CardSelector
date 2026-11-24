@@ -1,5 +1,5 @@
 // Phone edits in site/data/phone-edits.json:  node tools/phone_edits_test.js
-// 1. Offline: site/js/store.js against an in-memory copy of the GitHub API holding the real data files: every
+// 1. Offline: site/js/store.js against an in-memory copy of the GitHub API holding synthetic offers: every
 //    offer save writes only phone-edits.json, conflicts, main moving mid-save, Undo, a stale page, bonus saves,
 //    and the bytes each save sends and receives.
 // 2. Folding: tools/fold_phone_edits.py on a temp copy gives offers.json byte for byte as the old in-place save
@@ -8,6 +8,7 @@
 //    in place of the real one (one offer used, one activated) shows correctly; a missing file is the same as an
 //    empty one; a broken one shows the load error. The real data files are never written.
 const fs = require("fs"), path = require("path"), os = require("os"), crypto = require("crypto"), cp = require("child_process");
+const { editOffers, phoneOffers } = require("./fixtures/browser-offers");
 const ROOT = path.join(__dirname, ".."), SITE = path.join(ROOT, "site"), DATA = path.join(SITE, "data");
 const OFFERS = "site/data/offers.json", BONUS = "site/data/bonus-categories.json", EDITS = "site/data/phone-edits.json";
 
@@ -18,27 +19,22 @@ const ser = o => JSON.stringify(o, null, 2) + "\n";
 const digest = () => fs.readdirSync(DATA).map(f => f + ":" + crypto.createHash("sha1").update(fs.readFileSync(path.join(DATA, f))).digest("hex")).join(" ");
 const dataBefore = digest();
 
-// Test offers, picked from today's data so a refresh doesn't break the test: live offers whose merchant has no
-// other offer on the same card (so a search for the name finds exactly that row), longest names first (few other
-// matches), id order on ties.
-//   usbank: U.S. Bank, already activated, percent bonus (it shows in the "Ready now" headline); marked used on Smartly
-//   needs:  U.S. Bank, needs activation; chase: a single-card issuer (Chase or Citi), needs activation; capone: Capital One
-const offersText = read(OFFERS), offersData = JSON.parse(offersText);
+// Serve the same bytes to the browser, mock GitHub, fold script and validator.
+const offersData = phoneOffers(JSON.parse(read(OFFERS)).categories), offersText = ser(offersData);
 const byId = Object.fromEntries(offersData.offers.map(o => [o.id, o]));
-// Not expiring within two days: the page hides offers by the device's own date, which on CI (UTC) is already the
-// next day during a Pacific evening.
-const safeDate = new Date(Date.now() + 2 * 864e5).toISOString().slice(0, 10);
-const perCard = {};
-offersData.offers.forEach(o => { const k = o.card + "|" + o.merchant; perCard[k] = (perCard[k] || 0) + 1; });
-const pick = (pred, not = []) => (offersData.offers
-  .filter(o => o.status === "active" && !(o.expires && o.expires <= safeDate) && perCard[o.card + "|" + o.merchant] === 1 && !not.includes(o.id) && pred(o))
-  .sort((a, b) => b.merchant.length - a.merchant.length || (a.id < b.id ? -1 : 1))[0] || {}).id;
-const ID = {};
-ID.usbank = pick(o => o.card === "U.S. Bank" && o.activation === "already_activated" && /^\s*\d+(\.\d+)?\s*%/.test(o.bonus));
-ID.needs = pick(o => o.card === "U.S. Bank" && o.activation === "needs_activation", [ID.usbank]);
-ID.chase = pick(o => /^(Chase|Citi) /.test(o.card) && o.activation === "needs_activation");
-ID.capone = pick(o => o.card === "Capital One");
+const ID = Object.fromEntries(Object.entries(editOffers).map(([name, o]) => [name, o.id]));
 const ROW_CARD = (() => { const l = JSON.parse(read("site/data/cards.json")).offer_lists || {}; return c => (l[c] && l[c].row_name) || c; })();
+
+function writeTestData(dir) {
+  for (const f of ["bonus-categories.json", "cards.json", "card-links.json", "merchant-locations.json"]) {
+    fs.copyFileSync(path.join(DATA, f), path.join(dir, f));
+  }
+  fs.writeFileSync(path.join(dir, "offers.json"), offersText);
+  fs.writeFileSync(path.join(dir, "phone-edits.json"), "{}\n");
+  // The synthetic offer book has no Dining merchants. Keep the validator's cuisine vocabulary.
+  const { cuisines } = JSON.parse(read("site/data/cuisines.json"));
+  fs.writeFileSync(path.join(dir, "cuisines.json"), ser({ cuisines, merchants: {}, to_classify: [] }));
+}
 
 // ---- In-memory GitHub: commits hold whole file maps; blob shas are real git blob hashes. ----
 const gitSha = buf => crypto.createHash("sha1").update(Buffer.concat([Buffer.from("blob " + buf.length + "\0"), buf])).digest("hex");
@@ -103,8 +99,7 @@ const E = require(path.join(SITE, "js/edits.js")), S = require(path.join(SITE, "
 const today = E.pacificToday();
 
 async function offline() {
-  console.log("-- offline store (mock GitHub with the real data files)");
-  ok(ID.usbank && ID.needs && ID.chase && ID.capone, "test offers picked from the data: " + [ID.usbank, ID.needs, ID.chase, ID.capone].join(", "));
+  console.log("-- offline store (mock GitHub with synthetic offers)");
   const hub = new Hub({ [OFFERS]: offersText, [BONUS]: read(BONUS), [EDITS]: "{}\n" }); // no pending edits, whatever main holds
   const start = hub.head;
   globalThis.fetch = (u, o) => hub.fetch(u, o);
@@ -156,11 +151,13 @@ async function offline() {
   ok(pending()[ID.capone] && pending()[ID.capone].used_on === "Discover it" && pending()[ID.needs] && pending()[ID.usbank] && pending()[ID.chase], "race: no edit lost (" + Object.keys(pending()).join(", ") + ")");
 
   // A page loaded before offers.json changed on main: refused, nothing written.
-  const fold = hub.commit(hub.tree(Object.assign({}, hub.trees[hub.commits[hub.head].tree], { [OFFERS]: hub.blob(offersText.replace('"bonus": "10% cash back"', '"bonus": "10% cash back "')) })), hub.head, "offers.json changed");
+  const updated = JSON.parse(offersText);
+  updated.offers.find(o => o.id === ID.usbank).bonus = "11% cash back";
+  const fold = hub.commit(hub.tree(Object.assign({}, hub.trees[hub.commits[hub.head].tree], { [OFFERS]: hub.blob(ser(updated)) })), hub.head, "offers.json changed");
   hub.head = fold;
   r = await save({ type: "offer.activation", id: ID.chase, from: "already_activated", to: "needs_activation" }, "stale page");
   ok(r.status === "error" && r.kind === "reload" && /Wait a minute, reload/.test(r.message) && r.files.length === 0, "offers.json changed on main -> " + r.kind + ": " + r.message);
-  hub.head = hub.commits[fold].parent; // back to the real offers.json
+  hub.head = hub.commits[fold].parent; // back to the original fixture
 
   // Undo the mark used: exact earlier status_since, entry removed. Undo activation: entry removed.
   r = await save(undoUsed, "undo used");
@@ -171,7 +168,7 @@ async function offline() {
 
   // Restore (the details button, no status_since): active since today, kept as an edit like the old save did.
   r = await save({ type: "offer.status", id: ID.capone, from: "used", to: "active" }, "restore");
-  const wantRestore = byId[ID.capone].status_since === today ? undefined : JSON.stringify({ status: "active", status_since: today });
+  const wantRestore = JSON.stringify({ status: "active", status_since: today });
   ok(r.status === "saved" && JSON.stringify(pending()[ID.capone]) === wantRestore, "restore: entry " + JSON.stringify(pending()[ID.capone]));
 
   // Undo of that restore: used again on the same card (Discover it, from the race above), earlier date kept.
@@ -271,9 +268,8 @@ function foldOnMain() {
   };
   const seed = path.join(t, "seed");
   fs.mkdirSync(path.join(seed, "tools"), { recursive: true }); fs.mkdirSync(path.join(seed, "site/data"), { recursive: true });
-  ["fold_phone_edits.py", "validate.py", "fold_on_main.sh"].forEach(f => fs.copyFileSync(path.join(__dirname, f), path.join(seed, "tools", f)));
-  fs.readdirSync(DATA).forEach(f => fs.copyFileSync(path.join(DATA, f), path.join(seed, "site/data", f)));
-  fs.writeFileSync(path.join(seed, EDITS), "{}\n");
+  ["fold_phone_edits.py", "validate.py", "coupon_promotions.py", "fold_on_main.sh"].forEach(f => fs.copyFileSync(path.join(__dirname, f), path.join(seed, "tools", f)));
+  writeTestData(path.join(seed, "site/data"));
   git(seed, "init", "-q", "-b", "main"); git(seed, "add", "-A"); git(seed, "commit", "-qm", "base"); git(seed, "remote", "add", "origin", origin); git(seed, "push", "-q", "origin", "main");
   // The workflow's runner: a clone of main; runs the script as the fold job does.
   const runner = path.join(t, "runner");
@@ -352,9 +348,8 @@ function validator() {
   console.log("-- validate.py checks of phone-edits.json (temp copy)");
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "val-"));
   fs.mkdirSync(path.join(dir, "tools")); fs.mkdirSync(path.join(dir, "site/data"), { recursive: true });
-  fs.copyFileSync(path.join(__dirname, "validate.py"), path.join(dir, "tools/validate.py"));
-  fs.readdirSync(DATA).forEach(f => fs.copyFileSync(path.join(DATA, f), path.join(dir, "site/data", f)));
-  const auto = offersData.offers.find(o => o.activation === "auto_enrolled" && o.status === "active").id;
+  ["validate.py", "coupon_promotions.py"].forEach(f => fs.copyFileSync(path.join(__dirname, f), path.join(dir, "tools", f)));
+  writeTestData(path.join(dir, "site/data"));
   const run = text => {
     fs.writeFileSync(path.join(dir, "site/data/phone-edits.json"), text);
     try { cp.execFileSync("python3", ["-B", path.join(dir, "tools/validate.py")], { encoding: "utf8", stdio: "pipe" }); return ""; }
@@ -376,7 +371,7 @@ function validator() {
     ["used_on on Chase", ser({ [ID.chase]: { status: "used", status_since: today, used_on: "Smartly" } }), /used_on belongs only/],
     ["used_on on restore", ser({ [ID.usbank]: { status: "active", status_since: today, used_on: "Smartly" } }), /used_on belongs only/],
     ["bad activation", ser({ [ID.chase]: { activation: "auto_enrolled" } }), /activation must be needs_activation or already_activated/],
-    ["activation on an auto-enrolled offer", ser({ [auto]: { activation: "already_activated" } }), /can't switch activation/],
+    ["activation on an auto-enrolled offer", ser({ [ID.auto]: { activation: "already_activated" } }), /can't switch activation/],
     ["extra field", ser({ [ID.chase]: { activation: "already_activated", note: "x" } }), /unexpected field/],
     ["empty entry", ser({ [ID.chase]: {} }), /non-empty object/],
     ["not an object", "[]\n", /must be an object keyed by offer id/],
@@ -593,15 +588,13 @@ async function usedChecks(page, load, search, testEdits) {
   ok(await page.$eval("#used button", b => b.getAttribute("aria-pressed")) === "false" && /active offers loaded/.test(await page.$eval("#main", e => e.innerText)), "picking Used again returns to normal results");
 
   // 3. Recently unavailable: dropped and expired offers only.
-  const miss = offersData.offers.find(o => o.status === "missing");
+  const miss = editOffers.missing;
   await search(U.merchant);
   const g = await page.$eval("#main", e => (e.querySelector("details.expired") || {}).innerText || "");
   ok(!/Recently unavailable/.test(g) && !(await rows()).some(r => r.key === keyOf(U)), "signed in: the used offer is not under Recently unavailable (nor in the results)");
-  if (miss) {
-    await search(miss.merchant);
-    const m = await page.$eval("#main", e => (e.querySelector("details.expired") || {}).innerText || "");
-    ok(/Recently unavailable/.test(m) && /Dropped off/.test(m), "a missing offer (" + miss.merchant + ") is still under Recently unavailable");
-  } else console.log("SKIP no missing offer in the data to check Recently unavailable");
+  await search(miss.merchant);
+  const m = await page.$eval("#main", e => (e.querySelector("details.expired") || {}).innerText || "");
+  ok(/Recently unavailable/.test(m) && /Dropped off/.test(m), "a missing offer (" + miss.merchant + ") is still under Recently unavailable");
   ok(/under the Used filter/.test(await page.$eval("#editbody", e => e.textContent)), "Edit mode note points to the Used filter");
 
   // 4. Signed out: no Used filter, used offers hidden.
@@ -821,8 +814,11 @@ async function cardBonusChecks(br, base) {
 async function detailChecks(br, base) {
   console.log("-- Card Bonus details: reversal, Focus, Choice (real store.js, mock GitHub)");
   const FLEX = "test/flex-q4", FREE = "test/freedom-q4";
-  const text = bonusText([[FLEX, "Freedom Flex", "Flex", "activated"], [FREE, "Freedom", null, "activated"]]);
-  const entries0 = JSON.parse(text).entries, CC = entries0.find(e => e.kind === "top_category"), BOA = entries0.find(e => e.kind === "chosen");
+  const bonus = JSON.parse(bonusText([[FLEX, "Freedom Flex", "Flex", "activated"], [FREE, "Freedom", null, "activated"]]));
+  const CC = bonus.entries.find(e => e.kind === "top_category"), BOA = bonus.entries.find(e => e.kind === "chosen");
+  CC.planned = "restaurants";
+  BOA.choice = "online shopping";
+  const text = ser(bonus); // Feed the seeded preferences to both the page and mock GitHub.
   const hub = new Hub({ [OFFERS]: offersText, [BONUS]: text, [EDITS]: "{}\n" });
   const start = hub.head;
   let deployed = false;
@@ -920,10 +916,12 @@ async function detailChecks(br, base) {
   ok(v.sel === CC.planned && v.save === "hidden" && J(v.tags) === J([CC.planned + ":CardSelector focus"]) && /changes nothing at Citi/.test(v.focus) && !/set your Citi category|earns? 5%/i.test(v.focus),
     "detail focus: the stored focus picked and tagged, no Save, copy never claims a Citi election (" + J([v.sel, v.save, v.tags]) + ")");
   await page.selectOption("#dtbody .bfocus select", "grocery stores");
-  const sv1 = (await view()).save;
+  const draftFocus = await view();
   await page.selectOption("#dtbody .bfocus select", CC.planned);
-  const sv2 = (await view()).save;
-  ok(sv1 === "shown" && sv2 === "hidden" && hub.since(start).length === 4, "detail focus: Save shows once changed, hides when changed back, nothing saved (" + J([sv1, sv2]) + ")");
+  const resetFocus = await view();
+  ok(draftFocus.sel === "grocery stores" && draftFocus.sel !== CC.planned && draftFocus.save === "shown" &&
+    resetFocus.sel === CC.planned && resetFocus.save === "hidden" && hub.file(BONUS) === text && hub.since(start).length === 4,
+    "detail focus: changed selection shows Save; reverting hides it without a commit (" + J([draftFocus.sel, draftFocus.save, resetFocus.sel, resetFocus.save]) + ")");
   await page.selectOption("#dtbody .bfocus select", "grocery stores");
   await page.click("#dtbody .bfocus button");
   await page.waitForFunction(() => /Deploying/.test(document.getElementById("savemsg").textContent));
@@ -947,11 +945,14 @@ async function detailChecks(br, base) {
   v = await view();
   ok(v.sel === BOA.choice && v.save === "hidden" && J(v.tags) === J([BOA.choice + ":Your Choice"]) && /Change it at Bank of America first, then here\./.test(v.choice),
     "detail choice: the stored choice picked and tagged, no Save, \"Change it at Bank of America first, then here.\" (" + J([v.sel, v.tags]) + ")");
+  const beforeChoice = hub.head;
   await page.selectOption("#dtbody .bfocus select", "dining");
-  const sc1 = (await view()).save;
+  const draftChoice = await view();
   await page.selectOption("#dtbody .bfocus select", BOA.choice);
-  const sc2 = (await view()).save;
-  ok(sc1 === "shown" && sc2 === "hidden", "detail choice: Save shows once changed, hides when changed back (" + J([sc1, sc2]) + ")");
+  const resetChoice = await view();
+  ok(draftChoice.sel === "dining" && draftChoice.sel !== BOA.choice && draftChoice.save === "shown" &&
+    resetChoice.sel === BOA.choice && resetChoice.save === "hidden" && hub.file(BONUS) === text && hub.head === beforeChoice,
+    "detail choice: changed selection shows Save; reverting hides it without a commit (" + J([draftChoice.sel, draftChoice.save, resetChoice.sel, resetChoice.save]) + ")");
   await page.selectOption("#dtbody .bfocus select", "dining");
   await page.click("#dtbody .bfocus button");
   await page.waitForFunction(() => /Deploying/.test(document.getElementById("savemsg").textContent));
@@ -1128,7 +1129,16 @@ async function browser() {
   const http = require("http"), { chromium } = require("playwright");
   const TYPES = { ".html": "text/html", ".js": "text/javascript", ".json": "application/json" };
   const server = http.createServer((req, res) => {
-    const p = path.join(SITE, decodeURIComponent(req.url.split("?")[0]).replace(/\/$/, "/index.html"));
+    const url = decodeURIComponent(req.url.split("?")[0]);
+    if (url === "/data/offers.json") {
+      res.writeHead(200, { "Content-Type": TYPES[".json"] });
+      return res.end(offersText);
+    }
+    if (url === "/data/phone-edits.json") {
+      res.writeHead(200, { "Content-Type": TYPES[".json"] });
+      return res.end("{}\n");
+    }
+    const p = path.join(SITE, url.replace(/\/$/, "/index.html"));
     if (!p.startsWith(SITE) || !fs.existsSync(p)) { res.writeHead(404); return res.end(); }
     res.writeHead(200, { "Content-Type": TYPES[path.extname(p)] || "application/octet-stream" });
     fs.createReadStream(p).pipe(res);
@@ -1175,13 +1185,12 @@ async function browser() {
 
   await load({ status: 200, body: "{}\n" });
   const empty = await both();
-  await load(null); // the real file
-  const real = await both();
+  await load(null); // the test server's default file
+  const served = await both();
   await load({ status: 404, body: "" });
   const missing = await both();
-  const realEmpty = read(EDITS) === "{}\n"; // main may hold pending edits between folds
-  ok(JSON.stringify(empty) === JSON.stringify(missing) && (!realEmpty || JSON.stringify(empty) === JSON.stringify(real)),
-     "missing phone-edits.json = empty file" + (realEmpty ? " = the real file" : " (real file has pending edits, not compared)") + " (searches: " + JSON.stringify(U.merchant) + ", " + JSON.stringify(C.merchant) + ")");
+  ok(JSON.stringify(empty) === JSON.stringify(missing) && JSON.stringify(empty) === JSON.stringify(served),
+     "missing phone-edits.json = empty response = the test server's default file");
   ok(rowOf(U, empty.u.rows) && /\bReady\b/.test(rowOf(U, empty.u.rows).text) && rowOf(C, empty.c.rows) && /\bActivate\b/.test(rowOf(C, empty.c.rows).text),
      "without edits: " + U.merchant + " (" + U.card + ") listed, " + C.merchant + " (" + C.card + ") needs activation");
 
@@ -1189,13 +1198,11 @@ async function browser() {
   const ed = await both();
   ok(!rowOf(U, ed.u.rows), "used edit: " + U.merchant + " (" + U.card + ") is gone from the results (signed out)");
   ok(rowOf(C, ed.c.rows) && /\bReady\b/.test(rowOf(C, ed.c.rows).text), "activated edit: " + C.merchant + " (" + C.card + ") shows Ready");
-  // The headlines, where they named these offers without the edits.
-  if (/U\.S\. Bank offer/.test(empty.u.use)) ok(!/U\.S\. Bank offer/.test(ed.u.use), "headline no longer counts the used U.S. Bank offer: " + JSON.stringify(ed.u.use.split("\n").slice(0, 2).join(" / ")));
-  else console.log("SKIP headline for " + U.merchant + " didn't name the U.S. Bank offer: " + JSON.stringify(empty.u.use.split("\n").slice(0, 2).join(" / ")));
-  if (/After activating/.test(empty.c.use)) ok(ed.c.use !== empty.c.use && /Ready now/.test(ed.c.use), "headline for " + C.merchant + " changes with the activation: " + JSON.stringify(ed.c.use.split("\n").slice(0, 2).join(" / ")));
-  else console.log("SKIP headline for " + C.merchant + " had no After activating line: " + JSON.stringify(empty.c.use.split("\n").slice(0, 2).join(" / ")));
+  ok(/U\.S\. Bank offer/.test(empty.u.use) && !/U\.S\. Bank offer/.test(ed.u.use), "headline no longer counts the used U.S. Bank offer: " + JSON.stringify([empty.u.use, ed.u.use]));
+  ok(/After activating/.test(empty.c.use) && ed.c.use !== empty.c.use && /^Ready now: Freedom Flex/m.test(ed.c.use),
+     "headline for " + C.merchant + " changes with the activation: " + JSON.stringify([empty.c.use, ed.c.use]));
   const others = ed.c.rows.filter(r => !r.gone && r.id !== C.merchant + " | " + ROW_CARD(C.card));
-  ok(JSON.stringify(others) === JSON.stringify(empty.c.rows.filter(r => !r.gone && r.id !== C.merchant + " | " + ROW_CARD(C.card))), "other rows in that search untouched (" + others.length + ")");
+  ok(others.length > 0 && JSON.stringify(others) === JSON.stringify(empty.c.rows.filter(r => !r.gone && r.id !== C.merchant + " | " + ROW_CARD(C.card))), "other rows in that search untouched (" + others.length + ")");
 
   await usedChecks(page, load, search, testEdits);
 
@@ -1208,7 +1215,7 @@ async function browser() {
 
   // The page's own copy check in the browser: a save gets past it (to writing a blob) only when the hash the page
   // works out for its offers.json is git's blob hash of the file. The GitHub API is a stub here; nothing is sent.
-  const want = gitSha(fs.readFileSync(path.join(DATA, "offers.json")));
+  const want = gitSha(Buffer.from(offersText));
   const calls = [];
   await page.unroute("https://api.github.com/**");
   await page.route("https://api.github.com/**", r => {
