@@ -793,10 +793,10 @@ class RefreshTest(unittest.TestCase):
         self.assertIsNone(offer["minimum_spend"])
         promotion = offer["promotions"][0]
         self.assertEqual(promotion["minimum_purchase"], 75)
-        self.assertEqual(promotion["conditions"], ["New customers only with the specified promotional coupon. Cannot combine with other promotions.",
+        self.assertEqual(promotion["conditions"], ["Cannot combine with other promotions.",
                                                    "Online orders only.", "Selected items only.", "First order only.",
                                                    "Eligible with 1000 reward points."])
-        self.assertIn('Promo text reads "First purchase only with the specified promotional coupon. Selected items only."', offer["other_details"])
+        self.assertIn('Promo text reads "Selected items only."', offer["other_details"])
         self.assertFalse(valid_promotion(dict(promotion, conditions=["New customers only with SYNTHWITH99."])))
         before = self.data_bytes()
         unsafe = self.write_inventory([dict(row, domain="offers.example/private?session=SYNTHLINK99")])
@@ -808,6 +808,75 @@ class RefreshTest(unittest.TestCase):
         public += "".join(self.t.read(f) for f in before)
         for word in ("SYNTHLEGACY99", "SYNTHRAW99", "SYNTHWITH99", "syntheticlower", "SYNTHLINK99", "PRIVATE-COUPON-SENTINEL"):
             self.assertNotIn(word, public)
+
+    def test_coupon_noun_instructions_stay_out_of_reports_and_public_data(self):
+        _, saved, _ = self.seven_eleven_inventory()
+        row = self.coupon_inventory("2026-11-24")
+        oid, day = saved["id"], row["extraction_date"]
+        instructions = [
+            "Use coupon ZQSAVE20.", "Apply coupon ZQSAVE20 at checkout.", "Enter coupon ZQSAVE20 at checkout.",
+            "Use promo ZQSAVE20.", "Apply promo ZQSAVE20.", "Use voucher ZQSAVE20.", "Enter voucher zqsave20.",
+            "Use offer ZQSAVE20.", "Apply discount ZQSAVE20.", "Use coupon zqbigdeal.", "Enter promo zqsave20 in cart.",
+            "use the promotional ‘zqbigdeal’.", "Use coupon ZQSYNTH42 at checkout.",
+            "New customers use coupon ZQSYNTH42", "Use coupon online-zqsave20.",
+        ]
+        safe_conditions = [
+            "Apply before tax.", "Restrictions apply without specific products named.",
+            "Members save with USAA.", "Items must be purchased with IKEA Family.",
+            "Valid with iPhone15 purchases.", "Apply discount before tax.", "Use the offer online.",
+            "Apply promotional pricing at checkout.", "USE COUPON AT CHECKOUT.",
+        ]
+        tokens = ("zqsave20", "zqbigdeal", "zqsynth42")
+
+        def note(line):
+            return f'Promo text reads "{line}"'
+
+        self.t.change_offers(lambda by, _: by[oid]["other_details"].extend(map(note, instructions + safe_conditions)))
+        companion = Path(self.coupon_evidence(row))
+        capture = json.loads(companion.read_text())
+        coupon = capture["verified_coupon_offers"][0]["coupon"]
+        coupon["code"] = {}  # The private value was unavailable to the capture.
+        coupon["additional_conditions_summary"] = instructions + safe_conditions + [
+            "Enter promo zqbigdeal in cart. Selected styles only.",
+        ]
+        companion.write_text(json.dumps(capture))
+        p, template = self.write_inventory([row]), self.t.root / "template.json"
+        extra = ("--coupons", str(companion))
+        code, report_output, _ = self.t.run("report", "Capital One", [p], read_date=day, extra=(*extra, "--template", str(template)))
+        self.assertEqual(code, 0, report_output)
+        report_json = (self.t.root / "report.json").read_text()
+        apply_output, _ = self.apply_ok("Capital One", [p], read_date=day, extra=extra)
+        apply_json = (self.t.root / "report.json").read_text()
+        public = report_output + report_json + template.read_text() + apply_output + apply_json + self.t.read("offers.json")
+        for token in tokens:
+            self.assertNotIn(token, public.casefold())
+        saved = self.t.offers()[oid]
+        self.assertEqual(saved["other_details"], list(map(note, safe_conditions)))
+        self.assertEqual(saved["promotions"][0]["conditions"], safe_conditions + ["Selected styles only."])
+
+        def validate():
+            return subprocess.run([sys.executable, "tools/validate.py"], cwd=self.t.root, capture_output=True, text=True)
+
+        clean_data = self.t.load()
+        result = validate()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        offer = next(o for o in clean_data["offers"] if o["id"] == oid)
+        targets = (
+            ("panel summary", offer["promotions"][0]["conditions"], "bad public coupon promotion"),
+            ("legacy note", offer["other_details"], "unsafe public Capital One promotional note"),
+        )
+        for field, target, message in targets:
+            for line in instructions:
+                with self.subTest(line=line, field=field):
+                    target.append(note(line) if field == "legacy note" else line)
+                    self.t.write_json("offers.json", clean_data)
+                    target.pop()
+                    result = validate()
+                    output = result.stdout + result.stderr
+                    self.assertNotEqual(result.returncode, 0, output)
+                    self.assertIn(message, output)
+                    for token in tokens:
+                        self.assertNotIn(token, output.casefold())
 
     def test_used_offer_in_batch_stays_used(self):
         self.t.change_offers(lambda by, d: by["chase-freedom/whisker"].update(status="used", status_since="2026-10-20"))

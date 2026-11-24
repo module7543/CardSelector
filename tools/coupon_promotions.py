@@ -20,13 +20,27 @@ ESTIMATE_WINDOW = 60
 # Generated listing notes can include codes the panel never exposed. Match explicit code
 # instructions and compact code-like tokens following common instruction words.
 CODE_TOKEN = r"(?:(?=[A-Z0-9_-]*[A-Z])[A-Z0-9][A-Z0-9_-]{3,}|(?=[\w-]*\d)[A-Za-z][A-Za-z0-9_-]{3,})"
-CODE_ACTION = r"(?:use|enter|apply|with|using)"
+CODE_VERB = r"(?:use|enter|apply)"
+CODE_QUALIFIER = r"(?:with|using)"
+CODE_ACTION = rf"(?:{CODE_VERB}|{CODE_QUALIFIER})"
+COUPON_NOUN = r"(?:coupon|promo|promotional|voucher|offer|discount)"
 CODE_LABEL = r"(?:the\s+)?(?:(?:promo|coupon|discount)\s+)?code"
-OPEN_QUOTE = r"[\"'“‘]?"
+OPEN_QUOTE = r"[\"'“‘]"
+# A noun in an instruction can introduce a lowercase code. Recognize ordinary continuations
+# such as "apply discount before tax" as prose, even when typeset in capitals.
+NON_CODE_WORD = (rf"(?i:(?:{COUPON_NOUN}|a|an|the|at|in|on|before|after|during|online|offline|only|once|first|per"
+                 r"|for|from|with|without|to|by|as|when|where|while|until|if|unless|automatically|directly"
+                 r"|pricing|price|terms|restrictions|details|benefits|eligibility|codes?)(?![\w-]))")
+# A bare "with" or "using" can name a card, merchant or product. Require both uppercase
+# letters and digits before withholding the ambiguous sentence, unless the value is known.
+QUALIFIER_TOKEN = r"(?=[A-Z0-9_-]*[A-Z])(?=[A-Z0-9_-]*[0-9])[A-Z0-9][A-Z0-9_-]{3,}"
 CODE_PHRASE = re.compile(
-    rf"(?<!\w)(?:(?i:(?:{CODE_ACTION}\s+)?{CODE_LABEL}\s*[:=]\s*){OPEN_QUOTE}[\w-]+"
-    rf"|(?i:{CODE_ACTION}\s+{CODE_LABEL}\s+){OPEN_QUOTE}[\w-]+"
-    rf"|(?i:{CODE_ACTION}\s+){OPEN_QUOTE}{CODE_TOKEN})(?![\w-])[\"'”’]?"
+    rf"(?<!\w)(?:(?i:(?:{CODE_ACTION}\s+)?{CODE_LABEL}\s*[:=]\s*){OPEN_QUOTE}?[\w-]+"
+    rf"|(?i:{CODE_ACTION}\s+{CODE_LABEL}\s+){OPEN_QUOTE}?[\w-]+"
+    rf"|(?P<omit>(?i:{CODE_VERB}\s+(?:the\s+)?{COUPON_NOUN}(?:\s*[:=]\s*|\s+))"
+    rf"(?:{OPEN_QUOTE}|(?!{NON_CODE_WORD}))[\w-]+"
+    rf"|(?i:{CODE_VERB}\s+){OPEN_QUOTE}?(?!{NON_CODE_WORD}){CODE_TOKEN}"
+    rf"|(?i:{CODE_QUALIFIER}\s+){OPEN_QUOTE}?{QUALIFIER_TOKEN}))(?![\w-])[\"'”’]?"
 )
 CODE_WORD = re.compile(r"\bcode\b", re.I)
 UNSAFE_TEXT = re.compile(r"[a-z][a-z0-9+.-]*://|www\.|//[\w.-]+[./?]|\b(?:[a-z0-9-]+\.)+[a-z]{2,}[/#?]"
@@ -94,6 +108,9 @@ def summarized_terms(line, codes):
         return ""
 
     for part in re.split(r"(?<=[.!?;])\s+", normal):
+        # Withholding an ambiguous sentence preserves the meaning of the independent terms.
+        if any(match["omit"] for match in CODE_PHRASE.finditer(part)):
+            continue
         redacted = CODE_PHRASE.sub(replace_code, part)
         redacted = re.sub(r"\s+([.!?,;])", r"\1", redacted).strip()
         if re.fullmatch(r"(?:Apply the promotional coupon(?: at checkout| to (?:save|redeem))?)?[.!?;]?", redacted, flags=re.I):
