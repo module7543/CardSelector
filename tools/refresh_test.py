@@ -211,6 +211,60 @@ class RefreshTest(unittest.TestCase):
         self.assertEqual(self.t.offers()["capital-one/loop-mobile"]["activation"], "already_activated")
         self.assertEqual(self.t.offers()["capital-one/loop-mobile"]["channel"], "online_and_app")
 
+    def test_capital_one_inventory_refresh_rechecks_activation(self):
+        offer_id, previous_read, later_read = "capital-one/7-eleven", "2026-11-23", "2026-11-24"
+        eligibility = "Order through 7Now or 7-Eleven. Physical in-store and fuel purchases are excluded."
+        historical_activation = "Capital One shows Activated under Added to Card. The selected card was not shown."
+        saved = {
+            "id": offer_id, "card": "Capital One", "merchant": "7-Eleven", "category": "Groceries & Food Delivery",
+            "bonus": "10% back", "expires": None, "expires_text": None, "activation": "already_activated",
+            "redemption": {"method": "card_linked", "evidence": "offer_type"}, "channel": "online_and_app",
+            "spend_cap": None, "minimum_spend": None, "fine_print": None,
+            "other_details": [eligibility, historical_activation], "last_read": previous_read,
+            "first_seen": "2026-11-10", "status": "active", "status_since": "2026-11-10",
+        }
+        inventory_row = {
+            "extraction_date": later_read, "layout_variant": "current_layout", "tile_kind": "standard",
+            "merchant": "7-Eleven", "domain": "7-eleven.com", "reward": "10% back", "channel": "In-App",
+            "offer_type": "cardLinked", "offer_type_basis": "Encoded tile offer-type labels", "activation_status": "",
+        }
+        activated = dict(inventory_row, tile_kind="added_to_card", activation_status="Activated")
+        nonactivated = dict(inventory_row, activation_status="Not activated")
+        cases = (
+            ("no current evidence", [inventory_row], "none_shown", False, None),
+            ("conflicting evidence", [nonactivated, activated], "none_shown", True, None),
+            ("explicit nonactivation", [nonactivated, dict(inventory_row, activation_status="Needs activation")],
+             "needs_activation", False, None),
+            ("explicit activation with an unknown label on another placement",
+             [dict(inventory_row, activation_status="Unknown"), activated], "already_activated", False, None),
+            ("pending activation edit", [inventory_row], "already_activated", False, "needs_activation"),
+        )
+        snapshot = self.t.load()
+        snapshot["offers"] = [o for o in snapshot["offers"] if o["card"] != "Capital One"] + [saved]
+        snapshot["batches"].append({"card": "Capital One", "read_date": previous_read, "offers_found": 1})
+        p = self.t.root / "inventory.csv"
+        for case, rows, expected, conflicting, pending in cases:
+            with self.subTest(case=case):
+                self.t.write_json("offers.json", snapshot)
+                self.t.write_json("phone-edits.json", {offer_id: {"activation": pending}} if pending else {})
+                edits = self.t.read("phone-edits.json")
+                with p.open("w", newline="") as stream:
+                    writer = csv.DictWriter(stream, fieldnames=inventory_row)
+                    writer.writeheader()
+                    writer.writerows(rows)
+                _, report = self.apply_ok("Capital One", [p], read_date=None, dec_date=later_read)
+                self.assertEqual(report["read_date"], later_read)
+                self.assertEqual(any("conflicting activation labels" in flag for flag in report["flags"]), conflicting)
+                offer = self.t.offers()[offer_id]
+                self.assertEqual(offer["activation"], expected)
+                self.assertEqual(offer["redemption"], saved["redemption"])
+                self.assertEqual(offer["bonus"], saved["bonus"])
+                self.assertEqual(offer["first_seen"], saved["first_seen"])
+                self.assertEqual(offer["last_read"], later_read)
+                self.assertIn(eligibility, offer["other_details"])
+                self.assertNotIn(historical_activation, offer["other_details"])
+                self.assertEqual(self.t.read("phone-edits.json"), edits)
+
     def test_used_offer_in_batch_stays_used(self):
         self.t.change_offers(lambda by, d: by["chase-freedom/whisker"].update(status="used", status_since="2026-10-20"))
         self.apply_ok("Chase Freedom", [self.t.csv("Chase Freedom")])

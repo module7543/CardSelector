@@ -478,6 +478,7 @@ class CapitalOne(Adapter):
     INVENTORY = {"extraction_date", "layout_variant", "tile_kind", "merchant", "domain", "reward", "channel",
                  "offer_type", "offer_type_basis", "activation_status"}
     TYPE_BASES = {"Encoded tile offer-type labels", "Promoted affiliate tile template"}
+    ACTIVATION = {"activated": "already_activated", "needs activation": "needs_activation", "not activated": "needs_activation"}
     inventory = False
 
     def check_columns(self, cols):
@@ -575,7 +576,7 @@ class CapitalOne(Adapter):
                     channels.add(self.CHANNEL[channel])
                 if row["offer_type_basis"].strip() in self.TYPE_BASES:
                     types.update(t.strip().lower() for t in row["offer_type"].split("|") if t.strip())
-                state = row["activation_status"].strip().lower()
+                state = self.ACTIVATION.get(row["activation_status"].strip().lower())
                 if state:
                     states.add(state)
             if len(channels) == 1:
@@ -584,14 +585,12 @@ class CapitalOne(Adapter):
                 inc.set["channel"] = "none_shown"
                 inc.flags.append("conflicting channel labels")
             routes = types & {"affiliate", "cardlinked"}
-            if states & {"activated", "needs activation", "not activated"}:
+            if states:
                 routes.add("cardlinked")
             if len(states) > 1:
                 inc.flags.append("conflicting activation labels")
-            elif states == {"activated"}:
-                inc.set["activation"] = "already_activated"
-            elif states in ({"needs activation"}, {"not activated"}):
-                inc.set["activation"] = "needs_activation"
+            # Each inventory supplies current activation evidence; a blank or conflict clears the previous observation.
+            inc.set["activation"] = next(iter(states)) if len(states) == 1 else "none_shown"
 
             if routes == {"affiliate"}:
                 method = "via_shop_link"
@@ -606,8 +605,8 @@ class CapitalOne(Adapter):
                 method = "unknown"
             basis = "offer_type" if routes & types else "activation_status"
             inc.set["redemption"] = {"method": method, "evidence": "not_shown" if method == "unknown" else basis}
-            if method == "via_shop_link":
-                inc.set["activation"] = "none_shown"
+            # This note predates structured activation. Leaving it in details can imply that the old evidence is current.
+            inc.drop_notes.append("Capital One shows Activated under Added to Card. The selected card was not shown.")
             count = len(placements)
             inc.replace.append((r"^\d+ tiles listed$", f"{count} tiles listed" if count > 1 else None))
             out.append(inc)
@@ -1339,8 +1338,6 @@ def plan(card, paths, given_date, decisions=None, part=False, complete_parts=Fal
         if inc.bonus is not None and inc.bonus != o["bonus"]:
             (out["bonus_changes"] if repriced else out["wording_changes"]).append(
                 {"id": sid, "merchant": merchant, "from": o["bonus"], "to": inc.bonus})
-            if repriced and "redemption" in inc.set and "activation" not in pe:
-                touch(o, "activation", inc.set.get("activation", "none_shown"))
             touch(o, "bonus", inc.bonus)
         for f, val in inc.set.items():
             if f in pe:
