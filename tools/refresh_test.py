@@ -1513,6 +1513,20 @@ class RefreshTest(unittest.TestCase):
         self.assertIn("destination restrictions need public evidence", text)
         self.assertEqual(self.t.data_snapshot(), before)
 
+    def test_chase_same_host_detached_checkout_after_gift_card_rule_blocks_apply(self):
+        card = "Chase Freedom"
+        _, capture = self.chase_review_fixture(card, reward_description=(
+            'Earn 10% cash back. Offer valid online at <a href="https://shop.example.com/">Example Shop</a> '
+            'only when you pay through the checkout link below. Gift cards are excluded. '
+            'https://shop.example.com/member-checkout?token=TESTONLY'
+        ))
+        before = self.t.data_snapshot()
+        code, text, _ = self.t.run("apply", card, [capture], decisions={})
+        self.assertEqual(code, 2, text)
+        self.assertIn("destination restrictions need public evidence", text)
+        self.assertNotIn("TESTONLY", text)
+        self.assertEqual(self.t.data_snapshot(), before)
+
     def test_chase_unbound_checkout_destinations_refuse_across_source_boundaries(self):
         card = "Chase Freedom"
         cases = {
@@ -1662,27 +1676,31 @@ class RefreshTest(unittest.TestCase):
     def test_chase_description_publication_and_ordinary_travel_expiry(self):
         card = "Chase Freedom"
 
-        def add(rows):
+        def add(rows, detached_url=""):
             return rows + [dict(rows[0], offer_id="FIXTURE:travel", merchant="Chase Travel", bonus_as_shown="$100 back",
                                 channel="ONLINE", min_spend="600", reward_cap="0", end_timestamp="2027-01-01T04:59:59Z",
                                 expiration_text="Offer expires 12/31/2026.", reward_description=(
                                     "<b>Get $100 back when you spend $600 or more.</b><br>Offer expires 12/31/2026."
                                     "<br>Offer valid online only at <a href='https://shop.example/hidden?token=ANCHORSECRET'>"
                                     "shop.example</a>. Coupon code required: MOCKSAVE."
-                                    "<br>Gift cards are excluded. https://shop.example/private?auth=PATHSECRET."
+                                    f"<br>Gift cards are excluded.{detached_url}"
                                     "<br>Customer ID: X81Z239Q. session_token=MOCKSESSION."
                                     "<script>SCRAPEDTOKEN</script>"
                                 ))]
 
+        decisions = {"categories": {"Chase Travel": "Travel"}}
+        capture = self.t.csv(card, lambda rows: add(rows, " https://shop.example/private?auth=PATHSECRET."))
+        self.assert_chase_review_conflict(card, capture, "destination restrictions need public evidence", decisions)
+
         capture = self.t.csv(card, add)
-        out, report = self.apply_ok(card, [capture], {"categories": {"Chase Travel": "Travel"}})
+        out, report = self.apply_ok(card, [capture], decisions)
         offer = self.t.offers()["chase-freedom/chase-travel"]
         self.assertEqual(offer["expires_text"], "Offer expires 12/31/2026")
         self.assertEqual(report["flags"], [])
         self.assertIn("Gift cards are excluded", offer["fine_print"])
         self.assertIn("Offer valid online only at the issuer-specified site", offer["fine_print"])
         self.assertIn("promotional coupon required", offer["fine_print"])
-        for forbidden in ("MOCKSAVE", "ANCHORSECRET", "PATHSECRET", "X81Z239Q", "MOCKSESSION", "SCRAPEDTOKEN", "<b>"):
+        for forbidden in ("MOCKSAVE", "ANCHORSECRET", "X81Z239Q", "MOCKSESSION", "SCRAPEDTOKEN", "<b>"):
             self.assertNotIn(forbidden, out)
             self.assertNotIn(forbidden, offer["fine_print"])
 
